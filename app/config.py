@@ -1,0 +1,8 @@
+RT_URL = "https://tickets.wc-12.com"
+API_ENDPOINT = "/REST/2.0"
+RT_TOKEN = "1-7857-e7f98423b3b0e6e1da56f78722cc7ffe"
+LABEL_WIDTH_MM = 100
+LABEL_HEIGHT_MM = 62
+DATABASE = 'assets.db'
+PREFIX = 'W12-'
+PADDING = 4

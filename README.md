@@ -1,51 +1,131 @@
-# Nix Python Devenv
+# RT Asset Utils
 
-A Python development environment template using [devenv](https://devenv.sh) with working C bindings,
-managed by [uv](https://docs.astral.sh/uv/) package manager.
+RT Asset Utils is a Flask-based application designed to manage asset tags and interact with the Request Tracker (RT) system. It provides endpoints for generating asset tags, confirming them, and printing labels.
 
-A version of this repo with CUDA is available on the
-[cuda branch](https://github.com/clementpoiret/nix-python-devenv/tree/cuda).
+## Requirements
 
-## Features
-
-- CUDA toolkit and CUDNN support (see the `cuda` branch)
-- Python 3.x environment
-- Fast package management with uv
-- Automatic environment activation with direnv
-- Example script using numpy
+- Python >= 3.11
+- Flask >= 2.2.0
+- pandas >= 1.5.0
+- requests >= 2.28.0
+- click >= 8.0.0
+- reportlab >= 3.6.0
+- qrcode >= 7.3.1
 
 ## Installation
 
-1. Install [Nix](https://nixos.org/download/):
+1. Clone the repository:
+
    ```bash
-   sh <(curl -L https://nixos.org/nix/install) --daemon
+   git clone <repository-url>
+   cd nix-python-devenv
    ```
 
-2. Install [devenv](https://devenv.sh/)
+2. Install dependencies:
+
    ```bash
-   nix-env -iA devenv -f https://github.com/NixOS/nixpkgs/tarball/nixpkgs-unstable
+   pip install -r requirements.txt
    ```
 
-3. Install [direnv](https://direnv.net/) (optional but recommended)
+3. Initialize the database:
 
-4. Clone and setup:
    ```bash
-   git clone --single-branch --branch cuda git@github.com:clementpoiret/nix-python-devenv.git
-
-   # Allow direnv to manage the environment
-   direnv allow
+   flask init-db
    ```
 
-## Usage
+4. Run the server:
+   ```bash
+   python run.py
+   ```
 
-The environment automatically:
-- Activates the Python virtual environment
-- Sets up LD_LIBRARY_PATH
-- Provides the `hello` command to test C Bindings
+The server will start on `http://127.0.0.1:5000`.
 
-Run the sample script:
-```bash
-hello
+## Routes
+
+### 1. `/`
+
+**Method:** `GET`  
+**Description:** A simple route to check if the server is running.  
+**Response:**
+
+```json
+{
+  "message": "Server is running!"
+}
 ```
 
-This will display the output of numpy functions.
+---
+
+### 2. `/print_label`
+
+**Method:** `GET`  
+**Description:** Generates a PDF label for a given asset ID.  
+**Query Parameters:**
+
+- `assetId` (required): The ID of the asset in the RT system.
+
+**Example Request:**
+
+```bash
+curl "http://127.0.0.1:5000/print_label?assetId=12345"
+```
+
+**Response:** A PDF file containing the asset label.
+
+---
+
+### 3. `/next-asset-tag`
+
+**Method:** `GET`  
+**Description:** Generates the next available asset tag.  
+**Response:**
+
+```json
+{
+  "tag_number": 1025,
+  "full_tag": "W12-1025"
+}
+```
+
+---
+
+### 4. `/confirm-asset-tag`
+
+**Method:** `POST`  
+**Description:** Confirms an asset tag and associates it with an RT asset ID.  
+**Request Body:**
+
+```json
+{
+  "tag_number": 1025,
+  "rt_asset_id": 12345
+}
+```
+
+**Response:**
+
+```json
+{
+  "message": "Asset tag confirmed successfully."
+}
+```
+
+---
+
+## Database Schema
+
+The application uses an SQLite database with the following schema:
+
+```sql
+CREATE TABLE asset_tags (
+  tag_number INTEGER PRIMARY KEY,
+  full_tag TEXT UNIQUE NOT NULL,
+  rt_asset_id INTEGER NULL,
+  generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  confirmed_at TIMESTAMP NULL
+);
+```
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.

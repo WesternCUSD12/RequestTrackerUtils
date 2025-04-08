@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Asset Label{% endblock %}
+
+{% block content %}
+<div class="label">
+    <!-- Left-aligned QR Code -->
+    <div class="qr-code">
+        <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code">
+    </div>
+
+    <!-- Text Content -->
+    <div class="text-content">
+        <h1>{{ name }}</h1>
+        {% if internal_name and internal_name != "N/A" %}
+            <p><strong>N:</strong> {{ internal_name }}</p>
+        {% endif %}
+        {% if serial_number  %}
+        <p><strong>S:</strong> {{ serial_number|upper }}</p>
+        {% endif %}
+        {% if model_number != "N/A" %}
+            <p><strong>M:</strong> {{ model_number }}</p>
+        {% endif %}
+        {% if funding_source != "N/A" and funding_source != "District Funds" %}
+            <p><strong>F:</strong> {{ funding_source }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Bottom-aligned Barcode -->
+    <div class="barcode">
+        <h3 class="school-name"> Western CUSD #12 </h3>
+        <img src="data:image/png;base64,{{ barcode }}" alt="Barcode">
+    </div>
+</div>
+{% endblock %}

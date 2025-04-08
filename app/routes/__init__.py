@@ -1,0 +1,1 @@
+from app.routes import label_routes, tag_routes
