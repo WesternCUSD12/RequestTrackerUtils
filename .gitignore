@@ -233,3 +233,10 @@ devenv.local.nix
 
 # pre-commit
 .pre-commit-config.yaml
+
+result/
+
+# project-specific
+
+asset_tag_confirmations.log
+asset_tag_sequence.txt
