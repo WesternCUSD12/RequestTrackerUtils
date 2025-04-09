@@ -9,6 +9,7 @@
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs { inherit system; };
+      lib = pkgs.lib; # Define lib from pkgs
       isNixos = pkgs.stdenv.isLinux; # Check if the system is Linux
     in {
       # Package definition for the Flask app
