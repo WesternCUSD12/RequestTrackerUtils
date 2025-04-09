@@ -44,8 +44,8 @@ The server will start on `http://127.0.0.1:5000`.
 
 ### 1. `/`
 
-**Method:** `GET`  
-**Description:** A simple route to check if the server is running.  
+**Method:** `GET`
+**Description:** A simple route to check if the server is running.
 **Response:**
 
 ```json
@@ -58,8 +58,8 @@ The server will start on `http://127.0.0.1:5000`.
 
 ### 2. `/print_label`
 
-**Method:** `GET`  
-**Description:** Generates a PDF label for a given asset ID.  
+**Method:** `GET`
+**Description:** Generates a PDF label for a given asset ID.
 **Query Parameters:**
 
 - `assetId` (required): The ID of the asset in the RT system.
@@ -76,8 +76,8 @@ curl "http://127.0.0.1:5000/print_label?assetId=12345"
 
 ### 3. `/next-asset-tag`
 
-**Method:** `GET`  
-**Description:** Generates the next available asset tag.  
+**Method:** `GET`
+**Description:** Generates the next available asset tag.
 **Response:**
 
 ```json
@@ -91,8 +91,8 @@ curl "http://127.0.0.1:5000/print_label?assetId=12345"
 
 ### 4. `/confirm-asset-tag`
 
-**Method:** `POST`  
-**Description:** Confirms an asset tag and associates it with an RT asset ID.  
+**Method:** `POST`
+**Description:** Confirms an asset tag and associates it with an RT asset ID.
 **Request Body:**
 
 ```json
@@ -111,20 +111,6 @@ curl "http://127.0.0.1:5000/print_label?assetId=12345"
 ```
 
 ---
-
-## Database Schema
-
-The application uses an SQLite database with the following schema:
-
-```sql
-CREATE TABLE asset_tags (
-  tag_number INTEGER PRIMARY KEY,
-  full_tag TEXT UNIQUE NOT NULL,
-  rt_asset_id INTEGER NULL,
-  generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  confirmed_at TIMESTAMP NULL
-);
-```
 
 ## License
 
