@@ -106,7 +106,7 @@
                   serviceConfig = {
                     ExecStart = "${pkgs.python3}/bin/python3 -m app";
                     WorkingDirectory = config.services.requestTrackerUtils.workingDirectory;
-                    Environment = lib.mkMerge [
+                    Environment = lib.mkForce (lib.mkMerge [
                       "FLASK_APP=app"
                       "WORKING_DIR=${config.services.requestTrackerUtils.workingDirectory}"
                       "LABEL_WIDTH_MM=${toString config.services.requestTrackerUtils.labelWidthMm}"
@@ -115,7 +115,7 @@
                       "API_ENDPOINT=${config.services.requestTrackerUtils.apiEndpoint}"
                       "PREFIX=${config.services.requestTrackerUtils.prefix}"
                       "PADDING=${toString config.services.requestTrackerUtils.padding}"
-                    ];
+                    ]);
                     EnvironmentFile = config.services.requestTrackerUtils.secretsFile;
                     Restart = "always";
                     User = config.services.requestTrackerUtils.user;
