@@ -6,13 +6,26 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+    }:
     let
-      lib = import nixpkgs { system = "x86_64-linux"; }.lib; # Use lib from nixpkgs
-    in {
+      pkgs = import nixpkgs { system = "x86_64-linux"; }; # Import pkgs
+      lib = pkgs.lib; # Use lib from pkgs
+    in
+    {
       # Define the NixOS module at the top level
-      nixosModules.requestTrackerUtils = lib.optionalAttrs (lib.stdenv.isLinux) {
-        config, lib, pkgs, ... }: {
+      nixosModules.requestTrackerUtils =
+        {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+        {
           options.requestTrackerUtils = {
             enable = lib.mkOption {
               type = lib.types.bool;
@@ -122,10 +135,9 @@
             '';
           };
         };
-      };
 
       # Package definition for the Flask app
-      packages.default = import nixpkgs { system = "x86_64-linux"; }.python3Packages.buildPythonApplication {
+      packages.default = pkgs.python3Packages.buildPythonApplication {
         pname = "request-tracker-utils";
         version = "0.3.0";
 
@@ -136,7 +148,7 @@
         format = "pyproject";
 
         # Python dependencies
-        propagatedBuildInputs = with import nixpkgs { system = "x86_64-linux"; }.python3Packages; [
+        propagatedBuildInputs = with pkgs.python3Packages; [
           pandas
           requests
           flask
@@ -151,11 +163,11 @@
         postInstall = ''
           mkdir -p $out/bin
           echo '#!/bin/sh' > $out/bin/request-tracker-utils
-          echo 'exec ${import nixpkgs { system = "x86_64-linux"; }.python3}/bin/python3 -m app' >> $out/bin/request-tracker-utils
+          echo 'exec ${pkgs.python3}/bin/python3 -m app' >> $out/bin/request-tracker-utils
           chmod +x $out/bin/request-tracker-utils
         '';
 
-        meta = with import nixpkgs { system = "x86_64-linux"; }.lib; {
+        meta = with pkgs.lib; {
           description = "Flask app for Request Tracker";
           license = lib.licenses.mit;
           maintainers = [ lib.maintainers.jmartinWestern ];
