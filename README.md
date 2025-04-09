@@ -70,7 +70,7 @@ The server will start on `http://127.0.0.1:5000`.
 curl "http://127.0.0.1:5000/print_label?assetId=12345"
 ```
 
-**Response:** A PDF file containing the asset label.
+**Response:** A html doc containing the asset label.
 
 ---
 
