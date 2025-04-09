@@ -112,6 +112,50 @@ curl "http://127.0.0.1:5000/print_label?assetId=12345"
 
 ---
 
+## NixOS Service Module
+
+This project includes a NixOS service module for deploying the Flask app as a systemd service.
+
+### Configuration Options
+
+| Option        | Type   | Default                                    | Description                           |
+| ------------- | ------ | ------------------------------------------ | ------------------------------------- |
+| `enable`      | bool   | `false`                                    | Enable the Flask app service.         |
+| `host`        | string | `"127.0.0.1"`                              | Host address for the Flask app.       |
+| `port`        | int    | `5000`                                     | Port for the Flask app.               |
+| `secretsFile` | path   | `"/etc/request-tracker-utils/secrets.env"` | Path to the secrets environment file. |
+
+### Example Configuration
+
+To use this module via a Nix flake, add the following to your `flake.nix`:
+
+```nix
+{
+   inputs = {
+      nixpkgs.url = "github:NixOS/nixpkgs";
+      request-tracker-utils.url = "github:WesternCUSD12/RequestTrackerUtils";
+   };
+
+   outputs = { self, nixpkgs, request-tracker-utils }: {
+      nixosConfigurations.mySystem = nixpkgs.lib.nixosSystem {
+         system = "x86_64-linux";
+         modules = [
+            ./hardware-configuration.nix
+            request-tracker-utils.nixosModule
+            {
+               services.requestTrackerUtils = {
+                  enable = true;
+                  host = "0.0.0.0";
+                  port = 8080;
+                  secretsFile = "/run/secrets/request-tracker-utils.env";
+               };
+            }
+         ];
+      };
+   };
+}
+```
+
 ## License
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
