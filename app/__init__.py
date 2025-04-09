@@ -1,5 +1,4 @@
 from flask import Flask
-from app.database import init_app
 from app.routes import label_routes, tag_routes
 
 def create_app():
@@ -7,9 +6,6 @@ def create_app():
 
     # Load configuration
     app.config.from_object('app.config')
-
-    # Initialize database
-    init_app(app)
 
     # Register blueprints
     app.register_blueprint(label_routes.bp)
