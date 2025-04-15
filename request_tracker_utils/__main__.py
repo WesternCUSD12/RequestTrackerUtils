@@ -1,4 +1,4 @@
-from app import create_app
+from request_tracker_utils import create_app
 
 # Create the Flask app instance
 app = create_app()

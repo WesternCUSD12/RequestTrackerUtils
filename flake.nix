@@ -104,9 +104,10 @@
                   after = [ "network.target" ];
                   wantedBy = [ "multi-user.target" ];
                   serviceConfig = {
-                    ExecStart = "${pkgs.python3}/bin/python3 -m app";
+                    ExecStart = "${pkgs.python3}/bin/python3 -m request_tracker_utils";
+                    # ExecStart = "${pkgs.request-tracker-utils}/bin/request-tracker-utils";
                     WorkingDirectory = config.services.requestTrackerUtils.workingDirectory;
-                    Environment = lib.mkForce (lib.mkMerge [
+                    Environment = [
                       "FLASK_APP=app"
                       "WORKING_DIR=${config.services.requestTrackerUtils.workingDirectory}"
                       "LABEL_WIDTH_MM=${toString config.services.requestTrackerUtils.labelWidthMm}"
@@ -115,7 +116,7 @@
                       "API_ENDPOINT=${config.services.requestTrackerUtils.apiEndpoint}"
                       "PREFIX=${config.services.requestTrackerUtils.prefix}"
                       "PADDING=${toString config.services.requestTrackerUtils.padding}"
-                    ]);
+                    ];
                     EnvironmentFile = config.services.requestTrackerUtils.secretsFile;
                     Restart = "always";
                     User = config.services.requestTrackerUtils.user;
@@ -142,17 +143,19 @@
 
         # Package definition for the Flask app
         packages = {
-          default = pkgs.python3Packages.buildPythonApplication {
+          default = pkgs.python3Packages.buildPythonApplication rec {
             pname = "request-tracker-utils";
             version = "0.3.0";
+            pyproject = true;
 
             # Path to your Flask app source code
             src = ./.;
 
-            # Use pyproject.toml for building
-            format = "pyproject";
+            nativeBuildInputs = with pkgs.python3Packages; [
+              setuptools
+              wheel
+            ];
 
-            # Python dependencies
             propagatedBuildInputs = with pkgs.python3Packages; [
               pandas
               requests
@@ -163,14 +166,19 @@
               python-barcode
               python-dotenv
             ];
+            # Use pyproject.toml for building
+            # format = "pyproject";
+            # buildInputs = with pkgs.python3Packages; [
+            #   setuptools
+            #   wheel
+            # ];
 
-            # Entry point for the Flask app
-            postInstall = ''
-              mkdir -p $out/bin
-              echo '#!/bin/sh' > $out/bin/request-tracker-utils
-              echo 'exec ${pkgs.python3}/bin/python3 -m app' >> $out/bin/request-tracker-utils
-              chmod +x $out/bin/request-tracker-utils
-            '';
+            # postInstall = ''
+            #   mkdir -p $out/bin
+            #   echo '#!/bin/sh' > $out/bin/request-tracker-utils
+            #   echo "exec $out/bin/python3 -m request_tracker_utils" >> $out/bin/request-tracker-utils
+            #   chmod +x $out/bin/request-tracker-utils
+            # '';
 
             meta = with pkgs.lib; {
               description = "Flask app for Request Tracker";
