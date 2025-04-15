@@ -104,7 +104,8 @@
                   after = [ "network.target" ];
                   wantedBy = [ "multi-user.target" ];
                   serviceConfig = {
-                    ExecStart = "${pkgs.python3}/bin/python3 -m request_tracker_utils";
+                    ExecStart = "${self.packages.${system}.default}/bin/request-tracker-utils";
+
                     # ExecStart = "${pkgs.request-tracker-utils}/bin/request-tracker-utils";
                     WorkingDirectory = config.services.requestTrackerUtils.workingDirectory;
                     Environment = [
@@ -116,6 +117,7 @@
                       "API_ENDPOINT=${config.services.requestTrackerUtils.apiEndpoint}"
                       "PREFIX=${config.services.requestTrackerUtils.prefix}"
                       "PADDING=${toString config.services.requestTrackerUtils.padding}"
+                      "PORT=${toString config.services.requestTrackerUtils.port}"
                     ];
                     EnvironmentFile = config.services.requestTrackerUtils.secretsFile;
                     Restart = "always";
@@ -143,7 +145,7 @@
 
         # Package definition for the Flask app
         packages = {
-          default = pkgs.python3Packages.buildPythonApplication rec {
+          default = pkgs.python3Packages.buildPythonApplication {
             pname = "request-tracker-utils";
             version = "0.3.0";
             pyproject = true;
@@ -151,10 +153,10 @@
             # Path to your Flask app source code
             src = ./.;
 
-            nativeBuildInputs = with pkgs.python3Packages; [
-              setuptools
-              wheel
-            ];
+            # nativeBuildInputs = with pkgs.python3Packages; [
+            #   setuptools
+            #   wheel
+            # ];
 
             propagatedBuildInputs = with pkgs.python3Packages; [
               pandas

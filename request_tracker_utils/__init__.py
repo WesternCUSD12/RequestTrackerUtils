@@ -12,3 +12,8 @@ def create_app():
     app.register_blueprint(tag_routes.bp)
 
     return app
+
+def main():
+    app = create_app()
+    port = app.config.get('PORT', 8080)
+    app.run(debug=True, host='0.0.0.0', port=port)

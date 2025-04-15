@@ -424,8 +424,8 @@ wheels = [
 ]
 
 [[package]]
-name = "rt-aset-utils"
-version = "0.1.0"
+name = "rt-asset-utils"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
