@@ -16,4 +16,10 @@ def create_app():
 def main():
     app = create_app()
     port = app.config.get('PORT', 8080)
+    app.logger.setLevel("INFO")
+
+
+    rt_token = app.config.get('RT_TOKEN', 'Not Set')
+    app.logger.info(f"RT_TOKEN: {rt_token}")
+
     app.run(debug=True, host='0.0.0.0', port=port)
