@@ -37,6 +37,13 @@ def create_app():
         })
         
         routes.append({
+            "endpoint": "/labels/batch",
+            "methods": ["POST"],
+            "description": "Generate labels for multiple assets based on a query",
+            "usage": "POST /labels/batch with form data: query=<rt_query>"
+        })
+        
+        routes.append({
             "endpoint": "/labels/update-all",
             "methods": ["POST"],
             "description": "Updates the 'Label' custom field to 'Label' for all assets",
@@ -82,10 +89,18 @@ def create_app():
 def main():
     app = create_app()
     port = app.config.get('PORT', 8080)
-    app.logger.setLevel("INFO")
+    
+    # Set logging level to DEBUG for more detailed logs
+    import logging
+    app.logger.setLevel(logging.DEBUG)
+    
+    # Log Flask and Werkzeug messages too
+    logging.getLogger('werkzeug').setLevel(logging.DEBUG)
+    logging.getLogger('flask').setLevel(logging.DEBUG)
 
-
+    # Log configuration information
     rt_token = app.config.get('RT_TOKEN', 'Not Set')
     app.logger.info(f"RT_TOKEN: {rt_token}")
+    app.logger.info(f"Starting server on port {port}")
 
     app.run(debug=True, host='0.0.0.0', port=port)

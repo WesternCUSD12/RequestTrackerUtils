@@ -6,7 +6,61 @@
 <h1>Request Tracker Utils</h1>
 <p>Utilities for managing Request Tracker asset tags and labels</p>
 
-<h2>Available Routes</h2>
+<div class="mb-4">
+    <h2>Web Interfaces</h2>
+    <div class="list-group">
+        <a href="{{ url_for('label_routes.label_home') }}" class="list-group-item list-group-item-action">
+            <i class="bi bi-printer"></i> Label Printing
+            <p class="text-muted small mb-0 mt-1">Generate and print asset labels one at a time</p>
+        </a>
+        <a href="{{ url_for('label_routes.batch_labels') }}" class="list-group-item list-group-item-action">
+            <i class="bi bi-printer-fill"></i> Batch Label Printing
+            <p class="text-muted small mb-0 mt-1">Print multiple asset labels using an RT query with page breaks</p>
+        </a>
+    </div>
+</div>
+
+<div class="mb-4">
+    <h2>Usage Guide</h2>
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5><i class="bi bi-printer"></i> Label Printing</h5>
+                </div>
+                <div class="card-body">
+                    <p>Generate asset labels from Request Tracker:</p>
+                    <ul>
+                        <li><strong>Single Label</strong>: Enter an RT asset ID to generate a label</li>
+                        <li><strong>Batch Printing</strong>: Search for assets using RT query syntax</li>
+                        <li>Labels include asset details, serial numbers, and QR codes</li>
+                        <li>Use browser printing features for physical labels</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5><i class="bi bi-code-slash"></i> API Routes</h5>
+                </div>
+                <div class="card-body">
+                    <p>Integrate with other systems via API:</p>
+                    <ul>
+                        <li>Generate labels programmatically</li>
+                        <li>Retrieve and assign asset tags</li>
+                        <li>Update asset information in RT</li>
+                    </ul>
+                    <a href="#api-routes" class="btn btn-sm btn-outline-primary">View API Documentation</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h2 id="api-routes">Available API Routes</h2>
 <ul class="route-list">
     {% for route in routes %}
     <li class="route-item">
