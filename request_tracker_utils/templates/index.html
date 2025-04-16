@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block title %}Request Tracker Utils{% endblock %}
+
+{% block content %}
+<h1>Request Tracker Utils</h1>
+<p>Utilities for managing Request Tracker asset tags and labels</p>
+
+<h2>Available Routes</h2>
+<ul class="route-list">
+    {% for route in routes %}
+    <li class="route-item">
+        <h3>{{ route.endpoint }}</h3>
+        <div>
+            {% for method in route.methods %}
+            <span class="route-method">{{ method }}</span>
+            {% endfor %}
+        </div>
+        <p>{{ route.description }}</p>
+        <p><strong>Usage:</strong> {{ route.usage }}</p>
+    </li>
+    {% endfor %}
+</ul>
+{% endblock %}

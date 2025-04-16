@@ -4,16 +4,64 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Default Title{% endblock %}</title>
+    {% block styles %}
     <style>
+        :root {
+            --primary-bg-color: #f5f5f5;
+            --label-border-color: #000;
+            --label-bg-color: #fff;
+            --text-font-family: Arial, sans-serif;
+            --qr-width: 1.25in;
+            --qr-height: 1.25in;
+            --text-margin-left: 1.75in;
+            --heading-font-size: 16px;
+            --text-font-size: 12px;
+            --barcode-height: 25px;
+        }
+
         body {
             margin: 0;
             padding: 0;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            background-color: #f5f5f5;
+            min-height: 100vh;
+            background-color: var(--primary-bg-color);
         }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .route-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .route-item {
+            background-color: white;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .route-item h3 {
+            margin-top: 0;
+        }
+        
+        .route-method {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            background-color: #4CAF50;
+            color: white;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+
         .label {
             display: flex;
             flex-direction: column;
@@ -21,23 +69,26 @@
             align-items: flex-start;
             width: {{ label_width }}mm; /* Dynamically set width */
             height: {{ label_height }}mm; /* Dynamically set height */
-            border: 1px solid #000;
-            @media print {
-                border: none;
-            }
+            border: 1px solid var(--label-border-color);
             padding: 10px;
             box-sizing: border-box;
-            font-family: Arial, sans-serif;
+            font-family: var(--text-font-family);
             position: relative;
-            background-color: #fff;
+            background-color: var(--label-bg-color);
+        }
+
+        @media print {
+            .label {
+                border: none;
+            }
         }
 
         .qr-code {
             position: absolute;
             top: 10px;
             left: 10px;
-            width: 1.25in;
-            height: 1.25in;
+            width: var(--qr-width);
+            height: var(--qr-height);
         }
 
         .qr-code img {
@@ -46,7 +97,7 @@
         }
 
         .text-content {
-            margin-left: 1.75in; /* Leave space for the QR code */
+            margin-left: var(--text-margin-left);
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
@@ -54,36 +105,39 @@
         }
 
         .text-content h1 {
-            font-size: 16px;
+            font-size: var(--heading-font-size);
             margin: 0;
         }
 
         .text-content p {
-            font-size: 12px;
+            font-size: var(--text-font-size);
             margin: 2px 0;
         }
 
         .school-name {
             padding: 0;
-            margin-bottom: 0; /* Ensure no spacing below the heading */
+            margin-bottom: 0;
         }
 
         .barcode {
             position: absolute;
             bottom: 10px;
-            # left: 10px;
             width: 95%;
             text-align: center;
         }
 
         .barcode img {
-            # display: none;
             width: 100%;
-            height: 25px;
+            height: var(--barcode-height);
         }
     </style>
+    {% endblock %}
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
-    {% block content %}{% endblock %}
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
 </body>
 </html>
