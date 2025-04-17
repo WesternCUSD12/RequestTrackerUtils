@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 
 # Run the application
-nix run
+python run.py
 
 # Development environment
 devenv shell

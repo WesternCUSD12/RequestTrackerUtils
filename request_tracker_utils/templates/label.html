@@ -6,7 +6,13 @@
 <div class="label">
     <!-- Left-aligned QR Code -->
     <div class="qr-code">
+        {% if qr_code %}
         <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code">
+        {% else %}
+        <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #f0f0f0;">
+            <span>QR Code</span>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Text Content -->
@@ -29,7 +35,67 @@
     <!-- Bottom-aligned Barcode -->
     <div class="barcode">
         <h3 class="school-name"> Western CUSD #12 </h3>
+        {% if barcode %}
         <img src="data:image/png;base64,{{ barcode }}" alt="Barcode">
+        {% else %}
+        <div style="width: 100%; height: 20px; display: flex; align-items: center; justify-content: center; background: #f0f0f0;">
+            <span style="font-size: 10px;">{{ name }}</span>
+        </div>
+        {% endif %}
     </div>
 </div>
+
+<div class="no-print" style="margin-top: 20px; text-align: center;">
+    <button onclick="printLabel();" class="btn btn-primary">Print Label</button>
+    <a href="{{ url_for('label_routes.label_home') }}" class="btn btn-secondary">Back</a>
+</div>
+
+<script>
+    // Script to ensure proper printing
+    window.addEventListener('beforeprint', function() {
+        // This helps prevent browsers from scaling content
+        document.body.style.width = '100mm';
+        document.body.style.height = '62mm';
+        
+        // Check print orientation
+        detectPrintOrientation();
+    });
+    
+    // Detect and warn about incorrect print orientation
+    function detectPrintOrientation() {
+        // Most browsers set @page properties before printing
+        const style = window.getComputedStyle(document.body);
+        const pageWidth = parseInt(style.getPropertyValue('--print-page-width') || '0');
+        const pageHeight = parseInt(style.getPropertyValue('--print-page-height') || '0');
+        
+        // If we can't detect orientation from styles, check window dimensions
+        if (pageWidth === 0 || pageHeight === 0) {
+            const isPortrait = window.innerHeight > window.innerWidth;
+            if (!isPortrait) {
+                // Show warning for landscape orientation (we need portrait)
+                showOrientationWarning();
+            }
+        } else {
+            // Check if detected page size is landscape
+            if (pageWidth > pageHeight) {
+                showOrientationWarning();
+            }
+        }
+    }
+    
+    function showOrientationWarning() {
+        if (confirm("WARNING: Your print settings appear to be in landscape orientation. Labels should be printed in portrait orientation for best results. Do you want to continue anyway?")) {
+            // User wants to continue with current settings
+            return;
+        } else {
+            // User wants to cancel and fix settings
+            window.cancelAnimationFrame = true; // This doesn't actually work in all browsers
+        }
+    }
+    
+    // Print button script - direct printing
+    function printLabel() {
+        window.print();
+    }
+</script>
 {% endblock %}

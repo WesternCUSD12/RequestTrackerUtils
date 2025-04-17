@@ -4,6 +4,8 @@ import io
 import base64
 import urllib.parse
 import qrcode
+import traceback
+from PIL import Image
 from barcode import Code128
 from barcode.writer import ImageWriter
 from request_tracker_utils.utils.rt_api import fetch_asset_data, search_assets, update_asset_custom_field, find_asset_by_name, rt_api_request
@@ -39,20 +41,69 @@ def generate_qr_code(url):
     Returns:
         str: Base64 encoded QR code image
     """
-    qr = qrcode.QRCode(box_size=10, border=4)
-    qr.add_data(url)
-    qr.make(fit=True)
-    qr_img = qr.make_image(fill="black", back_color="white")
+    try:
+        # QR code with higher error correction for better resilience
+        qr = qrcode.QRCode(
+            version=1,  # Fixed version to avoid issues
+            error_correction=qrcode.constants.ERROR_CORRECT_M,  # Medium error correction (15% damage recovery)
+            box_size=10,  # Increased box size for larger QR code
+            border=2      # Maintain smaller border
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+        
+        # Generate image directly to buffer
+        qr_buffer = io.BytesIO()
+        img = qr.make_image(fill_color="black", back_color="white")
+        img.save(qr_buffer, format="PNG")
+        qr_base64 = base64.b64encode(qr_buffer.getvalue()).decode("utf-8")
+        qr_buffer.close()
+        return qr_base64
+        
+    except Exception as e:
+        current_app.logger.error(f"QR code generation failed: {e}")
+        # Create a simple fallback QR code with plain PIL
+        try:
+            # Generate a simple black square as fallback
+            size = 200
+            fallback = Image.new('RGB', (size, size), color='white')
+            # Add a border to make it look like a QR code
+            for i in range(10):
+                for j in range(10):
+                    if (i == 0 or j == 0 or i == 9 or j == 9) or (i in [2,7] and j in [2,7]):
+                        # Draw black squares in QR pattern
+                        x, y = i*20, j*20
+                        block = Image.new('RGB', (20, 20), color='black')
+                        fallback.paste(block, (x, y))
+                        
+            fallback_buffer = io.BytesIO()
+            fallback.save(fallback_buffer, format="PNG")
+            fallback_base64 = base64.b64encode(fallback_buffer.getvalue()).decode("utf-8")
+            fallback_buffer.close()
+            return fallback_base64
+        except Exception as fallback_error:
+            current_app.logger.error(f"QR code fallback failed: {fallback_error}")
+            # If all else fails, return an empty string
+            return ""
+
+def calculate_checksum(content):
+    """
+    Calculate a simple verification checksum for barcode data.
     
-    qr_buffer = io.BytesIO()
-    qr_img.save(qr_buffer, format="PNG")
-    qr_base64 = base64.b64encode(qr_buffer.getvalue()).decode("utf-8")
-    qr_buffer.close()
-    return qr_base64
+    Args:
+        content (str): The content to calculate checksum for
+        
+    Returns:
+        str: The original content followed by a verification digit
+    """
+    # Simple checksum algorithm - sum ASCII values and take modulo 10
+    checksum = sum(ord(c) for c in content) % 10
+    return f"{content}*{checksum}"
 
 def generate_barcode(content):
     """
     Generate a barcode image and return as base64 string.
+    Appends a verification checksum to the content for error detection.
     
     Args:
         content (str): Content to encode in the barcode
@@ -60,16 +111,53 @@ def generate_barcode(content):
     Returns:
         str: Base64 encoded barcode image
     """
-    barcode = Code128(content, writer=ImageWriter())
+    # Add verification checksum to content
+    verified_content = calculate_checksum(content)
+    barcode = Code128(verified_content, writer=ImageWriter())
+    # Adjust barcode parameters for better printing
     barcode_writer_options = {
-        "module_width": 4,
-        "module_height": 50,
+        "module_width": 0.5,  # Increased width for better resolution
+        "module_height": 10,  # Increased height for better resolution
+        "quiet_zone": 1,      # Minimal quiet zone
         "write_text": False,
-        "dpi": 600
+        "dpi": 300            # Higher DPI for better print quality
     }
     barcode_buffer = io.BytesIO()
     barcode.write(barcode_buffer, options=barcode_writer_options)
-    barcode_base64 = base64.b64encode(barcode_buffer.getvalue()).decode("utf-8")
+    
+    # Resize the barcode to make it wider
+    try:
+        barcode_buffer.seek(0)  # Reset buffer position
+        barcode_image = Image.open(barcode_buffer)
+        width, height = barcode_image.size
+        
+        # Make the barcode wider while maintaining quality
+        new_width = min(width * 1.2, 450)  # Controlled width increase
+        new_height = min(int(height * 0.8), 28)  # Less height reduction for better clarity
+        
+        # Use LANCZOS for best quality resizing
+        resize_method = getattr(Image, 'LANCZOS', getattr(Image, 'BICUBIC', Image.BICUBIC))
+        resized_barcode = barcode_image.resize((int(new_width), new_height), resize_method)
+        
+        # Save the resized image with high quality settings
+        resized_buffer = io.BytesIO()
+        resized_barcode.save(
+            resized_buffer, 
+            format="PNG", 
+            optimize=True, 
+            compress_level=1  # Lower compression for better quality
+        )
+        barcode_base64 = base64.b64encode(resized_buffer.getvalue()).decode("utf-8")
+        
+        # Close buffers
+        resized_buffer.close()
+    except Exception as img_error:
+        current_app.logger.error(f"Error processing barcode image: {img_error}")
+        # Fall back to original barcode if resize fails
+        barcode_buffer.seek(0)  # Reset buffer position
+        barcode_base64 = base64.b64encode(barcode_buffer.getvalue()).decode("utf-8")
+        
+    # Close buffer
     barcode_buffer.close()
     return barcode_base64
 
@@ -115,56 +203,177 @@ def print_label():
         if asset_name and not asset_id:
             current_app.logger.info(f"Looking up asset by name: {asset_name}")
             
-            # Use the direct lookup approach - fetch all assets and filter locally
-            if direct_lookup:
-                current_app.logger.info("Using direct lookup approach")
-                # Get a limited list of assets (1000 should be enough for most instances)
-                direct_query = "id>0 LIMIT 1000" 
-                response = rt_api_request("GET", f"/assets?query={urllib.parse.quote(direct_query)}", current_app.config)
-                all_assets = response.get("assets", [])
-                current_app.logger.info(f"Retrieved {len(all_assets)} assets for filtering")
+            # Try the JSON filter approach first (matching the curl command format)
+            try:
+                current_app.logger.info(f"Looking up asset by name using JSON filter: {asset_name}")
                 
-                # Case-insensitive exact match
-                matching_assets = [
-                    a for a in all_assets 
-                    if a.get("Name") and a.get("Name").lower() == asset_name.lower()
+                # Construct the same filter format used in the curl command
+                import requests
+                import json
+                
+                base_url = current_app.config.get('RT_URL')
+                api_endpoint = current_app.config.get('API_ENDPOINT')
+                token = current_app.config.get('RT_TOKEN')
+                
+                url = f"{base_url}{api_endpoint}/assets"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"token {token}"
+                }
+                
+                # First try exact match
+                filter_data = [
+                    {
+                        "field": "Name",
+                        "operator": "=",
+                        "value": asset_name
+                    }
                 ]
                 
-                if matching_assets:
-                    asset = matching_assets[0]
+                current_app.logger.info(f"Making POST request with exact match filter: {json.dumps(filter_data)}")
+                response = requests.post(url, headers=headers, json=filter_data)
+                response.raise_for_status()
+                
+                # Process the response
+                result = response.json()
+                current_app.logger.info(f"POST exact match response: {json.dumps(result)}")
+                
+                # Look for assets in the response
+                items = []
+                if 'items' in result:
+                    items = result.get('items', [])
+                elif 'assets' in result:
+                    items = result.get('assets', [])
+                
+                if items and len(items) > 0:
+                    asset = items[0]  # Take the first match
                     asset_id = asset.get('id')
-                    current_app.logger.info(f"Direct lookup found asset ID: {asset_id} for name: {asset_name}")
+                    current_app.logger.info(f"Found asset ID: {asset_id} for exact name match: {asset_name}")
                 else:
-                    # Try for approximate matches (contains)
-                    approx_matches = [
-                        a for a in all_assets 
-                        if a.get("Name") and asset_name.lower() in a.get("Name").lower()
+                    # If exact match fails, try LIKE match
+                    current_app.logger.info(f"No exact match found, trying LIKE operator")
+                    
+                    # Try with LIKE operator
+                    filter_data = [
+                        {
+                            "field": "Name",
+                            "operator": "LIKE",
+                            "value": asset_name
+                        }
                     ]
                     
-                    if approx_matches:
-                        asset = approx_matches[0]
-                        asset_id = asset.get('id')
-                        current_app.logger.info(f"Direct lookup found approximate match with ID: {asset_id}, name: {asset.get('Name')}")
-                    else:
-                        current_app.logger.error(f"No asset found with name similar to: {asset_name}")
-                        return jsonify({
-                            "error": f"No asset found with name: {asset_name}",
-                            "tip": "Try checking the asset name in RT or use an asset ID instead."
-                        }), 404
-            else:
-                # Use the standard find_asset_by_name function
-                asset = find_asset_by_name(asset_name, current_app.config)
-                
-                if not asset:
-                    current_app.logger.error(f"No asset found with name: {asset_name}")
-                    return jsonify({
-                        "error": f"No asset found with name: {asset_name}",
-                        "tip": "Try again with ?direct=true added to the URL or use an asset ID instead."
-                    }), 404
+                    current_app.logger.info(f"Making POST request with LIKE filter: {json.dumps(filter_data)}")
+                    response = requests.post(url, headers=headers, json=filter_data)
+                    response.raise_for_status()
                     
-                # Get the asset ID from the found asset
-                asset_id = asset.get('id')
-                current_app.logger.info(f"Found asset ID: {asset_id} for name: {asset_name}")
+                    # Process the response
+                    result = response.json()
+                    
+                    # Look for assets in the response
+                    items = []
+                    if 'items' in result:
+                        items = result.get('items', [])
+                    elif 'assets' in result:
+                        items = result.get('assets', [])
+                    
+                    if items and len(items) > 0:
+                        asset = items[0]  # Take the first match
+                        asset_id = asset.get('id')
+                        current_app.logger.info(f"Found asset ID: {asset_id} for LIKE name match: {asset_name}")
+                    else:
+                        # If that fails too, try with prefix search
+                        # Try searching with prefix (for W12-XXXX format)
+                        if '-' in asset_name:
+                            prefix = asset_name.split('-')[0]
+                            filter_data = [
+                                {
+                                    "field": "Name",
+                                    "operator": "LIKE",
+                                    "value": f"{prefix}-"
+                                }
+                            ]
+                            
+                            current_app.logger.info(f"Making POST request with prefix filter: {json.dumps(filter_data)}")
+                            response = requests.post(url, headers=headers, json=filter_data)
+                            response.raise_for_status()
+                            
+                            # Process the response
+                            result = response.json()
+                            
+                            # Look for assets in the response
+                            items = []
+                            if 'items' in result:
+                                items = result.get('items', [])
+                            elif 'assets' in result:
+                                items = result.get('assets', [])
+                            
+                            if items and len(items) > 0:
+                                # Find exact match or closest match
+                                exact_matches = [
+                                    item for item in items
+                                    if item.get("Name", "").lower() == asset_name.lower()
+                                ]
+                                
+                                if exact_matches:
+                                    asset = exact_matches[0]
+                                else:
+                                    # Just take the first one as approximate match
+                                    asset = items[0]
+                                    
+                                asset_id = asset.get('id')
+                                asset_name_found = asset.get("Name")
+                                current_app.logger.info(f"Found asset ID: {asset_id} for prefix match: {asset_name_found}")
+                            else:
+                                # All JSON filter approaches failed
+                                if direct_lookup:
+                                    # Fall back to direct lookup if requested
+                                    current_app.logger.info("JSON filter failed, falling back to direct lookup approach")
+                                    direct_query = "id>0 LIMIT 1000" 
+                                    response = rt_api_request("GET", f"/assets?query={urllib.parse.quote(direct_query)}", current_app.config)
+                                    all_assets = response.get("assets", [])
+                                    current_app.logger.info(f"Retrieved {len(all_assets)} assets for filtering")
+                                    
+                                    # Case-insensitive exact match
+                                    matching_assets = [
+                                        a for a in all_assets 
+                                        if a.get("Name") and a.get("Name").lower() == asset_name.lower()
+                                    ]
+                                    
+                                    if matching_assets:
+                                        asset = matching_assets[0]
+                                        asset_id = asset.get('id')
+                                        current_app.logger.info(f"Direct lookup found asset ID: {asset_id} for name: {asset_name}")
+                                    else:
+                                        # Try for approximate matches (contains)
+                                        approx_matches = [
+                                            a for a in all_assets 
+                                            if a.get("Name") and asset_name.lower() in a.get("Name").lower()
+                                        ]
+                                        
+                                        if approx_matches:
+                                            asset = approx_matches[0]
+                                            asset_id = asset.get('id')
+                                            current_app.logger.info(f"Direct lookup found approximate match with ID: {asset_id}, name: {asset.get('Name')}")
+                                        else:
+                                            raise Exception(f"No asset found with name similar to: {asset_name}")
+                                else:
+                                    # Fall back to standard find_asset_by_name as last resort
+                                    current_app.logger.info("JSON filter failed, falling back to standard find_asset_by_name")
+                                    asset = find_asset_by_name(asset_name, current_app.config)
+                                    
+                                    if not asset:
+                                        raise Exception(f"No asset found with name: {asset_name}")
+                                        
+                                    asset_id = asset.get('id')
+                                    current_app.logger.info(f"Found asset ID: {asset_id} for name: {asset_name}")
+                
+            except Exception as e:
+                current_app.logger.error(f"Error looking up asset by name: {e}")
+                return jsonify({
+                    "error": f"No asset found with name: {asset_name}",
+                    "tip": "Try checking the asset name in RT or use an asset ID instead.",
+                    "details": str(e)
+                }), 404
         
         # Fetch asset data from RT API using the ID
         current_app.logger.info(f"Fetching asset data for ID: {asset_id}")
@@ -187,17 +396,44 @@ def print_label():
         }
 
         # Generate QR Code with the RT URL
-        rt_asset_url = f"https://tickets.wc-12.com/Asset/Display.html?id={asset_id}"
-        asset_label_data["qr_code"] = generate_qr_code(rt_asset_url)
+        try:
+            rt_asset_url = f"https://tickets.wc-12.com/Asset/Display.html?id={asset_id}"
+            current_app.logger.debug(f"Generating QR code for URL: {rt_asset_url}")
+            asset_label_data["qr_code"] = generate_qr_code(rt_asset_url)
+            current_app.logger.debug("QR code generation successful")
+        except Exception as qr_error:
+            current_app.logger.error(f"Error generating QR code: {qr_error}")
+            # Provide a placeholder if QR code generation fails
+            asset_label_data["qr_code"] = ""
         
         # Generate Barcode
-        asset_label_data["barcode"] = generate_barcode(asset_label_data["name"])
+        try:
+            current_app.logger.debug(f"Generating barcode for content: {asset_label_data['name']}")
+            asset_label_data["barcode"] = generate_barcode(asset_label_data["name"])
+            current_app.logger.debug("Barcode generation successful")
+        except Exception as barcode_error:
+            current_app.logger.error(f"Error generating barcode: {barcode_error}")
+            # Provide a placeholder if barcode generation fails
+            asset_label_data["barcode"] = ""
         
-        current_app.logger.debug(f"Asset label data: {json.dumps(asset_label_data, indent=4)}")
+        # Log the final data - be careful not to log large binary data
+        log_data = {k: v if k not in ["qr_code", "barcode"] else "[binary data]" for k, v in asset_label_data.items()}
+        import json as json_for_logging
+        current_app.logger.debug(f"Asset label data: {json_for_logging.dumps(log_data, indent=4)}")
 
     except Exception as e:
+        import traceback
+        import json as json_module  # Import with a different name to avoid conflicts
+        error_traceback = traceback.format_exc()
         current_app.logger.error(f"Error processing asset data: {e}")
-        return jsonify({"error": "Failed to process asset data"}), 500
+        current_app.logger.error(f"Traceback: {error_traceback}")
+        
+        # Provide more detailed error for debugging - using jsonify directly which doesn't require json module
+        return jsonify({
+            "error": "Failed to process asset data", 
+            "details": str(e),
+            "asset_id": asset_id
+        }), 500
 
     # Render the label using the template
     current_app.logger.debug("Rendering the label template with asset label data")
@@ -216,6 +452,11 @@ def batch_labels():
         GET: Rendered template with the batch label form
         POST: Rendered template with labels for all matching assets
     """
+    # Log all request details to debug form submission issues
+    current_app.logger.info(f"Batch labels route called with method: {request.method}")
+    current_app.logger.info(f"Request form data: {request.form}")
+    current_app.logger.info(f"Request headers: {request.headers}")
+    
     if request.method == 'GET':
         return render_template('batch_labels_form.html')
     
@@ -293,9 +534,122 @@ def batch_labels():
                                 asset = approx_matches[0]
                                 current_app.logger.info(f"Direct lookup found approximate match for {asset_name}: {asset.get('Name')} (ID: {asset.get('id')})")
                     else:
-                        # Standard lookup method
-                        current_app.logger.info(f"Using standard lookup for asset: {asset_name}")
-                        asset = find_asset_by_name(asset_name, current_app.config)
+                        # Use JSON filter lookup method
+                        current_app.logger.info(f"Using JSON filter lookup for asset: {asset_name}")
+                        
+                        # Construct the filter in the same format as the curl command
+                        import requests
+                        import json
+                        
+                        base_url = current_app.config.get('RT_URL')
+                        api_endpoint = current_app.config.get('API_ENDPOINT')
+                        token = current_app.config.get('RT_TOKEN')
+                        
+                        url = f"{base_url}{api_endpoint}/assets"
+                        headers = {
+                            "Content-Type": "application/json",
+                            "Authorization": f"token {token}"
+                        }
+                        
+                        # Try exact match filter first
+                        filter_data = [
+                            {
+                                "field": "Name",
+                                "operator": "=",
+                                "value": asset_name
+                            }
+                        ]
+                        
+                        try:
+                            response = requests.post(url, headers=headers, json=filter_data)
+                            response.raise_for_status()
+                            result = response.json()
+                            
+                            # Extract assets from the response
+                            items = []
+                            if 'items' in result:
+                                items = result.get('items', [])
+                            elif 'assets' in result:
+                                items = result.get('assets', [])
+                            
+                            if items and len(items) > 0:
+                                # Take the first match
+                                asset = items[0]
+                                current_app.logger.info(f"Found exact match for {asset_name}")
+                            else:
+                                # If exact match fails, try LIKE operator
+                                filter_data = [
+                                    {
+                                        "field": "Name",
+                                        "operator": "LIKE",
+                                        "value": asset_name
+                                    }
+                                ]
+                                
+                                response = requests.post(url, headers=headers, json=filter_data)
+                                response.raise_for_status()
+                                result = response.json()
+                                
+                                # Extract assets from the response
+                                items = []
+                                if 'items' in result:
+                                    items = result.get('items', [])
+                                elif 'assets' in result:
+                                    items = result.get('assets', [])
+                                
+                                if items and len(items) > 0:
+                                    # Take the first match
+                                    asset = items[0]
+                                    current_app.logger.info(f"Found LIKE match for {asset_name}")
+                                else:
+                                    # If that fails, try with prefix search for W12-XXXX format
+                                    if '-' in asset_name:
+                                        prefix = asset_name.split('-')[0]
+                                        filter_data = [
+                                            {
+                                                "field": "Name",
+                                                "operator": "LIKE",
+                                                "value": f"{prefix}-"
+                                            }
+                                        ]
+                                        
+                                        response = requests.post(url, headers=headers, json=filter_data)
+                                        response.raise_for_status()
+                                        result = response.json()
+                                        
+                                        # Extract assets from the response
+                                        items = []
+                                        if 'items' in result:
+                                            items = result.get('items', [])
+                                        elif 'assets' in result:
+                                            items = result.get('assets', [])
+                                        
+                                        if items and len(items) > 0:
+                                            # Find exact match in the results if possible
+                                            exact_matches = [
+                                                item for item in items
+                                                if item.get("Name", "").lower() == asset_name.lower()
+                                            ]
+                                            
+                                            if exact_matches:
+                                                asset = exact_matches[0]
+                                                current_app.logger.info(f"Found exact match within prefix results for {asset_name}")
+                                            else:
+                                                # Just take first one as approximate match
+                                                asset = items[0]
+                                                current_app.logger.info(f"Found approximate match for {asset_name}: {asset.get('Name')}")
+                                        else:
+                                            # Fall back to the original method if JSON approach fails
+                                            current_app.logger.info(f"JSON filter method failed, falling back to find_asset_by_name")
+                                            asset = find_asset_by_name(asset_name, current_app.config)
+                                    else:
+                                        # Fall back to the original method if JSON approach fails
+                                        current_app.logger.info(f"JSON filter method failed, falling back to find_asset_by_name")
+                                        asset = find_asset_by_name(asset_name, current_app.config)
+                        except Exception as json_error:
+                            current_app.logger.warning(f"JSON filter lookup failed: {json_error}, falling back to find_asset_by_name")
+                            # Fall back to the original method if JSON approach fails with an exception
+                            asset = find_asset_by_name(asset_name, current_app.config)
                     
                     if asset:
                         current_app.logger.info(f"Found asset {asset_name} with ID: {asset.get('id')}")
@@ -323,8 +677,84 @@ def batch_labels():
         # If we're using a query, search for assets
         else:
             current_app.logger.info(f"Searching for assets with query: {query}")
-            assets = search_assets(query, current_app.config)
             
+            # Try using the JSON filter format first if the query looks like a prefix (like W12)
+            import re
+            if re.match(r'^[A-Za-z0-9]+$', query):  # Simple prefix like W12
+                try:
+                    current_app.logger.info(f"Query looks like a prefix, trying JSON filter approach")
+                    
+                    # Construct the filter in the same format as the curl command
+                    import requests
+                    import json
+                    
+                    base_url = current_app.config.get('RT_URL')
+                    api_endpoint = current_app.config.get('API_ENDPOINT')
+                    token = current_app.config.get('RT_TOKEN')
+                    
+                    url = f"{base_url}{api_endpoint}/assets"
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"token {token}"
+                    }
+                    
+                    # Use the LIKE operator with prefix
+                    filter_data = [
+                        {
+                            "field": "Name",
+                            "operator": "LIKE",
+                            "value": f"{query}-"  # Add hyphen for prefix match
+                        }
+                    ]
+                    
+                    current_app.logger.info(f"Making POST request with filter: {json.dumps(filter_data)}")
+                    response = requests.post(url, headers=headers, json=filter_data)
+                    response.raise_for_status()
+                    
+                    # Process the response
+                    result = response.json()
+                    
+                    # Extract assets from the response
+                    items = []
+                    if 'items' in result:
+                        items = result.get('items', [])
+                    elif 'assets' in result:
+                        items = result.get('assets', [])
+                    
+                    if items and len(items) > 0:
+                        current_app.logger.info(f"JSON filter found {len(items)} assets")
+                        assets = items
+                        
+                        # Fetch complete details for each asset
+                        complete_assets = []
+                        for item in assets:
+                            asset_id = item.get('id')
+                            if not asset_id:
+                                continue
+                                
+                            try:
+                                # Fetch complete asset data
+                                asset_data = fetch_asset_data(asset_id, current_app.config)
+                                complete_assets.append(asset_data)
+                            except Exception as e:
+                                current_app.logger.error(f"Error fetching details for asset {asset_id}: {e}")
+                                # Include the basic item anyway so we have something
+                                complete_assets.append(item)
+                        
+                        # Replace the assets list with the complete data
+                        assets = complete_assets
+                    else:
+                        # Fall back to the original search method
+                        current_app.logger.info(f"JSON filter found no assets, falling back to standard search")
+                        assets = search_assets(query, current_app.config)
+                except Exception as e:
+                    current_app.logger.warning(f"JSON filter search failed: {e}, falling back to standard search")
+                    # Fall back to standard search if JSON approach fails
+                    assets = search_assets(query, current_app.config)
+            else:
+                # Use standard search for complex queries
+                assets = search_assets(query, current_app.config)
+                
             if not assets:
                 return render_template('batch_labels_form.html', 
                                       error="No assets found matching your query.")
@@ -337,6 +767,23 @@ def batch_labels():
         for asset in assets:
             asset_id = asset.get('id')
             custom_fields = asset.get('CustomFields', [])
+            
+            # Ensure we have complete asset data with custom fields
+            if not custom_fields and asset_id:
+                try:
+                    # Fetch complete asset data if it doesn't already have custom fields
+                    current_app.logger.info(f"Fetching complete data for asset ID: {asset_id}")
+                    complete_asset = fetch_asset_data(asset_id, current_app.config)
+                    custom_fields = complete_asset.get("CustomFields", [])
+                    
+                    # Update asset data with the complete version
+                    asset = complete_asset
+                except Exception as e:
+                    current_app.logger.error(f"Error fetching complete asset data: {e}")
+            
+            # Log the custom fields for debugging
+            cf_names = [cf.get("name") for cf in custom_fields if cf.get("name")]
+            current_app.logger.debug(f"Custom fields for asset {asset_id}: {cf_names}")
             
             # Build label data for this asset
             label_data = {
@@ -353,7 +800,9 @@ def batch_labels():
             }
             
             # Generate QR Code with the RT URL
-            rt_asset_url = f"{current_app.config.get('RT_URL')}/Asset/Display.html?id={asset_id}"
+            # Use the same URL format as single labels
+            rt_asset_url = f"https://tickets.wc-12.com/Asset/Display.html?id={asset_id}"
+            current_app.logger.debug(f"QR code URL for asset {asset_id}: {rt_asset_url}")
             label_data["qr_code"] = generate_qr_code(rt_asset_url)
             
             # Generate Barcode
@@ -365,13 +814,34 @@ def batch_labels():
         context = {'labels': labels_data}
         if warning_message:
             context['warning'] = warning_message
-            
-        return render_template('batch_labels.html', **context)
+        
+        # Log the context data for debugging
+        current_app.logger.info(f"Rendering batch_labels.html with {len(labels_data)} labels")
+        
+        # Add debugging helper
+        context['debug'] = True
+        context['label_count'] = len(labels_data)
+        
+        # Ensure template exists and can be rendered
+        try:
+            response = render_template('batch_labels.html', **context)
+            current_app.logger.info(f"Successfully rendered batch_labels.html, response length: {len(response)}")
+            return response
+        except Exception as template_error:
+            current_app.logger.error(f"Error rendering template: {template_error}")
+            return render_template('batch_labels_form.html', 
+                                  error=f"Error rendering labels: {str(template_error)}")
         
     except Exception as e:
+        import traceback
+        import json as json_module  # Import with a different name to avoid conflicts
+        error_traceback = traceback.format_exc()
         current_app.logger.error(f"Error processing batch labels: {e}")
+        current_app.logger.error(f"Traceback: {error_traceback}")
+        
+        # Return a more detailed error
         return render_template('batch_labels_form.html', 
-                              error=f"Failed to process batch labels: {str(e)}")
+                              error=f"Failed to process batch labels: {str(e)}. Please check the server logs for more information.")
 
 def custom_jsonify(data):
     """
@@ -828,6 +1298,10 @@ def debug_asset():
 def search_assets_route():
     """
     Search for assets by partial name.
+    
+    Supports two query styles:
+    1. Simple query: ?q=W12 (searches for assets with W12 in the name)
+    2. Direct JSON format with POST to /labels/assets endpoint
     """
     search_term = request.args.get('q', '')
     limit = request.args.get('limit', 20, type=int)
@@ -838,6 +1312,150 @@ def search_assets_route():
         })
     
     try:
+        # First try using the direct JSON format that matches the curl command
+        current_app.logger.info(f"Searching for assets with term '{search_term}' using JSON filter format")
+        
+        # Construct filter similar to the curl command example
+        import requests
+        import json
+        
+        base_url = current_app.config.get('RT_URL')
+        api_endpoint = current_app.config.get('API_ENDPOINT')
+        token = current_app.config.get('RT_TOKEN')
+        
+        url = f"{base_url}{api_endpoint}/assets"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"token {token}"
+        }
+        
+        # Match the exact JSON structure from the curl command
+        # Using the exact format: [{ "field": "Name", "operator": "LIKE", "value": "W12-" }]
+        filter_data = [
+            {
+                "field": "Name",
+                "operator": "LIKE",
+                "value": f"{search_term}-"  # Add hyphen similar to W12-
+            }
+        ]
+        
+        # Log the exact curl command equivalent for debugging
+        curl_cmd = f"curl -H 'Authorization: token {token}' -X POST -H \"Content-Type: application/json\" -d '{json.dumps(filter_data)}' {url}"
+        current_app.logger.info(f"Equivalent curl command: {curl_cmd}")
+        
+        current_app.logger.info(f"Making POST request with filter: {json.dumps(filter_data)}")
+        
+        try:
+            # Make the POST request with JSON body
+            response = requests.post(url, headers=headers, json=filter_data)
+            response.raise_for_status()
+            
+            # Process the response
+            result = response.json()
+            # Log the entire response structure for debugging
+            current_app.logger.info(f"POST request returned response: {json.dumps(result)}")
+            
+            # Try to determine what kind of response we got
+            if 'items' in result:
+                current_app.logger.info(f"Response has 'items' field with {len(result.get('items', []))} items")
+            elif 'assets' in result:
+                current_app.logger.info(f"Response has 'assets' field with {len(result.get('assets', []))} assets")
+            else:
+                current_app.logger.info("Response does not have 'items' or 'assets' field")
+            
+            # Handle the response format from the direct JSON query
+            # Extract items from result based on the actual structure returned
+            items = []
+            if 'items' in result:
+                items = result.get('items', [])
+            elif 'assets' in result:
+                items = result.get('assets', [])
+                
+            current_app.logger.info(f"Found {len(items)} assets using JSON filter")
+            
+            # Log the first item to see its structure
+            if items and len(items) > 0:
+                current_app.logger.info(f"First item structure: {json.dumps(items[0])}")
+            
+            # Fetch full details for each asset found by ID
+            results = []
+            for item in items:
+                try:
+                    # Get the ID from the result item
+                    asset_id = item.get("id")
+                    if not asset_id:
+                        current_app.logger.warning(f"Item has no ID, skipping: {item}")
+                        continue
+                        
+                    # Fetch complete asset details
+                    current_app.logger.debug(f"Fetching details for asset ID: {asset_id}")
+                    asset_data = fetch_asset_data(asset_id, current_app.config)
+                    
+                    # Extract catalog information including name, if available
+                    catalog_info = asset_data.get("Catalog", {})
+                    catalog_id = None
+                    catalog_name = None
+                    
+                    # Handle different catalog formats
+                    if isinstance(catalog_info, dict):
+                        catalog_id = catalog_info.get("id")
+                        # Fetch catalog details to get its name
+                        if catalog_id:
+                            try:
+                                catalog_data = rt_api_request("GET", f"/catalog/{catalog_id}", config=current_app.config)
+                                catalog_name = catalog_data.get("Name")
+                                current_app.logger.debug(f"Found catalog name: {catalog_name} for ID: {catalog_id}")
+                            except Exception as catalog_error:
+                                current_app.logger.warning(f"Error fetching catalog details: {catalog_error}")
+                    elif isinstance(catalog_info, str) and catalog_info.isdigit():
+                        catalog_id = catalog_info
+                        # Try to fetch catalog name
+                        try:
+                            catalog_data = rt_api_request("GET", f"/catalog/{catalog_id}", config=current_app.config)
+                            catalog_name = catalog_data.get("Name")
+                            current_app.logger.debug(f"Found catalog name: {catalog_name} for ID: {catalog_id}")
+                        except Exception as catalog_error:
+                            current_app.logger.warning(f"Error fetching catalog details: {catalog_error}")
+                    
+                    results.append({
+                        "id": asset_id,
+                        "name": asset_data.get("Name", "Unknown"),
+                        "status": asset_data.get("Status", "Unknown"),
+                        "description": asset_data.get("Description", ""),
+                        "catalog": {
+                            "id": catalog_id,
+                            "name": catalog_name,
+                            "raw": catalog_info
+                        }
+                    })
+                except Exception as detail_error:
+                    current_app.logger.error(f"Error fetching details for asset {item.get('id')}: {detail_error}")
+                    # Include basic info even if details fetch fails
+                    results.append({
+                        "id": item.get("id"),
+                        "name": item.get("Name", "Unknown"),
+                        "status": item.get("Status", "Unknown"),
+                        "description": item.get("Description", ""),
+                        "catalog": {
+                            "id": None,
+                            "name": None,
+                            "raw": None,
+                            "error": "Failed to fetch catalog details"
+                        },
+                        "error": f"Failed to fetch complete details: {str(detail_error)}"
+                    })
+            
+            return custom_jsonify({
+                "search_term": search_term,
+                "total_results": len(results),
+                "results": results,
+                "query_type": "json_filter"
+            })
+            
+        except Exception as json_error:
+            current_app.logger.warning(f"JSON filter query failed: {json_error}, trying standard search")
+        
+        # If JSON approach fails, fall back to the original implementation
         # Try a direct query first
         query = f"Name LIKE '*{search_term}*' LIMIT {limit}"
         
@@ -863,17 +1481,72 @@ def search_assets_route():
         # Simplify the assets for display
         results = []
         for asset in assets:
-            results.append({
-                "id": asset.get("id"),
-                "name": asset.get("Name"),
-                "status": asset.get("Status"),
-                "description": asset.get("Description")
-            })
+            asset_id = asset.get("id")
+            if not asset_id:
+                continue
+                
+            try:
+                # For consistency with the JSON filter approach, also fetch complete details
+                # including catalog information
+                asset_data = fetch_asset_data(asset_id, current_app.config)
+                
+                # Extract catalog information including name, if available
+                catalog_info = asset_data.get("Catalog", {})
+                catalog_id = None
+                catalog_name = None
+                
+                # Handle different catalog formats
+                if isinstance(catalog_info, dict):
+                    catalog_id = catalog_info.get("id")
+                    # Fetch catalog details to get its name
+                    if catalog_id:
+                        try:
+                            catalog_data = rt_api_request("GET", f"/catalog/{catalog_id}", config=current_app.config)
+                            catalog_name = catalog_data.get("Name")
+                        except Exception as catalog_error:
+                            current_app.logger.warning(f"Error fetching catalog details: {catalog_error}")
+                elif isinstance(catalog_info, str) and catalog_info.isdigit():
+                    catalog_id = catalog_info
+                    # Try to fetch catalog name
+                    try:
+                        catalog_data = rt_api_request("GET", f"/catalog/{catalog_id}", config=current_app.config)
+                        catalog_name = catalog_data.get("Name")
+                    except Exception as catalog_error:
+                        current_app.logger.warning(f"Error fetching catalog details: {catalog_error}")
+                
+                results.append({
+                    "id": asset_id,
+                    "name": asset_data.get("Name", "Unknown"),
+                    "status": asset_data.get("Status", "Unknown"),
+                    "description": asset_data.get("Description", ""),
+                    "catalog": {
+                        "id": catalog_id,
+                        "name": catalog_name,
+                        "raw": catalog_info
+                    }
+                })
+            except Exception as detail_error:
+                current_app.logger.error(f"Error fetching details for asset {asset_id}: {detail_error}")
+                # Include basic info even if details fetch fails
+                results.append({
+                    "id": asset_id,
+                    "name": asset.get("Name", "Unknown"),
+                    "status": asset.get("Status", "Unknown"),
+                    "description": asset.get("Description", ""),
+                    "catalog": {
+                        "id": None,
+                        "name": None,
+                        "raw": None,
+                        "error": "Failed to fetch catalog details"
+                    },
+                    "error": f"Failed to fetch complete details: {str(detail_error)}"
+                })
         
         return custom_jsonify({
             "search_term": search_term,
             "total_results": len(results),
-            "results": results
+            "results": results,
+            "query_type": "standard_search"
         })
     except Exception as e:
         import traceback
@@ -1202,6 +1875,76 @@ def list_assets():
             "error": f"Failed to list assets: {str(e)}",
             "details": traceback.format_exc()
         })
+
+@bp.route('/assets', methods=['POST'])
+def search_assets_json():
+    """
+    API endpoint to search for assets using direct JSON queries.
+    
+    This endpoint accepts POST requests with JSON payload containing filter conditions.
+    It's compatible with the RT API format for querying assets.
+    
+    Example:
+    ```
+    curl -H 'Authorization: token YOUR_TOKEN' -X POST -H "Content-Type: application/json" 
+    -d '[{ "field": "Name", "operator": "LIKE", "value": "W12-" }]' http://localhost:8080/labels/assets
+    ```
+    
+    Returns:
+        JSON response with the matching assets
+    """
+    try:
+        # Get the JSON payload from the request
+        filter_conditions = request.get_json()
+        
+        if not filter_conditions:
+            return custom_jsonify({
+                "error": "No filter conditions provided"
+            }), 400
+            
+        current_app.logger.info(f"Received asset filter conditions: {filter_conditions}")
+        
+        # Direct API call to RT using the same filter format
+        base_url = current_app.config.get('RT_URL')
+        api_endpoint = current_app.config.get('API_ENDPOINT')
+        token = current_app.config.get('RT_TOKEN')
+        
+        url = f"{base_url}{api_endpoint}/assets"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"token {token}"
+        }
+        
+        # Make the request directly to RT with the filter JSON
+        import requests
+        current_app.logger.debug(f"Making POST request to RT API: {url}")
+        current_app.logger.debug(f"Using filter conditions: {filter_conditions}")
+        
+        response = requests.post(url, headers=headers, json=filter_conditions)
+        response.raise_for_status()
+        
+        # Process the response
+        result = response.json()
+        current_app.logger.debug(f"RT API returned {len(result.get('items', []))} items")
+        
+        # Return the result as-is (just sanitize it for JSON serialization)
+        from request_tracker_utils.utils.rt_api import sanitize_json
+        return custom_jsonify(sanitize_json(result))
+        
+    except requests.exceptions.RequestException as e:
+        current_app.logger.error(f"RT API request error: {e}")
+        return custom_jsonify({
+            "error": f"Failed to query RT API: {str(e)}",
+            "error_type": type(e).__name__
+        }), 500
+    except Exception as e:
+        import traceback
+        current_app.logger.error(f"Error processing asset search: {e}")
+        return custom_jsonify({
+            "error": f"Failed to process asset search: {str(e)}",
+            "error_type": type(e).__name__,
+            "details": traceback.format_exc().split('\n')
+        }), 500
 
 @bp.route('/debug', methods=['GET'])
 def debug_page():

@@ -1,5 +1,67 @@
 import requests
+import time
+import threading
 from flask import current_app
+from functools import lru_cache
+
+# Simple in-memory cache for assets with expiration
+class AssetCache:
+    def __init__(self, max_size=500, ttl=3600):  # Cache up to 500 assets for 1 hour
+        self.cache = {}
+        self.max_size = max_size
+        self.ttl = ttl
+        self.lock = threading.RLock()
+        
+        # Start a background thread to clean expired entries
+        self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
+        self.cleanup_thread.start()
+    
+    def get(self, key):
+        """Get an item from cache if it exists and is not expired"""
+        with self.lock:
+            if key in self.cache:
+                entry = self.cache[key]
+                if time.time() < entry['expires']:
+                    return entry['data']
+                else:
+                    # Remove expired entry
+                    del self.cache[key]
+        return None
+    
+    def set(self, key, value):
+        """Add an item to the cache with expiration"""
+        with self.lock:
+            # If cache is full, remove oldest entry
+            if len(self.cache) >= self.max_size:
+                oldest_key = min(self.cache.items(), key=lambda x: x[1]['expires'])[0]
+                del self.cache[oldest_key]
+            
+            self.cache[key] = {
+                'data': value,
+                'expires': time.time() + self.ttl
+            }
+    
+    def clear(self):
+        """Clear all cache entries"""
+        with self.lock:
+            self.cache.clear()
+    
+    def _cleanup_loop(self):
+        """Background thread to clean expired entries"""
+        while True:
+            time.sleep(300)  # Check every 5 minutes
+            self._cleanup_expired()
+    
+    def _cleanup_expired(self):
+        """Remove all expired entries from cache"""
+        now = time.time()
+        with self.lock:
+            expired_keys = [key for key, entry in self.cache.items() if entry['expires'] < now]
+            for key in expired_keys:
+                del self.cache[key]
+
+# Initialize the asset cache
+asset_cache = AssetCache()
 
 def sanitize_json(obj):
     """
@@ -81,13 +143,14 @@ def rt_api_request(method, endpoint, data=None, config=None):
             current_app.logger.error(f"RT API request error: {e}")
         raise
 
-def fetch_asset_data(asset_id, config=None):
+def fetch_asset_data(asset_id, config=None, use_cache=True):
     """
-    Fetch asset data from the RT API.
+    Fetch asset data from the RT API with caching.
     
     Args:
         asset_id (str): The ID of the asset to fetch
         config (dict, optional): Configuration dictionary, defaults to current_app.config
+        use_cache (bool, optional): Whether to use and update the cache, defaults to True
         
     Returns:
         dict: Asset data
@@ -95,21 +158,62 @@ def fetch_asset_data(asset_id, config=None):
     Raises:
         Exception: If there's an error fetching the asset data
     """
+    if not asset_id:
+        raise ValueError("Asset ID is missing or invalid")
+    
+    # Check if the asset is in cache
+    if use_cache:
+        cache_key = f"asset_{asset_id}"
+        cached_data = asset_cache.get(cache_key)
+        if cached_data:
+            if config is None:
+                current_app.logger.info(f"Cache hit for asset ID: {asset_id}")
+            return cached_data
+    
     try:
-        return rt_api_request("GET", f"/asset/{asset_id}", config=config)
+        # Log the API request details
+        if config is None:
+            current_app.logger.info(f"Fetching asset data for ID: {asset_id} from RT API")
+            
+        response = rt_api_request("GET", f"/asset/{asset_id}", config=config)
+        
+        # Validate response has expected fields
+        if not response:
+            raise ValueError(f"Empty response from RT API for asset ID: {asset_id}")
+            
+        # Check if the response has a Name field
+        if "Name" not in response:
+            # Log response for debugging
+            if config is None:
+                current_app.logger.warning(f"Response for asset ID {asset_id} is missing Name field: {response}")
+        
+        # Update cache with the response if caching is enabled
+        if use_cache:
+            cache_key = f"asset_{asset_id}"
+            asset_cache.set(cache_key, response)
+            if config is None:
+                current_app.logger.debug(f"Updated cache for asset ID: {asset_id}")
+                
+        return response
+        
     except requests.exceptions.RequestException as e:
         if config is None:  # Only log if using current_app
             current_app.logger.error(f"Error fetching asset data: {e}")
         raise Exception(f"Failed to fetch asset data from RT: {e}")
+    except Exception as e:
+        if config is None:
+            current_app.logger.error(f"Error processing asset data for ID {asset_id}: {str(e)}")
+        raise Exception(f"Error processing asset data: {str(e)}")
 
-def search_assets(query, config=None, try_post_fallback=True):
+def search_assets(query, config=None, try_post_fallback=True, use_cache=True):
     """
-    Search for assets in RT using a query.
+    Search for assets in RT using a query with caching.
     
     Args:
         query (str): The search query
         config (dict, optional): Configuration dictionary, defaults to current_app.config
         try_post_fallback (bool, optional): Whether to try POST method if GET fails, defaults to True
+        use_cache (bool, optional): Whether to use and update the cache, defaults to True
         
     Returns:
         list: List of assets matching the query
@@ -130,14 +234,39 @@ def search_assets(query, config=None, try_post_fallback=True):
         current_app.logger.debug(f"Original query: {query}")
         current_app.logger.debug(f"Encoded query: {encoded_query}")
     
+    # Check cache for this query
+    if use_cache and query:
+        # Use a hash of the query as the cache key
+        import hashlib
+        cache_key = f"query_{hashlib.md5(query.encode()).hexdigest()}"
+        cached_result = asset_cache.get(cache_key)
+        
+        if cached_result:
+            if config is None:
+                current_app.logger.info(f"Cache hit for query: {query}")
+            return cached_result
+    
     try:
         # First try with GET method - this is the most reliable approach
+        if config is None:
+            current_app.logger.info(f"Searching assets from RT API: {query}")
+            
         response = rt_api_request("GET", f"/assets?query={encoded_query}", config=config)
         
         if config is None:
             current_app.logger.debug(f"GET Response: {response}")
-            
-        return response.get("assets", [])
+        
+        # Get the assets from the response    
+        assets = response.get("assets", [])
+        
+        # Update cache
+        if use_cache and query:
+            cache_key = f"query_{hashlib.md5(query.encode()).hexdigest()}"
+            asset_cache.set(cache_key, assets)
+            if config is None:
+                current_app.logger.debug(f"Updated cache for query: {query}")
+                
+        return assets
         
     except requests.exceptions.RequestException as e:
         if config is None:  # Only log if using current_app
@@ -174,8 +303,19 @@ def search_assets(query, config=None, try_post_fallback=True):
                 
                 if config is None:
                     current_app.logger.debug(f"POST Response: {result}")
+                
+                # Get the assets from the response
+                assets = result.get("assets", [])
+                
+                # Update cache
+                if use_cache and query:
+                    import hashlib
+                    cache_key = f"query_{hashlib.md5(query.encode()).hexdigest()}"
+                    asset_cache.set(cache_key, assets)
+                    if config is None:
+                        current_app.logger.debug(f"Updated cache for query (POST): {query}")
                     
-                return result.get("assets", [])
+                return assets
                 
             except requests.exceptions.RequestException as post_e:
                 if config is None:

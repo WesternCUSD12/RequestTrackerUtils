@@ -50,6 +50,13 @@ def create_app():
             "usage": "POST /labels/update-all"
         })
         
+        routes.append({
+            "endpoint": "/labels/assets",
+            "methods": ["POST"],
+            "description": "Search for assets using direct JSON queries in RT API format",
+            "usage": "POST /labels/assets with JSON body: [{\"field\": \"Name\", \"operator\": \"LIKE\", \"value\": \"W12-\"}]"
+        })
+        
         # Tag routes
         routes.append({
             "endpoint": "/next-asset-tag",
@@ -72,17 +79,117 @@ def create_app():
             "usage": "POST /reset-asset-tag with JSON body: {'start_number': 100}"
         })
         
+        routes.append({
+            "endpoint": "/update-asset-name",
+            "methods": ["POST"],
+            "description": "Updates an asset's name in Request Tracker",
+            "usage": "POST /update-asset-name with JSON body: {'asset_id': '123', 'asset_name': 'W12-0001'}"
+        })
+        
+        routes.append({
+            "endpoint": "/webhook/asset-created",
+            "methods": ["POST"],
+            "description": "Webhook endpoint for RT to call when a new asset is created",
+            "usage": "POST /webhook/asset-created with JSON body: {'asset_id': '123', 'event': 'create'}"
+        })
+        
+        # Add documentation for RT webhook configuration
+        webhook_docs = {
+            "title": "RT Webhook Configuration",
+            "description": "To automatically assign asset tags when assets are created in Request Tracker, configure a webhook Scrip:",
+            "steps": [
+                "1. Go to Admin > Global > Scrips > Create",
+                "2. Set these Scrip properties:",
+                "   - Description: Auto Asset Tag Assignment",
+                "   - Condition: On Create",
+                "   - Stage: TransactionCreate",
+                "   - Action: User Defined",
+                "   - Template: User Defined",
+                "3. In the Custom Condition code, add:",
+                "```perl",
+                "return 1 if $self->TransactionObj->Type eq 'Create' && $self->TransactionObj->ObjectType eq 'RT::Asset';",
+                "return 0;",
+                "```",
+                "4. In the Custom Action code, add:",
+                "```perl",
+                "use LWP::UserAgent;",
+                "use JSON;",
+                "use HTTP::Request;",
+                "",
+                "my $asset_id = $self->TransactionObj->ObjectId;",
+                "my $webhook_url = 'http://your-server-address/webhook/asset-created';",
+                "",
+                "# Get the asset object to modify it later",
+                "my $asset = RT::Asset->new($RT::SystemUser);",
+                "$asset->Load($asset_id);",
+                "",
+                "# Use eval for error handling",
+                "eval {",
+                "  # Create a user agent for making HTTP requests",
+                "  my $ua = LWP::UserAgent->new(timeout => 10);",
+                "  ",
+                "  # Send POST request to the webhook with the asset ID",
+                "  my $response = $ua->post(",
+                "    $webhook_url,",
+                "    'Content-Type' => 'application/json',",
+                "    'Content' => encode_json({",
+                "      asset_id => $asset_id,",
+                "      event => 'create',",
+                "      timestamp => time()",
+                "    })",
+                "  );",
+                "  ",
+                "  # Check if the request was successful",
+                "  if ($response->is_success) {",
+                "    # Parse the JSON response",
+                "    my $result = decode_json($response->decoded_content);",
+                "    ",
+                "    # If the webhook assigned a tag, update the asset name in RT",
+                "    if ($result->{asset_tag}) {",
+                "      my $new_tag = $result->{asset_tag};",
+                "      ",
+                "      # Update the asset's name",
+                "      $RT::Logger->info(\"Updating asset #$asset_id name to '$new_tag'\");",
+                "      $asset->SetName($new_tag);",
+                "      ",
+                "      # Log the result",
+                "      $RT::Logger->info(\"Asset #$asset_id name updated to: \" . $asset->Name);",
+                "    } else {",
+                "      $RT::Logger->warning(\"No asset tag received from webhook for asset #$asset_id\");",
+                "    }",
+                "  } else {",
+                "    # Log the error if the webhook request failed",
+                "    $RT::Logger->error(\"Webhook request failed: \" . $response->status_line);",
+                "    $RT::Logger->error(\"Response content: \" . $response->decoded_content);",
+                "  }",
+                "};",
+                "if ($@) {",
+                "  # Catch any exceptions and log them",
+                "  $RT::Logger->error(\"Error in asset creation webhook: $@\");",
+                "}",
+                "",
+                "# Return success regardless of webhook result to avoid affecting RT",
+                "return 1;",
+                "```",
+                "5. Apply to: Assets",
+                "6. Set appropriate Queue/Catalog restrictions if needed",
+                "7. Save the Scrip"
+            ]
+        }
+        
         # For API requests, return JSON
         if request_wants_json():
             return jsonify({
                 "name": "Request Tracker Utils",
                 "description": "Utilities for managing Request Tracker asset tags and labels",
-                "available_routes": routes
+                "available_routes": routes,
+                "webhook_configuration": webhook_docs
             })
         
         # For browser requests, render HTML template
         return render_template('index.html', 
-                              routes=routes)
+                              routes=routes,
+                              webhook_docs=webhook_docs)
 
     return app
 

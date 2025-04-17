@@ -3,6 +3,16 @@
 {% block title %}Batch Label Printing{% endblock %}
 
 {% block content %}
+<div class="container-fluid pb-3">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Home</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('label_routes.label_home') }}">Label Printing</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Batch Labels</li>
+    </ol>
+  </nav>
+</div>
+
 <h1>Batch Label Printing</h1>
 
 <div class="row">
@@ -56,40 +66,50 @@
           </div>
           
           <script>
-            // Form validation
-            document.getElementById('query-form').addEventListener('submit', function(e) {
-              const query = document.getElementById('query').value.trim();
-              const assetNames = document.getElementById('asset_names').value.trim();
+            document.addEventListener('DOMContentLoaded', function() {
+              // Form validation
+              document.getElementById('query-form').addEventListener('submit', function(e) {
+                console.log('Form submit triggered');
+                const query = document.getElementById('query').value.trim();
+                const assetNames = document.getElementById('asset_names').value.trim();
+                
+                if (!query && !assetNames) {
+                  e.preventDefault();
+                  alert('Please enter either a query or asset names');
+                  return false;
+                }
+                
+                // Log form submission for debugging
+                console.log('Form being submitted with:');
+                console.log('- Query:', query);
+                console.log('- Asset names:', assetNames);
+                console.log('- Direct lookup:', document.getElementById('directLookup').checked);
+                
+                // Allow form submission
+                return true;
+              });
               
-              if (!query && !assetNames) {
-                e.preventDefault();
-                alert('Please enter either a query or asset names');
-                return false;
-              }
+              // Clear other field when one is filled
+              document.getElementById('query').addEventListener('input', function() {
+                if (this.value.trim()) {
+                  document.getElementById('asset_names').value = '';
+                }
+              });
               
-              return true;
-            });
-            
-            // Clear other field when one is filled
-            document.getElementById('query').addEventListener('input', function() {
-              if (this.value.trim()) {
+              document.getElementById('asset_names').addEventListener('input', function() {
+                if (this.value.trim()) {
+                  document.getElementById('query').value = '';
+                }
+              });
+              
+              // Switch between tabs
+              document.getElementById('query-tab').addEventListener('click', function() {
                 document.getElementById('asset_names').value = '';
-              }
-            });
-            
-            document.getElementById('asset_names').addEventListener('input', function() {
-              if (this.value.trim()) {
+              });
+              
+              document.getElementById('names-tab').addEventListener('click', function() {
                 document.getElementById('query').value = '';
-              }
-            });
-            
-            // Switch between tabs
-            document.getElementById('query-tab').addEventListener('click', function() {
-              document.getElementById('asset_names').value = '';
-            });
-            
-            document.getElementById('names-tab').addEventListener('click', function() {
-              document.getElementById('query').value = '';
+              });
             });
           </script>
           
@@ -137,6 +157,17 @@
         </ul>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="mt-4 text-center">
+  <div class="btn-group">
+    <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Home
+    </a>
+    <a href="{{ url_for('label_routes.label_home') }}" class="btn btn-outline-primary">
+      <i class="bi bi-printer"></i> Single Label Printing
+    </a>
   </div>
 </div>
 {% endblock %}

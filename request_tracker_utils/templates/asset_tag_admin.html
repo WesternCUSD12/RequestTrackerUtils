@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+
+{% block title %}Asset Tag Administration{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1 class="mb-3">Asset Tag Administration</h1>
+      <p class="lead">View and modify the current asset tag sequence.</p>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Home</a></li>
+          <li class="breadcrumb-item active">Asset Tag Admin</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Current Sequence Info Card -->
+    <div class="col-md-6 mb-4">
+      <div class="card h-100">
+        <div class="card-header bg-primary text-white">
+          <h2 class="h5 mb-0"><i class="bi bi-info-circle"></i> Current Sequence Info</h2>
+        </div>
+        <div class="card-body">
+          <div class="mb-4">
+            <h3 class="h4 mb-3">Next Asset Tag</h3>
+            <div class="py-3 px-4 bg-light rounded d-flex align-items-center justify-content-between">
+              <span class="h2 mb-0" id="current-tag">{{ next_tag }}</span>
+              <div>
+                <button class="btn btn-outline-secondary btn-sm mb-1" id="refresh-btn" title="Refresh">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+              </div>
+            </div>
+            <div class="small text-muted mt-2">
+              <div><strong>Prefix:</strong> <span id="tag-prefix">{{ prefix }}</span></div>
+              <div><strong>Current Sequence:</strong> <span id="tag-sequence">{{ sequence }}</span></div>
+              <div><strong>Last Updated:</strong> <span id="last-updated">{{ last_updated }}</span></div>
+            </div>
+          </div>
+
+          <div class="alert alert-info" role="alert">
+            <i class="bi bi-lightbulb"></i> The next asset created in RT will receive this tag when the webhook is configured.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Set New Sequence Card -->
+    <div class="col-md-6 mb-4">
+      <div class="card h-100">
+        <div class="card-header bg-warning">
+          <h2 class="h5 mb-0"><i class="bi bi-pencil-square"></i> Update Sequence</h2>
+        </div>
+        <div class="card-body">
+          <form id="update-sequence-form">
+            <div class="mb-3">
+              <label for="new-sequence" class="form-label">New Sequence Number</label>
+              <input type="number" class="form-control" id="new-sequence" min="0" required>
+              <div class="form-text">This will set the next asset tag to {{ prefix }}<span id="preview-sequence">####</span></div>
+            </div>
+            
+            <div class="alert alert-warning" role="alert">
+              <i class="bi bi-exclamation-triangle"></i> <strong>Warning:</strong> Changing the sequence number may cause duplicate tags if not used carefully.
+            </div>
+            
+            <div class="d-grid">
+              <button type="submit" class="btn btn-warning">Update Sequence</button>
+            </div>
+          </form>
+          
+          <div class="mt-3" id="update-result" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Activity Card -->
+  <div class="row">
+    <div class="col-12 mb-4">
+      <div class="card">
+        <div class="card-header bg-secondary text-white">
+          <h2 class="h5 mb-0"><i class="bi bi-clock-history"></i> Recent Asset Tag Activity</h2>
+        </div>
+        <div class="card-body">
+          {% if log_entries %}
+            <div class="table-responsive">
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Asset Tag</th>
+                    <th>RT Asset ID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for entry in log_entries %}
+                  <tr>
+                    <td>{{ entry.timestamp }}</td>
+                    <td>{{ entry.asset_tag }}</td>
+                    <td>
+                      <a href="{{ rt_url }}/Asset/Display.html?id={{ entry.rt_id }}" target="_blank">
+                        {{ entry.rt_id }} <i class="bi bi-box-arrow-up-right small"></i>
+                      </a>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="alert alert-info">
+              No recent activity found.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Update preview of new sequence as user types
+    const newSequenceInput = document.getElementById('new-sequence');
+    const previewSequence = document.getElementById('preview-sequence');
+    const zeroPad = (num, places) => String(num).padStart(places, '0');
+    
+    newSequenceInput.addEventListener('input', function() {
+      const value = parseInt(this.value) || 0;
+      previewSequence.textContent = zeroPad(value, 4);
+    });
+    
+    // Handle refresh button click
+    document.getElementById('refresh-btn').addEventListener('click', function() {
+      fetch('/next-asset-tag')
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('current-tag').textContent = data.next_asset_tag;
+          document.getElementById('tag-sequence').textContent = data.next_asset_tag.replace(/^[A-Za-z0-9\-]+-/, '');
+          document.getElementById('last-updated').textContent = new Date().toLocaleString();
+        })
+        .catch(error => {
+          console.error('Error refreshing tag:', error);
+          alert('Failed to refresh tag. Please try again.');
+        });
+    });
+    
+    // Handle form submission
+    document.getElementById('update-sequence-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const newSequence = parseInt(newSequenceInput.value);
+      const updateResult = document.getElementById('update-result');
+      
+      fetch('/reset-asset-tag', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          start_number: newSequence
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          updateResult.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> ${data.error}</div>`;
+        } else {
+          updateResult.innerHTML = `<div class="alert alert-success"><i class="bi bi-check-circle"></i> ${data.message}</div>`;
+          document.getElementById('current-tag').textContent = data.new_start_tag;
+          document.getElementById('tag-sequence').textContent = newSequence;
+          document.getElementById('last-updated').textContent = new Date().toLocaleString();
+          newSequenceInput.value = '';
+          previewSequence.textContent = '####';
+        }
+        updateResult.style.display = 'block';
+        
+        // Hide the result after 5 seconds
+        setTimeout(() => {
+          updateResult.style.display = 'none';
+        }, 5000);
+      })
+      .catch(error => {
+        console.error('Error updating sequence:', error);
+        updateResult.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> Failed to update sequence. Please try again.</div>`;
+        updateResult.style.display = 'block';
+      });
+    });
+  });
+</script>
+{% endblock %}

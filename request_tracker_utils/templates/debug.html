@@ -4,6 +4,14 @@
 
 {% block content %}
 <div class="container">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Home</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('label_routes.label_home') }}">Label Printing</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Diagnostic Tools</li>
+    </ol>
+  </nav>
+
   <h1>RT Asset Lookup Diagnostic Tools</h1>
   <p class="lead">Use these tools to troubleshoot asset lookup issues</p>
 
@@ -123,6 +131,22 @@
             <strong>API Troubleshooting:</strong> If you're experiencing issues with asset lookups, the "Test API Methods" tool will help determine which API request method works with your RT instance.
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="row mt-4 mb-4">
+    <div class="col-12 text-center">
+      <div class="btn-group">
+        <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left"></i> Back to Home
+        </a>
+        <a href="{{ url_for('label_routes.label_home') }}" class="btn btn-outline-primary">
+          <i class="bi bi-printer"></i> Back to Label Printing
+        </a>
+        <a href="{{ url_for('label_routes.batch_labels') }}" class="btn btn-outline-success">
+          <i class="bi bi-printer-fill"></i> Batch Label Printing
+        </a>
       </div>
     </div>
   </div>
