@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+
+{% block title %}Batch Label Printing{% endblock %}
+
+{% block content %}
+<div class="container-fluid pb-3">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Home</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('label_routes.label_home') }}">Label Printing</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Batch Labels</li>
+    </ol>
+  </nav>
+</div>
+
+<h1>Batch Label Printing</h1>
+
+<div class="row">
+  <div class="col-md-8">
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5>Query Assets</h5>
+      </div>
+      <div class="card-body">
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+        
+        <form id="query-form" action="{{ url_for('label_routes.batch_labels') }}" method="post">
+          <!-- Tab navigation -->
+          <ul class="nav nav-tabs mb-3" id="batchTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="query-tab" data-bs-toggle="tab" data-bs-target="#query-content" type="button" role="tab" aria-controls="query-content" aria-selected="true">By Query</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="names-tab" data-bs-toggle="tab" data-bs-target="#names-content" type="button" role="tab" aria-controls="names-content" aria-selected="false">By Asset Names</button>
+            </li>
+          </ul>
+          
+          <!-- Tab content -->
+          <div class="tab-content" id="batchTabsContent">
+            <!-- Query tab -->
+            <div class="tab-pane fade show active" id="query-content" role="tabpanel" aria-labelledby="query-tab">
+              <div class="mb-3">
+                <label for="query" class="form-label">Request Tracker Query</label>
+                <textarea class="form-control" id="query" name="query" rows="4" placeholder="Enter RT query to find assets"></textarea>
+                <div class="form-text">Examples: "Status='Production' AND CreatedBy='admin'", "Name LIKE 'W12-*'", "CF.{Serial Number} LIKE 'DEL*'"</div>
+              </div>
+            </div>
+            
+            <!-- Names tab -->
+            <div class="tab-pane fade" id="names-content" role="tabpanel" aria-labelledby="names-tab">
+              <div class="mb-3">
+                <label for="asset_names" class="form-label">Asset Names</label>
+                <textarea class="form-control" id="asset_names" name="asset_names" rows="4" placeholder="Enter asset names, one per line (e.g., W12-0001, W12-0002)"></textarea>
+                <div class="form-text">Enter multiple asset names separated by commas, spaces, or newlines</div>
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" value="true" id="directLookup" name="direct">
+                <label class="form-check-label" for="directLookup">
+                  Use direct lookup (more reliable but slower)
+                </label>
+                <div class="form-text">Enable this if you're having trouble finding assets by name</div>
+              </div>
+            </div>
+          </div>
+          
+          <script>
+            document.addEventListener('DOMContentLoaded', function() {
+              // Form validation
+              document.getElementById('query-form').addEventListener('submit', function(e) {
+                console.log('Form submit triggered');
+                const query = document.getElementById('query').value.trim();
+                const assetNames = document.getElementById('asset_names').value.trim();
+                
+                if (!query && !assetNames) {
+                  e.preventDefault();
+                  alert('Please enter either a query or asset names');
+                  return false;
+                }
+                
+                // Log form submission for debugging
+                console.log('Form being submitted with:');
+                console.log('- Query:', query);
+                console.log('- Asset names:', assetNames);
+                console.log('- Direct lookup:', document.getElementById('directLookup').checked);
+                
+                // Allow form submission
+                return true;
+              });
+              
+              // Clear other field when one is filled
+              document.getElementById('query').addEventListener('input', function() {
+                if (this.value.trim()) {
+                  document.getElementById('asset_names').value = '';
+                }
+              });
+              
+              document.getElementById('asset_names').addEventListener('input', function() {
+                if (this.value.trim()) {
+                  document.getElementById('query').value = '';
+                }
+              });
+              
+              // Switch between tabs
+              document.getElementById('query-tab').addEventListener('click', function() {
+                document.getElementById('asset_names').value = '';
+              });
+              
+              document.getElementById('names-tab').addEventListener('click', function() {
+                document.getElementById('query').value = '';
+              });
+            });
+          </script>
+          
+          <button type="submit" class="btn btn-primary">Generate Batch Labels</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">
+        <h5>Query Help</h5>
+      </div>
+      <div class="card-body">
+        <p>You can use any valid Request Tracker query syntax:</p>
+        <ul>
+          <li><code>Name LIKE 'pattern'</code> - Search by asset name</li>
+          <li><code>Status='value'</code> - Search by status</li>
+          <li><code>CF.{Field Name}='value'</code> - Search by custom field</li>
+          <li><code>Created > '2023-01-01'</code> - Search by creation date</li>
+          <li><code>A AND B</code> - Combine conditions with AND</li>
+          <li><code>A OR B</code> - Combine conditions with OR</li>
+        </ul>
+        <p>For more complex queries, consult the <a href="https://docs.bestpractical.com/rt/5.0.0/query_builder.html" target="_blank">RT query documentation</a>.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mt-3">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header">
+        <h5>Batch Printing Tips</h5>
+      </div>
+      <div class="card-body">
+        <p>When printing batch labels:</p>
+        <ul>
+          <li>Each label will be on its own page with proper page breaks.</li>
+          <li>Use your browser's print function (Ctrl+P or Cmd+P) to print the labels.</li>
+          <li>In the print dialog, select "Background Graphics" to include QR codes and barcodes.</li>
+          <li>For best results, use a modern browser like Chrome or Firefox.</li>
+          <li>Labels are designed to fit {{ config.LABEL_WIDTH_MM }}mm x {{ config.LABEL_HEIGHT_MM }}mm label sizes.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-4 text-center">
+  <div class="btn-group">
+    <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Home
+    </a>
+    <a href="{{ url_for('label_routes.label_home') }}" class="btn btn-outline-primary">
+      <i class="bi bi-printer"></i> Single Label Printing
+    </a>
+  </div>
+</div>
+{% endblock %}

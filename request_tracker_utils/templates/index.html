@@ -6,19 +6,207 @@
 <h1>Request Tracker Utils</h1>
 <p>Utilities for managing Request Tracker asset tags and labels</p>
 
-<h2>Available Routes</h2>
-<ul class="route-list">
-    {% for route in routes %}
-    <li class="route-item">
-        <h3>{{ route.endpoint }}</h3>
-        <div>
-            {% for method in route.methods %}
-            <span class="route-method">{{ method }}</span>
-            {% endfor %}
+<div class="mb-4">
+    <h2>Web Interfaces</h2>
+    <div class="list-group">
+        <a href="{{ url_for('label_routes.label_home') }}" class="list-group-item list-group-item-action">
+            <i class="bi bi-printer"></i> Label Printing
+            <p class="text-muted small mb-0 mt-1">Generate and print asset labels one at a time</p>
+        </a>
+        <a href="{{ url_for('label_routes.batch_labels') }}" class="list-group-item list-group-item-action">
+            <i class="bi bi-printer-fill"></i> Batch Label Printing
+            <p class="text-muted small mb-0 mt-1">Print multiple asset labels using an RT query with page breaks</p>
+        </a>
+        <a href="{{ url_for('tag_routes.asset_tag_admin') }}" class="list-group-item list-group-item-action">
+            <i class="bi bi-tag"></i> Asset Tag Admin
+            <p class="text-muted small mb-0 mt-1">View and update the asset tag sequence and logs</p>
+        </a>
+    </div>
+</div>
+
+<div class="mb-4">
+    <h2 class="d-flex align-items-center">
+        <button class="btn btn-link text-decoration-none text-reset ps-0" type="button" data-bs-toggle="collapse" data-bs-target="#usageGuideCollapse" aria-expanded="true" aria-controls="usageGuideCollapse">
+            <i class="bi bi-chevron-down me-2 section-toggle"></i>
+            Usage Guide
+        </button>
+    </h2>
+    <div class="collapse show" id="usageGuideCollapse">
+        <div class="row">
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5><i class="bi bi-printer"></i> Label Printing</h5>
+                </div>
+                <div class="card-body">
+                    <p>Generate asset labels from Request Tracker:</p>
+                    <ul>
+                        <li><strong>Single Label</strong>: Enter an RT asset ID to generate a label</li>
+                        <li><strong>Batch Printing</strong>: Search for assets using RT query syntax</li>
+                        <li>Labels include asset details, serial numbers, and QR codes</li>
+                        <li>Use browser printing features for physical labels</li>
+                    </ul>
+                </div>
+            </div>
         </div>
-        <p>{{ route.description }}</p>
-        <p><strong>Usage:</strong> {{ route.usage }}</p>
-    </li>
-    {% endfor %}
-</ul>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5><i class="bi bi-tag"></i> Asset Tag Management</h5>
+                </div>
+                <div class="card-body">
+                    <p>Automated asset tag assignment:</p>
+                    <ul>
+                        <li><strong>Automatic</strong>: RT webhook assigns tags to new assets</li>
+                        <li><strong>Sequential</strong>: Tags follow configurable numbering sequence</li>
+                        <li><strong>Tracked</strong>: All tag assignments are logged</li>
+                        <li><strong>Customizable</strong>: Use custom prefix (default: W12-)</li>
+                    </ul>
+                    <a href="#webhook-config" class="btn btn-sm btn-outline-primary">Webhook Setup Guide</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5><i class="bi bi-code-slash"></i> API Routes</h5>
+                </div>
+                <div class="card-body">
+                    <p>Integrate with other systems via API:</p>
+                    <ul>
+                        <li>Generate labels programmatically</li>
+                        <li>Retrieve and assign asset tags</li>
+                        <li>Update asset information in RT</li>
+                    </ul>
+                    <a href="#api-routes" class="btn btn-sm btn-outline-primary">View API Documentation</a>
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+</div>
+
+<div class="mb-5">
+    <h2 id="webhook-config" class="d-flex align-items-center">
+        <button class="btn btn-link text-decoration-none text-reset ps-0" type="button" data-bs-toggle="collapse" data-bs-target="#webhookConfigCollapse" aria-expanded="false" aria-controls="webhookConfigCollapse">
+            <i class="bi bi-chevron-right me-2 section-toggle"></i>
+            RT Webhook Configuration
+        </button>
+    </h2>
+    <div class="collapse" id="webhookConfigCollapse">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h3 class="h5">{{ webhook_docs.title }}</h3>
+            </div>
+            <div class="card-body">
+                <p>{{ webhook_docs.description }}</p>
+                
+                <div class="mb-4">
+                    {% set in_code_block = false %}
+                    {% set code_content = [] %}
+                    
+                    {% for step in webhook_docs.steps %}
+                        {% if step.startswith('```') %}
+                            {% if step == "```perl" %}
+                                {% set in_code_block = true %}
+                            {% else %}
+                                <div class="bg-light border rounded p-3 mb-3">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="fw-bold">Perl Code</span>
+                                        <span class="badge bg-secondary">RT Scrip Action</span>
+                                    </div>
+                                    <pre class="bg-light text-dark p-0 m-0"><code>{% for line in code_content %}{{ line }}
+{% endfor %}</code></pre>
+                                </div>
+                                {% set in_code_block = false %}
+                                {% set code_content = [] %}
+                            {% endif %}
+                        {% else %}
+                            {% if in_code_block %}
+                                {% set _ = code_content.append(step) %}
+                            {% else %}
+                                {% if step %}
+                                    {% if step.startswith('   ') %}
+                                        <div class="ms-4">{{ step }}</div>
+                                    {% else %}
+                                        <div>{{ step }}</div>
+                                    {% endif %}
+                                {% else %}
+                                    <div>&nbsp;</div>
+                                {% endif %}
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill"></i> 
+                    <strong>Note:</strong> Be sure to replace 'http://your-server-address' with your actual server URL.
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+</div>
+
+<h2 id="api-routes" class="d-flex align-items-center">
+    <button class="btn btn-link text-decoration-none text-reset ps-0" type="button" data-bs-toggle="collapse" data-bs-target="#apiRoutesCollapse" aria-expanded="false" aria-controls="apiRoutesCollapse">
+        <i class="bi bi-chevron-right me-2 section-toggle"></i>
+        Available API Routes
+    </button>
+</h2>
+<div class="collapse" id="apiRoutesCollapse">
+    <ul class="route-list">
+        {% for route in routes %}
+        <li class="route-item">
+            <h3>{{ route.endpoint }}</h3>
+            <div>
+                {% for method in route.methods %}
+                <span class="route-method">{{ method }}</span>
+                {% endfor %}
+            </div>
+            <p>{{ route.description }}</p>
+            <p><strong>Usage:</strong> {{ route.usage }}</p>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<script>
+  // Toggle chevron icon when collapsible sections expand/collapse
+  document.addEventListener('DOMContentLoaded', function() {
+    const collapseElements = document.querySelectorAll('.collapse');
+    
+    collapseElements.forEach(function(collapseEl) {
+      collapseEl.addEventListener('show.bs.collapse', function() {
+        const triggerBtn = document.querySelector(`[data-bs-target="#${this.id}"]`);
+        const icon = triggerBtn.querySelector('.section-toggle');
+        icon.classList.remove('bi-chevron-right');
+        icon.classList.add('bi-chevron-down');
+      });
+      
+      collapseEl.addEventListener('hide.bs.collapse', function() {
+        const triggerBtn = document.querySelector(`[data-bs-target="#${this.id}"]`);
+        const icon = triggerBtn.querySelector('.section-toggle');
+        icon.classList.remove('bi-chevron-down');
+        icon.classList.add('bi-chevron-right');
+      });
+    });
+    
+    // Auto-expand sections if they're directly targeted by URL hash
+    const hash = window.location.hash;
+    if (hash) {
+      const targetedSection = document.querySelector(hash);
+      if (targetedSection) {
+        const collapseEl = targetedSection.nextElementSibling;
+        if (collapseEl && collapseEl.classList.contains('collapse')) {
+          const bsCollapse = new bootstrap.Collapse(collapseEl);
+          bsCollapse.show();
+        }
+      }
+    }
+  });
+</script>
 {% endblock %}

@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+
+{% block title %}RT Asset Lookup Debug{% endblock %}
+
+{% block content %}
+<div class="container">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Home</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('label_routes.label_home') }}">Label Printing</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Diagnostic Tools</li>
+    </ol>
+  </nav>
+
+  <h1>RT Asset Lookup Diagnostic Tools</h1>
+  <p class="lead">Use these tools to troubleshoot asset lookup issues</p>
+
+  <div class="row mt-4">
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">Direct Asset Lookup</h5>
+        </div>
+        <div class="card-body">
+          <form id="lookup-form" action="/labels/direct-lookup" method="get" target="_blank">
+            <div class="mb-3">
+              <label for="name" class="form-label">Asset Name</label>
+              <input type="text" class="form-control" id="name" name="name" placeholder="e.g., W12-1246">
+            </div>
+            <button type="submit" class="btn btn-primary">Look Up Asset</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header bg-success text-white">
+          <h5 class="mb-0">Direct Print by ID</h5>
+        </div>
+        <div class="card-body">
+          <form id="direct-print-form" action="/labels/direct-print" method="get" target="_blank">
+            <div class="mb-3">
+              <label for="id" class="form-label">Asset ID</label>
+              <input type="text" class="form-control" id="id" name="id" placeholder="e.g., 123">
+            </div>
+            <button type="submit" class="btn btn-success">Print Label</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header bg-purple text-white" style="background-color: #6f42c1;">
+          <h5 class="mb-0">Get Asset Information</h5>
+        </div>
+        <div class="card-body">
+          <form id="asset-info-form" action="/labels/get-asset-info" method="get" target="_blank">
+            <div class="mb-3">
+              <label for="info-id" class="form-label">Asset ID</label>
+              <input type="text" class="form-control" id="info-id" name="id" placeholder="e.g., 123">
+            </div>
+            <button type="submit" class="btn" style="background-color: #6f42c1; color: white;">Get Info</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="row mt-4">
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header bg-info text-white">
+          <h5 class="mb-0">Asset List</h5>
+        </div>
+        <div class="card-body">
+          <p>View a list of assets in RT to check available names and IDs:</p>
+          <a href="/labels/fetch-assets" target="_blank" class="btn btn-info">List Assets</a>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header bg-warning text-dark">
+          <h5 class="mb-0">Search Assets by Name</h5>
+        </div>
+        <div class="card-body">
+          <form id="search-form" action="/labels/search-assets" method="get" target="_blank">
+            <div class="mb-3">
+              <label for="q" class="form-label">Search Term</label>
+              <input type="text" class="form-control" id="q" name="q" placeholder="e.g., W12">
+            </div>
+            <button type="submit" class="btn btn-warning">Search Assets</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header bg-danger text-white">
+          <h5 class="mb-0">Test API Methods</h5>
+        </div>
+        <div class="card-body">
+          <p>Test different API methods to see which ones work with your RT instance:</p>
+          <a href="/labels/test-api-methods" target="_blank" class="btn btn-danger">Run API Tests</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="row mt-4">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-header bg-secondary text-white">
+          <h5 class="mb-0">Troubleshooting Tips</h5>
+        </div>
+        <div class="card-body">
+          <ol>
+            <li>First, run the "Test API Methods" tool to see which API request format works with your RT instance</li>
+            <li>Use the "List Assets" tool to see what assets actually exist in RT</li>
+            <li>Use "Search Assets by Name" to find assets with similar names (e.g., search for "W12" to find all W12-xxxx assets)</li>
+            <li>Once you find an asset's ID, use the "Direct Print by ID" option for the most reliable printing</li>
+            <li>If the asset name contains special characters, try using its ID instead</li>
+            <li>Check that the asset names in RT exactly match what you're entering (including case, spacing, etc.)</li>
+          </ol>
+          
+          <div class="alert alert-info mt-3">
+            <strong>API Troubleshooting:</strong> If you're experiencing issues with asset lookups, the "Test API Methods" tool will help determine which API request method works with your RT instance.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="row mt-4 mb-4">
+    <div class="col-12 text-center">
+      <div class="btn-group">
+        <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left"></i> Back to Home
+        </a>
+        <a href="{{ url_for('label_routes.label_home') }}" class="btn btn-outline-primary">
+          <i class="bi bi-printer"></i> Back to Label Printing
+        </a>
+        <a href="{{ url_for('label_routes.batch_labels') }}" class="btn btn-outline-success">
+          <i class="bi bi-printer-fill"></i> Batch Label Printing
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
