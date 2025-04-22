@@ -9,8 +9,72 @@ from PIL import Image
 from barcode import Code128
 from barcode.writer import ImageWriter
 from request_tracker_utils.utils.rt_api import fetch_asset_data, search_assets, update_asset_custom_field, find_asset_by_name, rt_api_request
+from request_tracker_utils.celery import make_celery
 
 bp = Blueprint('label_routes', __name__, url_prefix='/labels')
+
+# Initialize Celery
+celery = make_celery(current_app)
+
+@celery.task
+def update_all_assets_task():
+    """
+    Background task to update the "Label" custom field for all assets.
+    """
+    try:
+        # Fetch all assets
+        assets = search_assets("", current_app.config)
+        current_app.logger.info(f"Found {len(assets)} assets to update")
+
+        # Track successes and failures
+        updated_count = 0
+        failed_assets = []
+
+        for asset in assets:
+            asset_id = asset.get("id")
+            asset_name = asset.get("Name", f"Asset #{asset_id}")
+
+            try:
+                # Update the "Label" custom field
+                update_asset_custom_field(asset_id, "Label", "Print Label", current_app.config)
+                updated_count += 1
+                current_app.logger.info(f"Updated Label field for asset {asset_name} (ID: {asset_id})")
+            except Exception as e:
+                current_app.logger.error(f"Failed to update asset {asset_name} (ID: {asset_id}): {e}")
+                failed_assets.append({"id": asset_id, "name": asset_name})
+
+        return {
+            "total_assets": len(assets),
+            "updated_assets": updated_count,
+            "failed_assets": len(failed_assets),
+            "failed_details": failed_assets
+        }
+    except Exception as e:
+        current_app.logger.error(f"Error updating assets: {e}")
+        raise e
+
+@bp.route('/update-all-labels', methods=['POST'])
+def update_all_labels_endpoint():
+    """
+    Endpoint to trigger the background task for updating all assets.
+    """
+    task = update_all_assets_task.apply_async()
+    return jsonify({
+        "message": "Task to update all assets has been started.",
+        "task_id": task.id
+    }), 202
+
+@bp.route('/task-status/<task_id>', methods=['GET'])
+def task_status(task_id):
+    """
+    Check the status of a Celery task.
+    """
+    task = celery.AsyncResult(task_id)
+    return jsonify({
+        "task_id": task.id,
+        "status": task.status,
+        "result": task.result
+    })
 
 def get_custom_field_value(custom_fields, field_name, default="N/A"):
     """

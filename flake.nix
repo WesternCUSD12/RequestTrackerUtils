@@ -95,6 +95,26 @@
                   default = 4;
                   description = "Padding for labels.";
                 };
+                celeryBrokerUrl = lib.mkOption {
+                  type = lib.types.str;
+                  default = "redis://localhost:6379/0";
+                  description = "URL for the Celery broker (e.g., Redis).";
+                };
+                celeryResultBackend = lib.mkOption {
+                  type = lib.types.str;
+                  default = "redis://localhost:6379/0";
+                  description = "URL for the Celery result backend.";
+                };
+                redisEnable = lib.mkOption {
+                  type = lib.types.bool;
+                  default = false;
+                  description = "Enable and run a local Redis service.";
+                };
+                redisPort = lib.mkOption {
+                  type = lib.types.int;
+                  default = 6379;
+                  description = "Port for the local Redis service.";
+                };
               };
 
               config = lib.mkIf config.services.requestTrackerUtils.enable {
@@ -118,6 +138,8 @@
                       "PREFIX=${config.services.requestTrackerUtils.prefix}"
                       "PADDING=${toString config.services.requestTrackerUtils.padding}"
                       "PORT=${toString config.services.requestTrackerUtils.port}"
+                      "CELERY_BROKER_URL=${config.services.requestTrackerUtils.celeryBrokerUrl}" # Pass Celery broker URL
+                      "CELERY_RESULT_BACKEND=${config.services.requestTrackerUtils.celeryResultBackend}" # Pass Celery result backend
                     ];
                     EnvironmentFile = config.services.requestTrackerUtils.secretsFile;
                     Restart = "always";
@@ -139,6 +161,12 @@
                   mkdir -p ${config.services.requestTrackerUtils.workingDirectory}
                   chown ${config.services.requestTrackerUtils.user}:${config.services.requestTrackerUtils.group} ${config.services.requestTrackerUtils.workingDirectory}
                 '';
+
+                services.redis = ib.mkIf config.services.requestTrackerUtils.redisEnable{
+                  enable = true;
+                  port = config.services.requestTrackerUtils.redisPort;
+                  bind = [ "127.0.0.1" ]; # Bind to localhost for security
+                };
               };
             };
         };
