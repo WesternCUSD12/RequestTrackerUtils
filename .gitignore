@@ -210,7 +210,6 @@ pyrightconfig.json
 *.egg-info
 
 # Personal dev stuff
-scripts/
 _tests/
 .aider*
 
@@ -241,3 +240,9 @@ result
 
 asset_tag_confirmations.log
 asset_tag_sequence.txt
+
+# Syncthing
+
+.stfolder/
+.stignore
+syncthing-folder*
