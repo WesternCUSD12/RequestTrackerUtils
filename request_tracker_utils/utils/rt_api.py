@@ -1,33 +1,54 @@
 import requests
 import time
 import threading
+import json
+import os
+import random
 from flask import current_app
 from functools import lru_cache
+import logging
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from pathlib import Path
 
-# Simple in-memory cache for assets with expiration
-class AssetCache:
-    def __init__(self, max_size=500, ttl=3600):  # Cache up to 500 assets for 1 hour
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+class PersistentAssetCache:
+    def __init__(self, max_size=1500, ttl=259200):  # Cache up to 1500 assets for 72 hours (259200 seconds)
         self.cache = {}
         self.max_size = max_size
         self.ttl = ttl
         self.lock = threading.RLock()
+        self.cache_file = Path.home() / '.rtutils' / 'asset_cache.json'
         
-        # Start a background thread to clean expired entries
+        # Ensure cache directory exists
+        self.cache_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Load existing cache from file
+        self._load_cache()
+        
+        # Start background threads
         self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
+        self.save_thread = threading.Thread(target=self._periodic_save_loop, daemon=True)
         self.cleanup_thread.start()
-    
+        self.save_thread.start()
+
     def get(self, key):
         """Get an item from cache if it exists and is not expired"""
         with self.lock:
             if key in self.cache:
                 entry = self.cache[key]
                 if time.time() < entry['expires']:
+                    logger.debug(f"Cache hit for key: {key}")
                     return entry['data']
                 else:
                     # Remove expired entry
+                    logger.debug(f"Removing expired entry for key: {key}")
                     del self.cache[key]
         return None
-    
+
     def set(self, key, value):
         """Add an item to the cache with expiration"""
         with self.lock:
@@ -40,18 +61,28 @@ class AssetCache:
                 'data': value,
                 'expires': time.time() + self.ttl
             }
-    
+            logger.debug(f"Added/updated cache entry for key: {key}")
+            self._save_cache()
+
     def clear(self):
         """Clear all cache entries"""
         with self.lock:
             self.cache.clear()
-    
+            self._save_cache()
+            logger.info("Cache cleared")
+
     def _cleanup_loop(self):
         """Background thread to clean expired entries"""
         while True:
             time.sleep(300)  # Check every 5 minutes
             self._cleanup_expired()
-    
+
+    def _periodic_save_loop(self):
+        """Background thread to periodically save cache to disk"""
+        while True:
+            time.sleep(600)  # Save every 10 minutes
+            self._save_cache()
+
     def _cleanup_expired(self):
         """Remove all expired entries from cache"""
         now = time.time()
@@ -59,9 +90,90 @@ class AssetCache:
             expired_keys = [key for key, entry in self.cache.items() if entry['expires'] < now]
             for key in expired_keys:
                 del self.cache[key]
+            if expired_keys:
+                logger.info(f"Cleaned up {len(expired_keys)} expired entries")
+                self._save_cache()
 
-# Initialize the asset cache
-asset_cache = AssetCache()
+    def _save_cache(self):
+        """Save cache to disk"""
+        try:
+            with self.lock:
+                # Create a copy of the cache with serializable data
+                cache_data = {
+                    'last_updated': time.time(),
+                    'entries': {
+                        k: {
+                            'data': v['data'],
+                            'expires': v['expires']
+                        } for k, v in self.cache.items()
+                    }
+                }
+                
+                # Save to file atomically using a temporary file
+                temp_file = self.cache_file.with_suffix('.tmp')
+                with open(temp_file, 'w') as f:
+                    json.dump(cache_data, f)
+                temp_file.replace(self.cache_file)
+                logger.debug("Cache saved to disk")
+        except Exception as e:
+            logger.error(f"Error saving cache to disk: {e}")
+
+    def _load_cache(self):
+        """Load cache from disk"""
+        try:
+            if self.cache_file.exists():
+                with open(self.cache_file, 'r') as f:
+                    cache_data = json.load(f)
+                    now = time.time()
+                    
+                    # Only load non-expired entries
+                    valid_entries = {
+                        k: v for k, v in cache_data.get('entries', {}).items()
+                        if v['expires'] > now
+                    }
+                    
+                    with self.lock:
+                        self.cache = valid_entries
+                    
+                    expired_count = len(cache_data.get('entries', {})) - len(valid_entries)
+                    logger.info(f"Loaded {len(valid_entries)} valid entries from disk cache")
+                    if expired_count > 0:
+                        logger.info(f"Skipped {expired_count} expired entries")
+        except Exception as e:
+            logger.error(f"Error loading cache from disk: {e}")
+            # Start with empty cache if load fails
+            self.cache = {}
+
+# Initialize the cache
+asset_cache = PersistentAssetCache()
+
+def create_retry_session(retries=5, backoff_factor=1.0, status_forcelist=(500, 502, 503, 504)):
+    """Create a requests Session with retry configuration
+    
+    Args:
+        retries (int): Number of retries before giving up
+        backoff_factor (float): Factor to apply between attempts. Wait will be:
+            {backoff factor} * (2 ** ({number of total retries} - 1))
+        status_forcelist (tuple): Status codes that trigger a retry
+    """
+    session = requests.Session()
+    
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+        allowed_methods=frozenset(['GET', 'POST', 'PUT', 'DELETE', 'HEAD']),
+        respect_retry_after_header=True,
+        # Add jitter to prevent thundering herd
+        backoff_jitter=random.uniform(0, 0.1)
+    )
+    
+    adapter = HTTPAdapter(max_retries=retry, pool_maxsize=10)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
 
 def sanitize_json(obj):
     """
@@ -87,60 +199,71 @@ def sanitize_json(obj):
 
 def rt_api_request(method, endpoint, data=None, config=None):
     """
-    Make a request to the RT API.
+    Make a request to the RT API with retry logic.
     
     Args:
-        method (str): HTTP method (GET, POST, PUT, DELETE)
+        method (str): HTTP method (GET, POST, etc.)
         endpoint (str): API endpoint path
-        data (dict, optional): JSON data to send with the request
-        config (dict, optional): Configuration dictionary, defaults to current_app.config
+        data (dict, optional): Data to send with the request
+        config (dict, optional): Configuration dictionary
         
     Returns:
-        dict: JSON response from API or None if request fails
+        dict: JSON response from the API
         
     Raises:
-        requests.exceptions.RequestException: If the request fails
+        requests.exceptions.RequestException: If the request fails after all retries
     """
-    # Use provided config or fall back to current_app.config
-    cfg = config or current_app.config
+    if config is None:
+        config = current_app.config
     
+    base_url = config.get('RT_URL')
+    api_endpoint = config.get('API_ENDPOINT')
+    token = config.get('RT_TOKEN')
+    
+    url = f"{base_url}{api_endpoint}{endpoint}"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"token {cfg['RT_TOKEN']}",
+        "Authorization": f"token {token}"
     }
-    url = f"{cfg['RT_URL']}{cfg['API_ENDPOINT']}{endpoint}"
-    
-    if config is None:  # Log request details if using current_app
-        current_app.logger.debug(f"RT API Request: {method} {url}")
-        if data:
-            current_app.logger.debug(f"Request data: {data}")
     
     try:
-        if method.upper() == "GET":
-            # For GET requests, use params=None since the query is part of the URL
-            response = requests.request(method, url, headers=headers)
-        else:
-            # For POST/PUT/DELETE requests, use json for JSON data
-            response = requests.request(method, url, headers=headers, json=data)
+        # Create a session with retry logic
+        session = create_retry_session()
+        
+        # Add timeout to prevent hanging
+        response = session.request(
+            method, 
+            url, 
+            headers=headers, 
+            json=data, 
+            verify=True,
+            timeout=(30, 90)  # (connect timeout, read timeout)
+        )
+        
+        # Log retry attempts and response details
+        if response.history:
+            logger.info(f"Request succeeded after {len(response.history)} retries")
             
-        # Log response status
-        if config is None:
-            current_app.logger.debug(f"Response status: {response.status_code}")
-            
+        if response.status_code >= 400:
+            logger.error(f"Error response from RT API: Status {response.status_code}")
+            logger.error(f"URL: {url}")
+            logger.error(f"Method: {method}")
+            if data:
+                logger.error(f"Request data: {json.dumps(data)}")
+            logger.error(f"Response headers: {dict(response.headers)}")
+            try:
+                logger.error(f"Response content: {response.text}")
+            except:
+                logger.error("Could not decode response content")
+        
         response.raise_for_status()
+        return response.json()
         
-        # Sanitize the response to handle objects like datetime that can't be JSON serialized
-        result = response.json()
-        
-        # Log summarized response (just count items if it's a list of assets)
-        if config is None and "assets" in result:
-            asset_count = len(result.get("assets", []))
-            current_app.logger.debug(f"Response contains {asset_count} assets")
-            
-        return sanitize_json(result)
     except requests.exceptions.RequestException as e:
-        if config is None:  # Only log if using current_app
-            current_app.logger.error(f"RT API request error: {e}")
+        logger.error(f"RT API request failed: {e}")
+        if hasattr(e, 'response') and hasattr(e.response, 'text'):
+            logger.error(f"Error response content: {e.response.text}")
+            logger.error(f"Error response headers: {dict(e.response.headers) if e.response else 'No headers'}")
         raise
 
 def fetch_asset_data(asset_id, config=None, use_cache=True):
@@ -207,124 +330,148 @@ def fetch_asset_data(asset_id, config=None, use_cache=True):
 
 def search_assets(query, config=None, try_post_fallback=True, use_cache=True):
     """
-    Search for assets in RT using a query with caching.
-    
-    Args:
-        query (str): The search query
-        config (dict, optional): Configuration dictionary, defaults to current_app.config
-        try_post_fallback (bool, optional): Whether to try POST method if GET fails, defaults to True
-        use_cache (bool, optional): Whether to use and update the cache, defaults to True
-        
-    Returns:
-        list: List of assets matching the query
-        
-    Raises:
-        Exception: If there's an error searching for assets
-        
-    Notes:
-        - Based on testing, the RT API supports GET requests with query parameters
-        - It also supports POST requests with form-urlencoded content type
-        - It does NOT support POST requests with JSON payloads
+    Search for assets in RT using a query with pagination support.
     """
-    # URL encode the query to handle special characters properly
-    import urllib.parse
-    encoded_query = urllib.parse.quote(query)
+    logger.info(f"Starting asset search with query: {query}")
+    start_time = time.time()
     
-    if config is None:
-        current_app.logger.debug(f"Original query: {query}")
-        current_app.logger.debug(f"Encoded query: {encoded_query}")
-    
-    # Check cache for this query
+    # Check cache
     if use_cache and query:
-        # Use a hash of the query as the cache key
         import hashlib
-        cache_key = f"query_{hashlib.md5(query.encode()).hexdigest()}"
+        cache_key = f"query_{hashlib.md5(str(query).encode()).hexdigest()}"
         cached_result = asset_cache.get(cache_key)
-        
         if cached_result:
-            if config is None:
-                current_app.logger.info(f"Cache hit for query: {query}")
+            logger.info(f"Cache hit for query: {query}")
             return cached_result
     
+    all_assets = []
+    page = 1
+    
     try:
-        # First try with GET method - this is the most reliable approach
-        if config is None:
-            current_app.logger.info(f"Searching assets from RT API: {query}")
+        # Convert query to JSON search format
+        if isinstance(query, list):
+            search_condition = query
+            logger.info(f"Using provided search conditions: {json.dumps(search_condition)}")
+        elif query == "id>0":
+            search_condition = [{
+                "field": "id",
+                "operator": ">=",
+                "value": 0
+            }]
+            logger.info("Using id>0 search condition to fetch all assets")
+        elif "=" in query:
+            field, value = query.split("=", 1)
+            field = field.strip()
+            value = value.strip("' ")
+            search_condition = [{
+                "field": field,
+                "operator": "=",
+                "value": value
+            }]
+            logger.info(f"Using equals search condition: {field}={value}")
+        elif "LIKE" in query.upper():
+            field, value = query.upper().split("LIKE", 1)
+            field = field.strip()
+            value = value.strip("' ")
+            search_condition = [{
+                "field": field,
+                "operator": "LIKE",
+                "value": value
+            }]
+            logger.info(f"Using LIKE search condition: {field} LIKE {value}")
+        else:
+            search_condition = [{
+                "field": "Name",
+                "operator": "LIKE",
+                "value": query
+            }]
+            logger.info(f"Using default Name LIKE search condition with value: {query}")
+
+        logger.info("Beginning paginated asset fetch...")
+        
+        while True:
+            logger.info(f"Fetching page {page}...")
+            fetch_start = time.time()
             
-        response = rt_api_request("GET", f"/assets?query={encoded_query}", config=config)
+            # Make POST request with JSON search conditions
+            try:
+                response = rt_api_request(
+                    "POST", 
+                    f"/assets?page={page}",
+                    data=search_condition,
+                    config=config
+                )
+                fetch_duration = time.time() - fetch_start
+                logger.info(f"Page {page} fetch completed in {fetch_duration:.1f} seconds")
+            except Exception as e:
+                logger.error(f"Error fetching page {page}: {str(e)}")
+                raise
+            
+            # Extract items from response
+            items = []
+            if 'items' in response:
+                items = response['items']
+                logger.info(f"Found {len(items)} items in 'items' field")
+            elif 'assets' in response:
+                items = response['assets']
+                logger.info(f"Found {len(items)} items in 'assets' field")
+            else:
+                logger.warning(f"No items found in response for page {page}")
+            
+            if not items:
+                logger.info(f"No more items found on page {page}, ending pagination")
+                break
+            
+            # Process items in the current page
+            logger.info(f"Processing {len(items)} items from page {page}")
+            processed = 0
+            
+            for item in items:
+                asset_id = item.get('id')
+                if asset_id:
+                    try:
+                        # Fetch full asset details if we only got IDs
+                        if len(item.keys()) <= 3:  # Only has id, type, _url
+                            logger.debug(f"Fetching full details for asset {asset_id}")
+                            asset_detail = rt_api_request("GET", f"/asset/{asset_id}", config=config)
+                            all_assets.append(asset_detail)
+                        else:
+                            all_assets.append(item)
+                        processed += 1
+                        if processed % 10 == 0:
+                            logger.info(f"Processed {processed}/{len(items)} items from page {page}")
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch details for asset {asset_id}: {e}")
+            
+            logger.info(f"Completed processing page {page} ({processed} items)")
+            
+            # Check pagination info
+            total_pages = response.get('pages', 1)
+            if page >= total_pages:
+                logger.info(f"Reached last page ({page} of {total_pages})")
+                break
+            
+            page += 1
+            if page % 10 == 0:  # Log progress every 10 pages
+                duration = time.time() - start_time
+                logger.info(f"Processed {len(all_assets)} assets so far in {duration:.1f} seconds...")
         
-        if config is None:
-            current_app.logger.debug(f"GET Response: {response}")
-        
-        # Get the assets from the response    
-        assets = response.get("assets", [])
+        total_duration = time.time() - start_time
+        logger.info(f"Found {len(all_assets)} total assets in {total_duration:.1f} seconds")
         
         # Update cache
         if use_cache and query:
-            cache_key = f"query_{hashlib.md5(query.encode()).hexdigest()}"
-            asset_cache.set(cache_key, assets)
-            if config is None:
-                current_app.logger.debug(f"Updated cache for query: {query}")
-                
-        return assets
+            cache_key = f"query_{hashlib.md5(str(query).encode()).hexdigest()}"
+            asset_cache.set(cache_key, all_assets)
+            logger.info(f"Updated cache for query: {query}")
         
-    except requests.exceptions.RequestException as e:
-        if config is None:  # Only log if using current_app
-            current_app.logger.warning(f"GET method failed for assets search: {e}")
-            
-        # If GET fails and fallback is enabled, try POST with form-urlencoded
-        if try_post_fallback:
-            try:
-                if config is None:
-                    current_app.logger.info("Trying POST with form-urlencoded as fallback")
-                
-                # Custom request to use form-urlencoded content type
-                import requests
-                
-                cfg = config or current_app.config
-                
-                headers = {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Authorization": f"token {cfg['RT_TOKEN']}",
-                }
-                
-                url = f"{cfg['RT_URL']}{cfg['API_ENDPOINT']}/assets"
-                form_data = {"query": query}
-                
-                if config is None:
-                    current_app.logger.debug(f"POST URL: {url}")
-                    current_app.logger.debug(f"POST Form Data: {form_data}")
-                
-                response = requests.post(url, headers=headers, data=form_data)
-                response.raise_for_status()
-                
-                # Process the response
-                result = response.json()
-                
-                if config is None:
-                    current_app.logger.debug(f"POST Response: {result}")
-                
-                # Get the assets from the response
-                assets = result.get("assets", [])
-                
-                # Update cache
-                if use_cache and query:
-                    import hashlib
-                    cache_key = f"query_{hashlib.md5(query.encode()).hexdigest()}"
-                    asset_cache.set(cache_key, assets)
-                    if config is None:
-                        current_app.logger.debug(f"Updated cache for query (POST): {query}")
-                    
-                return assets
-                
-            except requests.exceptions.RequestException as post_e:
-                if config is None:
-                    current_app.logger.error(f"POST fallback also failed: {post_e}")
-                # Fall through to the exception below
+        return all_assets
         
-        # If we get here, both methods failed or POST wasn't tried
-        if config is None:
-            current_app.logger.error(f"Error searching assets: {e}")
+    except Exception as e:
+        duration = time.time() - start_time
+        logger.error(f"Failed to search assets after {duration:.1f} seconds: {e}")
+        import traceback
+        logger.error(f"Stack trace:\n{traceback.format_exc()}")
         raise Exception(f"Failed to search assets in RT: {e}")
 
 def find_asset_by_name(asset_name, config=None):
