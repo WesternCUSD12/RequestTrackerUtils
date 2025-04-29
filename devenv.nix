@@ -27,6 +27,7 @@ in
 
   enterShell = ''
     . .devenv/state/venv/bin/activate
-    export PYTHONPATH=$PYTHONPATH:$(pwd)
   '';
+
+  dotenv.enable = true;
 }
