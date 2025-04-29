@@ -1,13 +1,21 @@
-{ pkgs, lib, config, inputs, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  inputs,
+  ...
+}:
 let
   buildInputs = with pkgs; [
     # stdenv.cc.cc
     libuv
     # zlib
   ];
-in 
+in
 {
-  env = { LD_LIBRARY_PATH = "${with pkgs; lib.makeLibraryPath buildInputs}"; };
+  env = {
+    LD_LIBRARY_PATH = "${with pkgs; lib.makeLibraryPath buildInputs}";
+  };
 
   languages.python = {
     enable = true;
@@ -19,6 +27,6 @@ in
 
   enterShell = ''
     . .devenv/state/venv/bin/activate
-    
+    export PYTHONPATH=$PYTHONPATH:$(pwd)
   '';
 }
