@@ -1,0 +1,246 @@
+{% extends 'base.html' %}
+
+{% block title %}Device Check-in{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1 class="mb-3">Device Check-in</h1>
+      <p class="lead">Scan or enter a device asset tag to begin check-in process.</p>
+    </div>
+  </div>
+
+  <!-- Asset Input Form -->
+  <div class="row mb-4">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="assetInput" class="form-label">Asset Tag</label>
+            <input type="text" class="form-control" id="assetInput" 
+                   placeholder="Scan or enter asset tag" 
+                   value="{{ asset_name if asset_name else '' }}" 
+                   autofocus>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Asset Details Section (populated by JS) -->
+  <div id="assetDetails" class="row mb-4" style="display: none;">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h2 class="h5 mb-0">Asset Details</h2>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <h3 class="h6">Primary Device</h3>
+              <div id="primaryAssetInfo"></div>
+              
+              <div class="mb-3">
+                <label for="deviceNotes" class="form-label">Check-in Notes</label>
+                <textarea class="form-control" id="deviceNotes" rows="3"></textarea>
+              </div>
+              
+              <div id="chromebookOptions" style="display: none;">
+                <div class="form-check mb-3">
+                  <input class="form-check-input" type="checkbox" id="brokenScreen">
+                  <label class="form-check-label" for="brokenScreen">
+                    Broken Screen
+                  </label>
+                </div>
+              </div>
+
+              <!-- Debug Information -->
+              <div class="mt-4">
+                <h3 class="h6">Debug Information</h3>
+                <div class="accordion" id="debugAccordion">
+                  <div class="accordion-item">
+                    <h4 class="accordion-header">
+                      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#customFields">
+                        Custom Fields
+                      </button>
+                    </h4>
+                    <div id="customFields" class="accordion-collapse collapse" data-bs-parent="#debugAccordion">
+                      <div class="accordion-body">
+                        <pre id="customFieldsData" class="bg-light p-2" style="max-height: 300px; overflow-y: auto;"></pre>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="accordion-item">
+                    <h4 class="accordion-header">
+                      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#rawData">
+                        Raw Asset Data
+                      </button>
+                    </h4>
+                    <div id="rawData" class="accordion-collapse collapse" data-bs-parent="#debugAccordion">
+                      <div class="accordion-body">
+                        <pre id="rawAssetData" class="bg-light p-2" style="max-height: 300px; overflow-y: auto;"></pre>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <h3 class="h6">Other Devices</h3>
+              <div id="otherDevices"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Indicator -->
+  <div id="loadingIndicator" class="text-center" style="display: none;">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+
+  <!-- Error Alert -->
+  <div id="errorAlert" class="alert alert-danger" style="display: none;" role="alert"></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const assetInput = document.getElementById('assetInput');
+    const assetDetails = document.getElementById('assetDetails');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const errorAlert = document.getElementById('errorAlert');
+    const primaryAssetInfo = document.getElementById('primaryAssetInfo');
+    const otherDevices = document.getElementById('otherDevices');
+    const chromebookOptions = document.getElementById('chromebookOptions');
+    const customFieldsData = document.getElementById('customFieldsData');
+    const rawAssetData = document.getElementById('rawAssetData');
+    
+    let lastAssetName = '';
+    let loadingTimeout = null;
+
+    async function fetchAssetInfo(assetName) {
+        if (!assetName || assetName === lastAssetName) return;
+        lastAssetName = assetName;
+        
+        loadingIndicator.style.display = 'block';
+        assetDetails.style.display = 'none';
+        errorAlert.style.display = 'none';
+        
+        try {
+            const response = await fetch(`/devices/api/asset/${encodeURIComponent(assetName)}`);
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to fetch asset information');
+            }
+            
+            // Display primary asset info
+            const asset = data.asset;
+            primaryAssetInfo.innerHTML = `
+                <dl class="row">
+                    <dt class="col-sm-4">Asset Tag</dt>
+                    <dd class="col-sm-8">${asset.Name || 'N/A'}</dd>
+                    
+                    <dt class="col-sm-4">Owner</dt>
+                    <dd class="col-sm-8">${asset.Owner?.id || asset.Owner || 'N/A'}</dd>
+                    
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">${asset.Status || 'N/A'}</dd>
+                    
+                    <dt class="col-sm-4">Type</dt>
+                    <dd class="col-sm-8">${asset.Type || 'N/A'}</dd>
+                    
+                    <dt class="col-sm-4">Serial Number</dt>
+                    <dd class="col-sm-8">${getCustomFieldValue(asset, 'Serial Number') || 'N/A'}</dd>
+                    
+                    <dt class="col-sm-4">Make</dt>
+                    <dd class="col-sm-8">${getCustomFieldValue(asset, 'Make') || 'N/A'}</dd>
+                    
+                    <dt class="col-sm-4">Model</dt>
+                    <dd class="col-sm-8">${getCustomFieldValue(asset, 'Model') || 'N/A'}</dd>
+                </dl>
+            `;
+            
+            // Show Chromebook options if applicable
+            chromebookOptions.style.display = 
+                (asset.Type && asset.Type.toLowerCase().includes('chromebook')) ? 'block' : 'none';
+            
+            // Display other devices
+            if (data.other_assets && data.other_assets.length > 0) {
+                otherDevices.innerHTML = data.other_assets.map(device => `
+                    <div class="card mb-2">
+                        <div class="card-body">
+                            <h6 class="card-title">${device.Name || 'N/A'}</h6>
+                            <div class="mb-2">
+                                <small class="text-muted">
+                                    Type: ${device.Type || 'N/A'} | 
+                                    Status: ${device.Status || 'N/A'}
+                                </small>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">Notes</label>
+                                <textarea class="form-control device-notes" 
+                                          data-asset-id="${device.id}"
+                                          rows="2"></textarea>
+                            </div>
+                            ${device.Type && device.Type.toLowerCase().includes('chromebook') ? `
+                                <div class="form-check">
+                                    <input class="form-check-input broken-screen" 
+                                           type="checkbox" 
+                                           data-asset-id="${device.id}">
+                                    <label class="form-check-label">
+                                        Broken Screen
+                                    </label>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                otherDevices.innerHTML = '<p class="text-muted">No other devices found for this owner.</p>';
+            }
+            
+            // Display debug information
+            customFieldsData.textContent = JSON.stringify(asset.CustomFields || {}, null, 2);
+            rawAssetData.textContent = JSON.stringify(asset, null, 2);
+            
+            assetDetails.style.display = 'block';
+            
+        } catch (error) {
+            errorAlert.textContent = error.message;
+            errorAlert.style.display = 'block';
+        } finally {
+            loadingIndicator.style.display = 'none';
+        }
+    }
+    
+    function getCustomFieldValue(asset, fieldName) {
+        if (!asset.CustomFields) return null;
+        const field = asset.CustomFields.find(f => f.name === fieldName);
+        return field ? field.value : null;
+    }
+    
+    // Handle asset input changes
+    assetInput.addEventListener('input', function(e) {
+        clearTimeout(loadingTimeout);
+        loadingTimeout = setTimeout(() => {
+            const value = e.target.value.trim();
+            if (value) fetchAssetInfo(value);
+        }, 500);
+    });
+    
+    // If there's an initial asset name, fetch its details
+    if (assetInput.value) {
+        fetchAssetInfo(assetInput.value);
+    }
+});
+</script>
+{% endblock %}

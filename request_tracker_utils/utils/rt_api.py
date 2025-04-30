@@ -223,6 +223,7 @@ def rt_api_request(method, endpoint, data=None, config=None):
     url = f"{base_url}{api_endpoint}{endpoint}"
     headers = {
         "Content-Type": "application/json",
+        "Accept": "application/json",  # Explicitly request JSON response
         "Authorization": f"token {token}"
     }
     
@@ -244,6 +245,15 @@ def rt_api_request(method, endpoint, data=None, config=None):
         if response.history:
             logger.info(f"Request succeeded after {len(response.history)} retries")
             
+        # Check content type of response
+        content_type = response.headers.get('content-type', '')
+        if 'application/json' not in content_type.lower():
+            logger.error(f"Unexpected content type: {content_type}")
+            logger.error(f"Response content: {response.text[:500]}...")  # Log first 500 chars
+            raise requests.exceptions.RequestException(
+                f"API returned non-JSON response (content-type: {content_type})"
+            )
+            
         if response.status_code >= 400:
             logger.error(f"Error response from RT API: Status {response.status_code}")
             logger.error(f"URL: {url}")
@@ -257,7 +267,16 @@ def rt_api_request(method, endpoint, data=None, config=None):
                 logger.error("Could not decode response content")
         
         response.raise_for_status()
-        return response.json()
+        
+        # Ensure we can parse the response as JSON
+        try:
+            return response.json()
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse response as JSON: {e}")
+            logger.error(f"Response content: {response.text[:500]}...")
+            raise requests.exceptions.RequestException(
+                f"Failed to parse API response as JSON: {str(e)}"
+            )
         
     except requests.exceptions.RequestException as e:
         logger.error(f"RT API request failed: {e}")
@@ -627,3 +646,32 @@ def update_asset_custom_field(asset_id, field_name, field_value, config=None):
         if config is None:  # Only log if using current_app
             current_app.logger.error(f"Error updating asset {asset_id} custom field: {e}")
         raise Exception(f"Failed to update asset custom field in RT: {e}")
+
+def get_assets_by_owner(owner, exclude_id=None, config=None):
+    """
+    Fetch all assets owned by a specific owner, optionally excluding one asset by ID.
+    
+    Args:
+        owner (str): The owner's identifier to search for
+        exclude_id (str, optional): Asset ID to exclude from results
+        config (dict, optional): Config dictionary for RT API settings
+        
+    Returns:
+        list: List of assets owned by this owner
+    """
+    if config is None:
+        from flask import current_app
+        config = current_app.config
+        
+    # Build query to find assets by owner - RT expects just Owner=value
+    query = f"Owner='{owner}'"
+    logger.info(f"Searching for assets with query: {query}")
+    
+    # Get all assets by this owner
+    assets = search_assets(query, config)
+    
+    # Filter out the excluded ID if provided
+    if exclude_id:
+        assets = [a for a in assets if str(a.get('id')) != str(exclude_id)]
+        
+    return assets
