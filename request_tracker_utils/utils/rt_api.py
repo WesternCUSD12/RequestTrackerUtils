@@ -285,14 +285,14 @@ def rt_api_request(method, endpoint, data=None, config=None):
             logger.error(f"Error response headers: {dict(e.response.headers) if e.response else 'No headers'}")
         raise
 
-def fetch_asset_data(asset_id, config=None, use_cache=True):
+def fetch_asset_data(asset_id, config=None, use_cache=False):
     """
-    Fetch asset data from the RT API with caching.
+    Fetch asset data from the RT API (caching disabled).
     
     Args:
         asset_id (str): The ID of the asset to fetch
         config (dict, optional): Configuration dictionary, defaults to current_app.config
-        use_cache (bool, optional): Whether to use and update the cache, defaults to True
+        use_cache (bool, optional): Whether to use and update the cache, defaults to False
         
     Returns:
         dict: Asset data
@@ -302,15 +302,6 @@ def fetch_asset_data(asset_id, config=None, use_cache=True):
     """
     if not asset_id:
         raise ValueError("Asset ID is missing or invalid")
-    
-    # Check if the asset is in cache
-    if use_cache:
-        cache_key = f"asset_{asset_id}"
-        cached_data = asset_cache.get(cache_key)
-        if cached_data:
-            if config is None:
-                current_app.logger.info(f"Cache hit for asset ID: {asset_id}")
-            return cached_data
     
     try:
         # Log the API request details
@@ -328,13 +319,6 @@ def fetch_asset_data(asset_id, config=None, use_cache=True):
             # Log response for debugging
             if config is None:
                 current_app.logger.warning(f"Response for asset ID {asset_id} is missing Name field: {response}")
-        
-        # Update cache with the response if caching is enabled
-        if use_cache:
-            cache_key = f"asset_{asset_id}"
-            asset_cache.set(cache_key, response)
-            if config is None:
-                current_app.logger.debug(f"Updated cache for asset ID: {asset_id}")
                 
         return response
         
@@ -347,21 +331,12 @@ def fetch_asset_data(asset_id, config=None, use_cache=True):
             current_app.logger.error(f"Error processing asset data for ID {asset_id}: {str(e)}")
         raise Exception(f"Error processing asset data: {str(e)}")
 
-def search_assets(query, config=None, try_post_fallback=True, use_cache=True):
+def search_assets(query, config=None, try_post_fallback=True, use_cache=False):
     """
-    Search for assets in RT using a query with pagination support.
+    Search for assets in RT using a query with pagination support (caching disabled).
     """
     logger.info(f"Starting asset search with query: {query}")
     start_time = time.time()
-    
-    # Check cache
-    if use_cache and query:
-        import hashlib
-        cache_key = f"query_{hashlib.md5(str(query).encode()).hexdigest()}"
-        cached_result = asset_cache.get(cache_key)
-        if cached_result:
-            logger.info(f"Cache hit for query: {query}")
-            return cached_result
     
     all_assets = []
     page = 1
@@ -477,12 +452,6 @@ def search_assets(query, config=None, try_post_fallback=True, use_cache=True):
         
         total_duration = time.time() - start_time
         logger.info(f"Found {len(all_assets)} total assets in {total_duration:.1f} seconds")
-        
-        # Update cache
-        if use_cache and query:
-            cache_key = f"query_{hashlib.md5(str(query).encode()).hexdigest()}"
-            asset_cache.set(cache_key, all_assets)
-            logger.info(f"Updated cache for query: {query}")
         
         return all_assets
         

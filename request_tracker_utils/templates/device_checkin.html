@@ -142,36 +142,44 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error(data.error || 'Failed to fetch asset information');
             }
             
-            // Display primary asset info
+            // Display primary asset info with prominent owner section
             const asset = data.asset;
+            const owner = data.owner;
             primaryAssetInfo.innerHTML = `
+                <div class="alert alert-info mb-3">
+                    <h4 class="alert-heading mb-2">Current Owner</h4>
+                    <p class="mb-0"><strong>${owner.name || owner.id || 'No Owner Assigned'}</strong></p>
+                </div>
                 <dl class="row">
                     <dt class="col-sm-4">Asset Tag</dt>
                     <dd class="col-sm-8">${asset.Name || 'N/A'}</dd>
-                    
-                    <dt class="col-sm-4">Owner</dt>
-                    <dd class="col-sm-8">${asset.Owner?.id || asset.Owner || 'N/A'}</dd>
                     
                     <dt class="col-sm-4">Status</dt>
                     <dd class="col-sm-8">${asset.Status || 'N/A'}</dd>
                     
                     <dt class="col-sm-4">Type</dt>
-                    <dd class="col-sm-8">${asset.Type || 'N/A'}</dd>
-                    
+                    <dd class="col-sm-8">${asset.CustomFields?.find(f => f.name === 'Type')?.values[0] || 'N/A'}</dd>
+
                     <dt class="col-sm-4">Serial Number</dt>
-                    <dd class="col-sm-8">${getCustomFieldValue(asset, 'Serial Number') || 'N/A'}</dd>
+                    <dd class="col-sm-8">${asset.CustomFields?.find(f => f.name === 'Serial Number')?.values[0] || 'N/A'}</dd>
                     
                     <dt class="col-sm-4">Make</dt>
-                    <dd class="col-sm-8">${getCustomFieldValue(asset, 'Make') || 'N/A'}</dd>
+                    <dd class="col-sm-8">${asset.CustomFields?.find(f => f.name === 'Manufacturer')?.values[0] || 'N/A'}</dd>
                     
                     <dt class="col-sm-4">Model</dt>
-                    <dd class="col-sm-8">${getCustomFieldValue(asset, 'Model') || 'N/A'}</dd>
+                    <dd class="col-sm-8">${asset.CustomFields?.find(f => f.name === 'Model')?.values[0] || 'N/A'}</dd>
+                    
+                    <dt class="col-sm-4">MAC Address</dt>
+                    <dd class="col-sm-8">${asset.CustomFields?.find(f => f.name === 'Mac Address')?.values[0] || 'N/A'}</dd>
+                    
+                    <dt class="col-sm-4">Internal Name</dt>
+                    <dd class="col-sm-8">${asset.CustomFields?.find(f => f.name === 'Internal Name')?.values[0] || 'N/A'}</dd>
                 </dl>
             `;
             
             // Show Chromebook options if applicable
-            chromebookOptions.style.display = 
-                (asset.Type && asset.Type.toLowerCase().includes('chromebook')) ? 'block' : 'none';
+            const assetType = asset.CustomFields?.find(f => f.name === 'Type')?.values[0] || '';
+            chromebookOptions.style.display = assetType.toLowerCase().includes('chromebook') ? 'block' : 'none';
             
             // Display other devices
             if (data.other_assets && data.other_assets.length > 0) {
@@ -181,7 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <h6 class="card-title">${device.Name || 'N/A'}</h6>
                             <div class="mb-2">
                                 <small class="text-muted">
-                                    Type: ${device.Type || 'N/A'} | 
+                                    Type: ${device.CustomFields?.find(f => f.name === 'Type')?.values[0] || 'N/A'} | 
                                     Status: ${device.Status || 'N/A'}
                                 </small>
                             </div>
@@ -191,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                           data-asset-id="${device.id}"
                                           rows="2"></textarea>
                             </div>
-                            ${device.Type && device.Type.toLowerCase().includes('chromebook') ? `
+                            ${device.CustomFields?.find(f => f.name === 'Type')?.values[0]?.toLowerCase().includes('chromebook') ? `
                                 <div class="form-check">
                                     <input class="form-check-input broken-screen" 
                                            type="checkbox" 
