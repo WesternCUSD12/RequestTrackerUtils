@@ -4,6 +4,7 @@ import logging
 import urllib.parse
 import requests
 import json
+import time
 
 bp = Blueprint('devices', __name__)
 logger = logging.getLogger(__name__)
@@ -22,7 +23,11 @@ def asset_details(asset_name):
 def get_asset_info(asset_name):
     """API endpoint to get asset and related devices info"""
     try:
-        logger.info(f"Received request for asset: {asset_name}")
+        logger.info("\n")
+        logger.info("==========================================")
+        logger.info(f"Device Lookup - {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Request for: {asset_name}")
+        logger.info("==========================================")
         
         # Make request directly to RT API using asset name
         base_url = current_app.config.get('RT_URL')
@@ -103,6 +108,20 @@ def get_asset_info(asset_name):
         logger.info(f"Fetching complete data for asset ID: {asset_id}")
         asset_data = fetch_asset_data(asset_id)
 
+        # Print detailed device information to console
+        logger.info(f"\n=== Device Details [{time.strftime('%H:%M:%S')}] ===")
+        logger.info(f"Asset ID: {asset_data.get('id')}")
+        logger.info(f"Asset Tag: {asset_data.get('Name')}")
+        logger.info(f"Status: {asset_data.get('Status')}")
+        
+        # Print custom fields
+        logger.info(f"\n=== Custom Fields [{time.strftime('%H:%M:%S')}] ===")
+        for field in asset_data.get('CustomFields', []):
+            field_name = field.get('name', 'Unknown')
+            field_values = field.get('values', [])
+            value = field_values[0] if field_values else 'N/A'
+            logger.info(f"{field_name}: {value}")
+
         # Extract owner information
         owner_data = asset_data.get('Owner', {})
         owner_info = {
@@ -119,12 +138,21 @@ def get_asset_info(asset_name):
             owner_info['id'] = owner_data
             owner_info['name'] = owner_data
 
+        # Print owner information
+        logger.info(f"\n=== Owner Information [{time.strftime('%H:%M:%S')}] ===")
+        logger.info(f"Owner ID: {owner_info['id']}")
+        logger.info(f"Owner Name: {owner_info['name']}")
+
         # Get other devices for this owner if we have one
         other_assets = []
         if owner_info['id']:
-            logger.info(f"Looking up other assets for owner: {owner_info['id']}")
+            logger.info(f"\n=== Other Devices for Owner {owner_info['id']} [{time.strftime('%H:%M:%S')}] ===")
             other_assets = get_assets_by_owner(owner_info['id'], exclude_id=asset_id)
-            logger.info(f"Found {len(other_assets)} other assets for owner {owner_info['id']}")
+            logger.info(f"Found {len(other_assets)} other assets")
+            
+            # Print summary of other devices
+            for other_asset in other_assets:
+                logger.info(f"- {other_asset.get('Name')} (ID: {other_asset.get('id')}, Status: {other_asset.get('Status')})")
             
             # Ensure custom fields are included in other assets
             for other_asset in other_assets:
@@ -134,6 +162,8 @@ def get_asset_info(asset_name):
                         other_asset.update(full_asset_data)
                     except Exception as e:
                         logger.error(f"Error fetching details for other asset {other_asset['id']}: {e}")
+
+        logger.info("----------------------------------------\n")
         
         # Include the full asset data with prominent owner info
         return jsonify({
