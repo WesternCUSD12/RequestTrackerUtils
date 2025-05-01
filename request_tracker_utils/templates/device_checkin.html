@@ -148,7 +148,8 @@ document.addEventListener('DOMContentLoaded', function() {
             primaryAssetInfo.innerHTML = `
                 <div class="alert alert-info mb-3">
                     <h4 class="alert-heading mb-2">Current Owner</h4>
-                    <p class="mb-0"><strong>${owner.name || owner.id || 'No Owner Assigned'}</strong></p>
+                    <p class="mb-0"><strong>${owner.display_name || owner.name || 'No Owner Assigned'}</strong></p>
+                    <small class="text-muted">${owner.id ? `(${owner.id})` : ''}</small>
                 </div>
                 <dl class="row">
                     <dt class="col-sm-4">Asset Tag</dt>

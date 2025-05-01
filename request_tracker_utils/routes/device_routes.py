@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app
-from ..utils.rt_api import find_asset_by_name, get_assets_by_owner, fetch_asset_data
+from ..utils.rt_api import find_asset_by_name, get_assets_by_owner, fetch_asset_data, fetch_user_data
 import logging
 import urllib.parse
 import requests
@@ -108,40 +108,43 @@ def get_asset_info(asset_name):
         logger.info(f"Fetching complete data for asset ID: {asset_id}")
         asset_data = fetch_asset_data(asset_id)
 
-        # Print detailed device information to console
-        logger.info(f"\n=== Device Details [{time.strftime('%H:%M:%S')}] ===")
-        logger.info(f"Asset ID: {asset_data.get('id')}")
-        logger.info(f"Asset Tag: {asset_data.get('Name')}")
-        logger.info(f"Status: {asset_data.get('Status')}")
-        
-        # Print custom fields
-        logger.info(f"\n=== Custom Fields [{time.strftime('%H:%M:%S')}] ===")
-        for field in asset_data.get('CustomFields', []):
-            field_name = field.get('name', 'Unknown')
-            field_values = field.get('values', [])
-            value = field_values[0] if field_values else 'N/A'
-            logger.info(f"{field_name}: {value}")
-
         # Extract owner information
         owner_data = asset_data.get('Owner', {})
         owner_info = {
             'id': None,
             'name': None,
-            'raw': owner_data
+            'raw': owner_data,
+            'display_name': None  # Add this field for the full name
         }
         
-        # Handle different Owner field formats
+        # Handle different Owner field formats and fetch user details
         if isinstance(owner_data, dict):
             owner_info['id'] = owner_data.get('id')
-            owner_info['name'] = owner_data.get('Name', owner_data.get('id'))
+            try:
+                # Fetch full user details
+                user_data = fetch_user_data(owner_info['id'])
+                owner_info['name'] = owner_data.get('Name', owner_data.get('id'))
+                owner_info['display_name'] = user_data.get('RealName', user_data.get('Name', owner_info['id']))
+            except Exception as e:
+                logger.error(f"Error fetching user details: {e}")
+                owner_info['name'] = owner_data.get('id')
+                owner_info['display_name'] = owner_data.get('id')
         elif isinstance(owner_data, str):
             owner_info['id'] = owner_data
-            owner_info['name'] = owner_data
+            try:
+                # Fetch full user details
+                user_data = fetch_user_data(owner_data)
+                owner_info['name'] = owner_data
+                owner_info['display_name'] = user_data.get('RealName', user_data.get('Name', owner_data))
+            except Exception as e:
+                logger.error(f"Error fetching user details: {e}")
+                owner_info['name'] = owner_data
+                owner_info['display_name'] = owner_data
 
         # Print owner information
         logger.info(f"\n=== Owner Information [{time.strftime('%H:%M:%S')}] ===")
         logger.info(f"Owner ID: {owner_info['id']}")
-        logger.info(f"Owner Name: {owner_info['name']}")
+        logger.info(f"Owner Name: {owner_info['display_name']}")
 
         # Get other devices for this owner if we have one
         other_assets = []

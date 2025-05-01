@@ -644,3 +644,43 @@ def get_assets_by_owner(owner, exclude_id=None, config=None):
         assets = [a for a in assets if str(a.get('id')) != str(exclude_id)]
         
     return assets
+
+def fetch_user_data(user_id, config=None):
+    """
+    Fetch user data from RT API.
+    
+    Args:
+        user_id (str): The ID (username) of the user to fetch
+        config (dict, optional): Configuration dictionary, defaults to current_app.config
+        
+    Returns:
+        dict: User data including Name, EmailAddress, etc.
+        
+    Raises:
+        Exception: If there's an error fetching the user data
+    """
+    if not user_id:
+        raise ValueError("User ID is missing or invalid")
+    
+    try:
+        if config is None:
+            from flask import current_app
+            config = current_app.config
+            current_app.logger.info(f"Fetching user data for ID: {user_id}")
+            
+        response = rt_api_request("GET", f"/user/{user_id}", config=config)
+        
+        # Validate response
+        if not response:
+            raise ValueError(f"Empty response from RT API for user ID: {user_id}")
+            
+        return response
+        
+    except requests.exceptions.RequestException as e:
+        if config is None:  # Only log if using current_app
+            current_app.logger.error(f"Error fetching user data: {e}")
+        raise Exception(f"Failed to fetch user data from RT: {e}")
+    except Exception as e:
+        if config is None:
+            current_app.logger.error(f"Error processing user data for ID {user_id}: {str(e)}")
+        raise Exception(f"Error processing user data: {str(e)}")
