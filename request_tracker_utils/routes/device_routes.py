@@ -108,23 +108,40 @@ def get_asset_info(asset_name):
         logger.info(f"Fetching complete data for asset ID: {asset_id}")
         asset_data = fetch_asset_data(asset_id)
 
-        # Extract owner information
+        # Extract owner information and log it
         owner_data = asset_data.get('Owner', {})
+        logger.info(f"\n=== Owner Information ===")
+        logger.info(f"Raw owner data: {json.dumps(owner_data, indent=2)}")
+        
         owner_info = {
             'id': None,
             'name': None,
             'raw': owner_data,
-            'display_name': None  # Add this field for the full name
+            'display_name': None,
+            'numeric_id': None  # Add field for numeric ID
         }
         
         # Handle different Owner field formats and fetch user details
         if isinstance(owner_data, dict):
-            owner_info['id'] = owner_data.get('id')
+            owner_id = owner_data.get('id')
+            logger.info(f"Owner ID from dict: {owner_id}")
+            owner_info['id'] = owner_id
             try:
                 # Fetch full user details
-                user_data = fetch_user_data(owner_info['id'])
+                logger.info(f"Fetching user details for ID: {owner_id}")
+                user_data = fetch_user_data(owner_id)
+                logger.info(f"User data retrieved: {json.dumps(user_data, indent=2)}")
                 owner_info['name'] = owner_data.get('Name', owner_data.get('id'))
                 owner_info['display_name'] = user_data.get('RealName', user_data.get('Name', owner_info['id']))
+                
+                # Extract numeric ID from hyperlinks
+                hyperlinks = user_data.get('_hyperlinks', [])
+                for link in hyperlinks:
+                    if link.get('ref') == 'self' and link.get('type') == 'user':
+                        owner_info['numeric_id'] = str(link.get('id'))
+                        logger.info(f"Found numeric user ID: {owner_info['numeric_id']}")
+                        break
+                
             except Exception as e:
                 logger.error(f"Error fetching user details: {e}")
                 owner_info['name'] = owner_data.get('id')
@@ -133,38 +150,65 @@ def get_asset_info(asset_name):
             owner_info['id'] = owner_data
             try:
                 # Fetch full user details
+                logger.info(f"Fetching user details for ID: {owner_data}")
                 user_data = fetch_user_data(owner_data)
+                logger.info(f"User data retrieved: {json.dumps(user_data, indent=2)}")
                 owner_info['name'] = owner_data
                 owner_info['display_name'] = user_data.get('RealName', user_data.get('Name', owner_data))
+                
+                # Extract numeric ID from hyperlinks
+                hyperlinks = user_data.get('_hyperlinks', [])
+                for link in hyperlinks:
+                    if link.get('ref') == 'self' and link.get('type') == 'user':
+                        owner_info['numeric_id'] = str(link.get('id'))
+                        logger.info(f"Found numeric user ID: {owner_info['numeric_id']}")
+                        break
+                
             except Exception as e:
                 logger.error(f"Error fetching user details: {e}")
                 owner_info['name'] = owner_data
                 owner_info['display_name'] = owner_data
 
+        logger.info(f"Final owner_info: {json.dumps(owner_info, indent=2)}")
+
         # Print owner information
         logger.info(f"\n=== Owner Information [{time.strftime('%H:%M:%S')}] ===")
         logger.info(f"Owner ID: {owner_info['id']}")
         logger.info(f"Owner Name: {owner_info['display_name']}")
+        logger.info(f"Owner Numeric ID: {owner_info['numeric_id']}")
 
         # Get other devices for this owner if we have one
         other_assets = []
-        if owner_info['id']:
-            logger.info(f"\n=== Other Devices for Owner {owner_info['id']} [{time.strftime('%H:%M:%S')}] ===")
-            other_assets = get_assets_by_owner(owner_info['id'], exclude_id=asset_id)
-            logger.info(f"Found {len(other_assets)} other assets")
-            
-            # Print summary of other devices
-            for other_asset in other_assets:
-                logger.info(f"- {other_asset.get('Name')} (ID: {other_asset.get('id')}, Status: {other_asset.get('Status')})")
-            
+        if owner_info['numeric_id']:  # Use numeric_id instead of id
+            logger.info(f"\n=== Looking up other assets for owner {owner_info['numeric_id']} ===")
+            try:
+                other_assets = get_assets_by_owner(owner_info['numeric_id'], exclude_id=asset_id)
+                logger.info(f"Found {len(other_assets)} other assets")
+                
+                # Log details about each asset found
+                for asset in other_assets:
+                    logger.info(f"Other asset found:")
+                    logger.info(f"  ID: {asset.get('id')}")
+                    logger.info(f"  Name: {asset.get('Name')}")
+                    logger.info(f"  Status: {asset.get('Status')}")
+                    logger.info(f"  Type: {next((cf['values'][0] for cf in asset.get('CustomFields', []) if cf['name'] == 'Type'), 'N/A')}")
+                
+            except Exception as e:
+                logger.error(f"Error getting other assets: {e}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                
             # Ensure custom fields are included in other assets
             for other_asset in other_assets:
                 if 'id' in other_asset and 'CustomFields' not in other_asset:
                     try:
+                        logger.info(f"Fetching full details for other asset {other_asset['id']}")
                         full_asset_data = fetch_asset_data(other_asset['id'])
                         other_asset.update(full_asset_data)
+                        logger.info(f"Successfully updated other asset {other_asset['id']} with full details")
                     except Exception as e:
                         logger.error(f"Error fetching details for other asset {other_asset['id']}: {e}")
+        else:
+            logger.warning("No owner ID available to lookup other assets")
 
         logger.info("----------------------------------------\n")
         

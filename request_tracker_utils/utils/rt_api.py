@@ -4,6 +4,7 @@ import threading
 import json
 import os
 import random
+import traceback
 from flask import current_app
 from functools import lru_cache
 import logging
@@ -621,7 +622,7 @@ def get_assets_by_owner(owner, exclude_id=None, config=None):
     Fetch all assets owned by a specific owner, optionally excluding one asset by ID.
     
     Args:
-        owner (str): The owner's identifier to search for
+        owner (str): The owner's identifier to search for (numeric ID)
         exclude_id (str, optional): Asset ID to exclude from results
         config (dict, optional): Config dictionary for RT API settings
         
@@ -632,18 +633,70 @@ def get_assets_by_owner(owner, exclude_id=None, config=None):
         from flask import current_app
         config = current_app.config
         
-    # Build query to find assets by owner - RT expects just Owner=value
-    query = f"Owner='{owner}'"
-    logger.info(f"Searching for assets with query: {query}")
-    
-    # Get all assets by this owner
-    assets = search_assets(query, config)
-    
-    # Filter out the excluded ID if provided
-    if exclude_id:
-        assets = [a for a in assets if str(a.get('id')) != str(exclude_id)]
+    try:
+        # Log input parameters
+        logger.info(f"\n=== get_assets_by_owner ===")
+        logger.info(f"Looking up assets for owner: {owner}")
+        logger.info(f"Excluding asset ID: {exclude_id}")
         
-    return assets
+        # Construct the URL for the assets endpoint
+        base_url = config.get('RT_URL')
+        api_endpoint = config.get('API_ENDPOINT')
+        url = f"{base_url}{api_endpoint}/assets"
+        
+        # Use exact format from successful curl command
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": f"token {config.get('RT_TOKEN')}"
+        }
+        
+        # Format query exactly as in the curl command
+        query = f"Owner = '{owner}'"
+        data = {"query": query}
+        
+        logger.info(f"Using query: {query}")
+        logger.info(f"Request URL: {url}")
+        logger.info(f"Request headers: {headers}")
+        logger.info(f"Request data: {data}")
+        
+        # Make the POST request with form-urlencoded data
+        response = requests.post(url, headers=headers, data=data)
+        response.raise_for_status()
+        
+        # Parse the response
+        result = response.json()
+        logger.info(f"Raw API Response: {json.dumps(result, indent=2)}")
+        
+        # Get the list of asset IDs from items array
+        items = result.get('items', [])
+        logger.info(f"Found {len(items)} items for owner {owner}")
+        for item in items:
+            logger.info(f"Item: {json.dumps(item, indent=2)}")
+        
+        # Fetch full details for each asset
+        assets = []
+        for item in items:
+            asset_id = item.get('id')
+            if asset_id and asset_id != exclude_id:
+                try:
+                    logger.info(f"Fetching details for asset ID: {asset_id}")
+                    asset_data = fetch_asset_data(asset_id, config)
+                    assets.append(asset_data)
+                    logger.info(f"Successfully fetched details for asset {asset_id}")
+                except Exception as e:
+                    logger.error(f"Error fetching details for asset {asset_id}: {e}")
+                    
+        logger.info(f"Final assets list contains {len(assets)} assets:")
+        for asset in assets:
+            logger.info(f"- Asset ID: {asset.get('id')}, Name: {asset.get('Name')}")
+        
+        logger.info("=== End get_assets_by_owner ===\n")
+        return assets
+        
+    except Exception as e:
+        logger.error(f"Error in get_assets_by_owner: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
 
 def fetch_user_data(user_id, config=None):
     """
