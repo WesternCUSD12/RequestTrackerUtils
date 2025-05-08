@@ -4,6 +4,15 @@
 
 {% block content %}
 <div class="container py-4">
+  <!-- Breadcrumb Navigation -->
+  <nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">Home</a></li>
+      <li class="breadcrumb-item"><a href="/devices">Devices</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Check-in</li>
+    </ol>
+  </nav>
+
   <div class="row mb-4">
     <div class="col-12">
       <h1 class="mb-3">Device Check-in</h1>
@@ -16,81 +25,153 @@
     <div class="col-md-6">
       <div class="card">
         <div class="card-body">
-          <div class="mb-3">
-            <label for="assetInput" class="form-label">Asset Tag</label>
-            <input type="text" class="form-control" id="assetInput" 
-                   placeholder="Scan or enter asset tag" 
-                   value="{{ asset_name if asset_name else '' }}" 
-                   autofocus>
+          <form id="assetSearchForm" onsubmit="return false;">
+            <div class="mb-3">
+              <label for="assetInput" class="form-label">Asset Tag</label>
+              <div class="input-group">
+                <input type="text" class="form-control" id="assetInput" 
+                       placeholder="Scan or enter asset tag" 
+                       value="{{ asset_name if asset_name else '' }}" 
+                       autofocus>
+                <button type="submit" class="btn btn-primary" id="searchButton">
+                  <i class="bi bi-search"></i> Search
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Batch Actions -->
+  <div id="batchActions" class="row mb-4" style="display: none;">
+    <div class="col-12">
+      <div class="card border-primary">
+        <div class="card-header bg-primary text-white">
+          <h2 class="h5 mb-0">Quick Actions</h2>
+        </div>
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <span id="deviceCountBadge" class="badge bg-info me-2">0 devices found</span>
+              <span class="text-muted">Process all devices at once</span>
+            </div>
+            <div>
+              <button id="checkInAllDevices" class="btn btn-success btn-lg">
+                <i class="bi bi-check-all"></i> Check In All Devices
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Asset Details Section (populated by JS) -->
-  <div id="assetDetails" class="row mb-4" style="display: none;">
-    <div class="col-12">
-      <div class="card">
-        <div class="card-header bg-primary text-white">
-          <h2 class="h5 mb-0">Asset Details</h2>
+  <div class="row">
+    <!-- Owner Info and Debug Section (Left Column) -->
+    <div class="col-md-4">
+      <!-- Owner Information -->
+      <div id="ownerInfo" class="mb-4" style="display: none;">
+        <div class="card">
+          <div class="card-header bg-info text-white">
+            <h2 class="h5 mb-0">Owner Information</h2>
+          </div>
+          <div class="card-body">
+            <div id="ownerDetails"></div>
+          </div>
         </div>
-        <div class="card-body">
-          <div class="row">
-            <div class="col-md-6">
-              <h3 class="h6">Primary Device</h3>
-              <div id="primaryAssetInfo"></div>
-              
-              <div class="mb-3">
-                <label for="deviceNotes" class="form-label">Check-in Notes</label>
-                <textarea class="form-control" id="deviceNotes" rows="3"></textarea>
-              </div>
-              
-              <div id="chromebookOptions" style="display: none;">
-                <div class="form-check mb-3">
-                  <input class="form-check-input" type="checkbox" id="brokenScreen">
-                  <label class="form-check-label" for="brokenScreen">
-                    Broken Screen
-                  </label>
-                </div>
-              </div>
+      </div>
 
-              <!-- Debug Information -->
-              <div class="mt-4">
-                <h3 class="h6">Debug Information</h3>
-                <div class="accordion" id="debugAccordion">
-                  <div class="accordion-item">
-                    <h4 class="accordion-header">
-                      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#customFields">
-                        Custom Fields
-                      </button>
-                    </h4>
-                    <div id="customFields" class="accordion-collapse collapse" data-bs-parent="#debugAccordion">
-                      <div class="accordion-body">
-                        <pre id="customFieldsData" class="bg-light p-2" style="max-height: 300px; overflow-y: auto;"></pre>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="accordion-item">
-                    <h4 class="accordion-header">
-                      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#rawData">
-                        Raw Asset Data
-                      </button>
-                    </h4>
-                    <div id="rawData" class="accordion-collapse collapse" data-bs-parent="#debugAccordion">
-                      <div class="accordion-body">
-                        <pre id="rawAssetData" class="bg-light p-2" style="max-height: 300px; overflow-y: auto;"></pre>
-                      </div>
-                    </div>
+      <!-- Debug Information -->
+      <div id="debugInfo" class="mb-4" style="display: none;">
+        <div class="card">
+          <div class="card-header bg-secondary text-white">
+            <h2 class="h5 mb-0">Debug Information</h2>
+          </div>
+          <div class="card-body">
+            <div class="accordion" id="debugAccordion">
+              <div class="accordion-item">
+                <h4 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#customFields">
+                    Custom Fields
+                  </button>
+                </h4>
+                <div id="customFields" class="accordion-collapse collapse" data-bs-parent="#debugAccordion">
+                  <div class="accordion-body">
+                    <pre id="customFieldsData" class="bg-light p-2" style="max-height: 300px; overflow-y: auto;"></pre>
                   </div>
                 </div>
               </div>
+              <div class="accordion-item">
+                <h4 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#rawData">
+                    Raw Asset Data
+                  </button>
+                </h4>
+                <div id="rawData" class="accordion-collapse collapse" data-bs-parent="#debugAccordion">
+                  <div class="accordion-body">
+                    <pre id="rawAssetData" class="bg-light p-2" style="max-height: 300px; overflow-y: auto;"></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- All Devices Column (Right Column) -->
+    <div class="col-md-8">
+      <!-- Asset Details Section (populated by JS) -->
+      <div id="assetDetails" class="mb-4" style="display: none;">
+        <div class="card">
+          <div class="card-header bg-primary text-white">
+            <h2 class="h5 mb-0">Device Check-in</h2>
+          </div>
+          <div class="card-body">
+            <!-- Primary Device will be shown first -->
+            <div class="mb-4">
+              <h3 class="h6 border-bottom pb-2 mb-3">Primary Device</h3>
+              <div id="primaryDeviceContainer"></div>
             </div>
             
-            <div class="col-md-6">
-              <h3 class="h6">Other Devices</h3>
+            <!-- Other devices will follow -->
+            <div id="otherDevicesContainer" class="mb-4">
+              <h3 class="h6 border-bottom pb-2 mb-3">Other Devices</h3>
               <div id="otherDevices"></div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Not Checked In Devices Table -->
+  <div id="notCheckedInDevices" class="row mb-4" style="display: none;">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header bg-warning">
+          <h2 class="h5 mb-0">Not Checked In Devices</h2>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th>Asset Tag</th>
+                  <th>Type</th>
+                  <th>Owner</th>
+                  <th>Serial Number</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="notCheckedInDevicesBody">
+              </tbody>
+            </table>
+          </div>
+          <div class="mt-3">
+            <button id="downloadCSV" class="btn btn-secondary">Download as CSV</button>
           </div>
         </div>
       </div>
@@ -106,6 +187,24 @@
 
   <!-- Error Alert -->
   <div id="errorAlert" class="alert alert-danger" style="display: none;" role="alert"></div>
+  
+  <!-- Success Alert -->
+  <div id="successAlert" class="alert alert-success" style="display: none;" role="alert"></div>
+
+  <!-- Progress Bar -->
+  <div id="progressContainer" class="row mb-4" style="display: none;">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h5>Processing devices...</h5>
+          <div class="progress" style="height: 25px;">
+            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+          </div>
+          <p id="processingStatus" class="mt-2 text-center"></p>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 {% endblock %}
@@ -115,16 +214,148 @@
 document.addEventListener('DOMContentLoaded', function() {
     const assetInput = document.getElementById('assetInput');
     const assetDetails = document.getElementById('assetDetails');
+    const debugInfo = document.getElementById('debugInfo');
+    const ownerInfo = document.getElementById('ownerInfo');
+    const ownerDetails = document.getElementById('ownerDetails');
     const loadingIndicator = document.getElementById('loadingIndicator');
     const errorAlert = document.getElementById('errorAlert');
-    const primaryAssetInfo = document.getElementById('primaryAssetInfo');
+    const successAlert = document.getElementById('successAlert');
+    const primaryDeviceContainer = document.getElementById('primaryDeviceContainer');
     const otherDevices = document.getElementById('otherDevices');
-    const chromebookOptions = document.getElementById('chromebookOptions');
+    const otherDevicesContainer = document.getElementById('otherDevicesContainer');
     const customFieldsData = document.getElementById('customFieldsData');
     const rawAssetData = document.getElementById('rawAssetData');
+    const notCheckedInDevices = document.getElementById('notCheckedInDevices');
+    const notCheckedInDevicesBody = document.getElementById('notCheckedInDevicesBody');
+    const downloadCSV = document.getElementById('downloadCSV');
+    const batchActions = document.getElementById('batchActions');
+    const deviceCountBadge = document.getElementById('deviceCountBadge');
+    const checkInAllDevices = document.getElementById('checkInAllDevices');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const processingStatus = document.getElementById('processingStatus');
     
+    let currentAssets = [];
     let lastAssetName = '';
     let loadingTimeout = null;
+    let notCheckedInList = [];
+
+    // Function to generate HTML for device details and check-in options
+    function generateDeviceTemplate(device, isMainDevice = false) {
+        // Get device information
+        const assetId = device.id;
+        const assetName = device.Name || 'N/A';
+        const assetType = device.CustomFields?.find(f => f.name === 'Type')?.values[0] || 'N/A';
+        const serialNumber = device.CustomFields?.find(f => f.name === 'Serial Number')?.values[0] || 'N/A';
+        const manufacturer = device.CustomFields?.find(f => f.name === 'Manufacturer')?.values[0] || 'N/A';
+        const model = device.CustomFields?.find(f => f.name === 'Model')?.values[0] || 'N/A';
+        const macAddress = device.CustomFields?.find(f => f.name === 'Mac Address')?.values[0] || 'N/A';
+        const internalName = device.CustomFields?.find(f => f.name === 'Internal Name')?.values[0] || 'N/A';
+        const status = device.Status || 'N/A';
+        
+        // Check if this device is a Chromebook
+        const isChromebook = assetType.toLowerCase().includes('chromebook');
+        
+        // Generate HTML with conditional formatting for primary vs. other device
+        const cardClasses = isMainDevice ? 'border-primary' : 'mb-3';
+        const deviceHtml = `
+            <div class="device-card card ${cardClasses}" data-asset-id="${assetId}">
+                <div class="card-body">
+                    <h5 class="card-title">${assetName} ${isMainDevice ? '<span class="badge bg-primary">Primary</span>' : ''}</h5>
+                    
+                    <!-- Device Details -->
+                    <dl class="row mb-3 small">
+                        <dt class="col-sm-4">Asset Tag</dt>
+                        <dd class="col-sm-8">${assetName}</dd>
+                        
+                        <dt class="col-sm-4">Status</dt>
+                        <dd class="col-sm-8">${status}</dd>
+                        
+                        <dt class="col-sm-4">Type</dt>
+                        <dd class="col-sm-8">${assetType}</dd>
+
+                        <dt class="col-sm-4">Serial Number</dt>
+                        <dd class="col-sm-8">${serialNumber}</dd>
+                        
+                        <dt class="col-sm-4">Make/Model</dt>
+                        <dd class="col-sm-8">${manufacturer} ${model}</dd>
+                        
+                        <dt class="col-sm-4">MAC Address</dt>
+                        <dd class="col-sm-8">${macAddress}</dd>
+                    </dl>
+                    
+                    <!-- Check-in Options -->
+                    <div class="mb-3">
+                        <label for="deviceNotes-${assetId}" class="form-label">Ticket Description</label>
+                        <textarea class="form-control device-notes" 
+                                id="deviceNotes-${assetId}" 
+                                data-asset-id="${assetId}"
+                                rows="2"></textarea>
+                    </div>
+                    
+                    <!-- Check-in status options -->
+                    <div class="mb-3">
+                        <label class="form-label">Check-in Status</label>
+                        <div class="form-check">
+                            <input class="form-check-input check-in-status" 
+                                type="radio" 
+                                name="checkInStatus-${assetId}" 
+                                id="checkedIn-${assetId}" 
+                                value="checked-in" 
+                                data-asset-id="${assetId}" 
+                                checked>
+                            <label class="form-check-label" for="checkedIn-${assetId}">
+                                Checked In (Remove Owner)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input check-in-status" 
+                                type="radio" 
+                                name="checkInStatus-${assetId}" 
+                                id="notCheckedIn-${assetId}" 
+                                value="not-checked-in" 
+                                data-asset-id="${assetId}">
+                            <label class="form-check-label" for="notCheckedIn-${assetId}">
+                                Not Checked In (Add to download list)
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Create Ticket Option -->
+                    <div class="form-check mb-3">
+                        <input class="form-check-input create-ticket" 
+                            type="checkbox" 
+                            id="createTicket-${assetId}" 
+                            data-asset-id="${assetId}">
+                        <label class="form-check-label" for="createTicket-${assetId}">
+                            Create Linked Ticket in Device Repair Queue
+                        </label>
+                    </div>
+                    
+                    ${isChromebook ? `
+                    <div class="form-check mb-3 chromebook-options">
+                        <input class="form-check-input broken-screen" 
+                            type="checkbox" 
+                            id="brokenScreen-${assetId}"
+                            data-asset-id="${assetId}">
+                        <label class="form-check-label" for="brokenScreen-${assetId}">
+                            Broken Screen
+                        </label>
+                    </div>
+                    ` : ''}
+
+                    <!-- Action Button -->
+                    <div class="mt-3 text-end">
+                        <button class="btn ${isMainDevice ? 'btn-primary' : 'btn-outline-primary'} process-device" data-asset-id="${assetId}">
+                            Process Check-in
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        return deviceHtml;
+    }
 
     async function fetchAssetInfo(assetName) {
         if (!assetName || assetName === lastAssetName) return;
@@ -132,7 +363,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         loadingIndicator.style.display = 'block';
         assetDetails.style.display = 'none';
+        debugInfo.style.display = 'none';
+        ownerInfo.style.display = 'none';
         errorAlert.style.display = 'none';
+        successAlert.style.display = 'none';
         
         try {
             const response = await fetch(`/devices/api/asset/${encodeURIComponent(assetName)}`);
@@ -142,86 +376,54 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error(data.error || 'Failed to fetch asset information');
             }
             
-            // Display primary asset info with prominent owner section
+            // Store current asset data for processing
+            currentAssets = [data.asset, ...data.other_assets];
+            
+            // Update device count in the batch actions section
+            const deviceCount = currentAssets.length;
+            deviceCountBadge.textContent = `${deviceCount} ${deviceCount === 1 ? 'device' : 'devices'} found`;
+            batchActions.style.display = 'block';
+            
+            // Display the primary device in the primary device container
             const asset = data.asset;
             const owner = data.owner;
-            primaryAssetInfo.innerHTML = `
-                <div class="alert alert-info mb-3">
+            
+            // Display owner information in the left column
+            ownerDetails.innerHTML = `
+                <div class="alert alert-info mb-0">
                     <h4 class="alert-heading mb-2">Current Owner</h4>
                     <p class="mb-0"><strong>${owner.display_name || owner.name || 'No Owner Assigned'}</strong></p>
                     <small class="text-muted">${owner.id ? `(${owner.id})` : ''}</small>
                 </div>
-                <dl class="row">
-                    <dt class="col-sm-4">Asset Tag</dt>
-                    <dd class="col-sm-8">${asset.Name || 'N/A'}</dd>
-                    
-                    <dt class="col-sm-4">Status</dt>
-                    <dd class="col-sm-8">${asset.Status || 'N/A'}</dd>
-                    
-                    <dt class="col-sm-4">Type</dt>
-                    <dd class="col-sm-8">${asset.CustomFields?.find(f => f.name === 'Type')?.values[0] || 'N/A'}</dd>
-
-                    <dt class="col-sm-4">Serial Number</dt>
-                    <dd class="col-sm-8">${asset.CustomFields?.find(f => f.name === 'Serial Number')?.values[0] || 'N/A'}</dd>
-                    
-                    <dt class="col-sm-4">Make</dt>
-                    <dd class="col-sm-8">${asset.CustomFields?.find(f => f.name === 'Manufacturer')?.values[0] || 'N/A'}</dd>
-                    
-                    <dt class="col-sm-4">Model</dt>
-                    <dd class="col-sm-8">${asset.CustomFields?.find(f => f.name === 'Model')?.values[0] || 'N/A'}</dd>
-                    
-                    <dt class="col-sm-4">MAC Address</dt>
-                    <dd class="col-sm-8">${asset.CustomFields?.find(f => f.name === 'Mac Address')?.values[0] || 'N/A'}</dd>
-                    
-                    <dt class="col-sm-4">Internal Name</dt>
-                    <dd class="col-sm-8">${asset.CustomFields?.find(f => f.name === 'Internal Name')?.values[0] || 'N/A'}</dd>
-                </dl>
             `;
             
-            // Show Chromebook options if applicable
-            const assetType = asset.CustomFields?.find(f => f.name === 'Type')?.values[0] || '';
-            chromebookOptions.style.display = assetType.toLowerCase().includes('chromebook') ? 'block' : 'none';
+            // Display primary device in the primary device container
+            primaryDeviceContainer.innerHTML = generateDeviceTemplate(asset, true);
             
             // Display other devices
             if (data.other_assets && data.other_assets.length > 0) {
-                otherDevices.innerHTML = data.other_assets.map(device => `
-                    <div class="card mb-2">
-                        <div class="card-body">
-                            <h6 class="card-title">${device.Name || 'N/A'}</h6>
-                            <div class="mb-2">
-                                <small class="text-muted">
-                                    Type: ${device.CustomFields?.find(f => f.name === 'Type')?.values[0] || 'N/A'} | 
-                                    Status: ${device.Status || 'N/A'}
-                                </small>
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label">Notes</label>
-                                <textarea class="form-control device-notes" 
-                                          data-asset-id="${device.id}"
-                                          rows="2"></textarea>
-                            </div>
-                            ${device.CustomFields?.find(f => f.name === 'Type')?.values[0]?.toLowerCase().includes('chromebook') ? `
-                                <div class="form-check">
-                                    <input class="form-check-input broken-screen" 
-                                           type="checkbox" 
-                                           data-asset-id="${device.id}">
-                                    <label class="form-check-label">
-                                        Broken Screen
-                                    </label>
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                `).join('');
+                otherDevices.innerHTML = data.other_assets.map(device => 
+                    generateDeviceTemplate(device, false)
+                ).join('');
+                otherDevicesContainer.style.display = 'block';
             } else {
                 otherDevices.innerHTML = '<p class="text-muted">No other devices found for this owner.</p>';
+                otherDevicesContainer.style.display = 'block';
             }
             
             // Display debug information
             customFieldsData.textContent = JSON.stringify(asset.CustomFields || {}, null, 2);
             rawAssetData.textContent = JSON.stringify(asset, null, 2);
             
+            // Show all sections
             assetDetails.style.display = 'block';
+            debugInfo.style.display = 'block';
+            ownerInfo.style.display = 'block';
+            
+            // Add event listeners to all process buttons
+            document.querySelectorAll('.process-device').forEach(button => {
+                button.addEventListener('click', handleProcessDevice);
+            });
             
         } catch (error) {
             errorAlert.textContent = error.message;
@@ -231,11 +433,338 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function getCustomFieldValue(asset, fieldName) {
-        if (!asset.CustomFields) return null;
-        const field = asset.CustomFields.find(f => f.name === fieldName);
-        return field ? field.value : null;
+    // Process device check-in
+    async function handleProcessDevice(event) {
+        const assetId = event.target.getAttribute('data-asset-id');
+        const deviceCard = document.querySelector(`.device-card[data-asset-id="${assetId}"]`);
+        
+        if (!deviceCard) {
+            errorAlert.textContent = "Could not locate device information.";
+            errorAlert.style.display = 'block';
+            return;
+        }
+        
+        console.log("Processing device with ID:", assetId);
+        console.log("Current assets:", currentAssets);
+        
+        // Find the device in our current assets list
+        // Convert both IDs to strings for comparison to ensure matching works correctly
+        const device = currentAssets.find(d => String(d.id) === String(assetId));
+        
+        if (!device) {
+            errorAlert.textContent = "Device data not found. Try refreshing the page.";
+            errorAlert.style.display = 'block';
+            return;
+        }
+        
+        // Get form values
+        const description = deviceCard.querySelector(`.device-notes[data-asset-id="${assetId}"]`)?.value.trim() || '';
+        const createTicket = deviceCard.querySelector(`.create-ticket[data-asset-id="${assetId}"]`)?.checked || false;
+        const brokenScreen = deviceCard.querySelector(`.broken-screen[data-asset-id="${assetId}"]`)?.checked || false;
+        const isCheckedIn = deviceCard.querySelector(`#checkedIn-${assetId}`).checked;
+        
+        // Get device details for display/logging
+        const assetName = device.Name || '';
+        const serialNumber = device.CustomFields?.find(f => f.name === 'Serial Number')?.values[0] || 'N/A';
+        const assetType = device.CustomFields?.find(f => f.name === 'Type')?.values[0] || 'N/A';
+        
+        // Get owner information from the owner display in the primary device section
+        const ownerName = document.querySelector('.alert-info .mb-0 strong')?.textContent || 'Unknown';
+        
+        // Show loading indicator
+        loadingIndicator.style.display = 'block';
+        
+        try {
+            if (isCheckedIn) {
+                // Process checked-in asset (update owner to Nobody)
+                const updateResponse = await fetch('/devices/api/update-asset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        assetId: assetId,
+                        setOwnerToNobody: true,
+                        createTicket: createTicket,
+                        ticketDescription: description || (brokenScreen ? 'Broken Screen' : ''),
+                        brokenScreen: brokenScreen
+                    })
+                });
+                
+                const updateResult = await updateResponse.json();
+                
+                if (!updateResponse.ok) {
+                    throw new Error(updateResult.error || 'Failed to update asset');
+                }
+                
+                // Show success message
+                successAlert.textContent = `Device ${assetName} has been checked in successfully.`;
+                successAlert.style.display = 'block';
+                
+                // Disable the form controls for this device
+                disableDeviceControls(deviceCard);
+                
+                // Add a "processed" class to visually indicate this device is done
+                deviceCard.classList.add('processed');
+                if (!deviceCard.querySelector('.alert-success')) {
+                    const successIndicator = document.createElement('div');
+                    successIndicator.className = 'alert alert-success mt-2 mb-0';
+                    successIndicator.textContent = 'Processed: Owner removed';
+                    deviceCard.appendChild(successIndicator);
+                }
+                
+            } else {
+                // Add to not-checked-in list
+                const deviceInfo = {
+                    assetId: assetId,
+                    assetName: assetName,
+                    serialNumber: serialNumber,
+                    assetType: assetType,
+                    ownerName: ownerName
+                };
+                
+                // Check if device is already in the list
+                const existingIndex = notCheckedInList.findIndex(item => item.assetId === assetId);
+                if (existingIndex === -1) {
+                    notCheckedInList.push(deviceInfo);
+                }
+                
+                // Update the not-checked-in devices table
+                updateNotCheckedInTable();
+                
+                // Show success message
+                successAlert.textContent = `Device ${assetName} has been added to the not checked in list.`;
+                successAlert.style.display = 'block';
+                
+                // Disable the form controls for this device
+                disableDeviceControls(deviceCard);
+                
+                // Add a "processed" class to visually indicate this device is done
+                deviceCard.classList.add('processed');
+                if (!deviceCard.querySelector('.alert-warning')) {
+                    const warningIndicator = document.createElement('div');
+                    warningIndicator.className = 'alert alert-warning mt-2 mb-0';
+                    warningIndicator.textContent = 'Processed: Added to not checked-in list';
+                    deviceCard.appendChild(warningIndicator);
+                }
+            }
+            
+        } catch (error) {
+            errorAlert.textContent = error.message;
+            errorAlert.style.display = 'block';
+        } finally {
+            loadingIndicator.style.display = 'none';
+            // Scroll to the success or error message
+            if (successAlert.style.display === 'block') {
+                successAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (errorAlert.style.display === 'block') {
+                errorAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
     }
+    
+    // Process all devices at once
+    async function processAllDevices() {
+        if (currentAssets.length === 0) {
+            errorAlert.textContent = "No devices found to process.";
+            errorAlert.style.display = 'block';
+            return;
+        }
+        
+        // Show progress bar and hide other indicators
+        progressContainer.style.display = 'block';
+        loadingIndicator.style.display = 'none';
+        errorAlert.style.display = 'none';
+        successAlert.style.display = 'none';
+        
+        // Disable check-in button while processing
+        checkInAllDevices.disabled = true;
+        
+        let successCount = 0;
+        let failCount = 0;
+        
+        // Process devices one by one
+        for (let i = 0; i < currentAssets.length; i++) {
+            const device = currentAssets[i];
+            const assetId = device.id;
+            const assetName = device.Name || 'Unknown';
+            
+            // Update progress
+            const progress = Math.round(((i) / currentAssets.length) * 100);
+            progressBar.style.width = `${progress}%`;
+            progressBar.setAttribute('aria-valuenow', progress);
+            progressBar.textContent = `${progress}%`;
+            processingStatus.textContent = `Processing device ${i + 1} of ${currentAssets.length}: ${assetName}`;
+            
+            try {
+                // Process the device - always set owner to Nobody, no tickets
+                const updateResponse = await fetch('/devices/api/update-asset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        assetId: assetId,
+                        setOwnerToNobody: true,
+                        createTicket: false, // Never create tickets in batch mode
+                        ticketDescription: '',
+                        brokenScreen: false
+                    })
+                });
+                
+                const updateResult = await updateResponse.json();
+                
+                if (!updateResponse.ok) {
+                    throw new Error(updateResult.error || 'Failed to update asset');
+                }
+                
+                // Handle success
+                successCount++;
+                
+                // Find and update the device card visually
+                const deviceCard = document.querySelector(`.device-card[data-asset-id="${assetId}"]`);
+                if (deviceCard) {
+                    disableDeviceControls(deviceCard);
+                    deviceCard.classList.add('processed');
+                    if (!deviceCard.querySelector('.alert-success')) {
+                        const successIndicator = document.createElement('div');
+                        successIndicator.className = 'alert alert-success mt-2 mb-0';
+                        successIndicator.textContent = 'Processed: Owner removed';
+                        deviceCard.appendChild(successIndicator);
+                    }
+                }
+                
+            } catch (error) {
+                console.error(`Error processing device ${assetName}:`, error);
+                failCount++;
+            }
+            
+            // Small delay to prevent overwhelming the server
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        // Complete the progress bar
+        progressBar.style.width = '100%';
+        progressBar.setAttribute('aria-valuenow', 100);
+        progressBar.textContent = '100%';
+        processingStatus.textContent = 'Processing complete!';
+        
+        // Show final result
+        if (failCount === 0) {
+            successAlert.textContent = `Successfully checked in all ${successCount} devices.`;
+            successAlert.style.display = 'block';
+        } else {
+            errorAlert.textContent = `Processed ${successCount} devices, but failed to process ${failCount} devices.`;
+            errorAlert.style.display = 'block';
+        }
+        
+        // Re-enable check-in button
+        checkInAllDevices.disabled = false;
+        
+        // Scroll to the result message
+        if (successAlert.style.display === 'block') {
+            successAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            errorAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        
+        // Hide progress bar after a delay
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+        }, 3000);
+    }
+    
+    // Add event listener for check in all devices button
+    checkInAllDevices.addEventListener('click', processAllDevices);
+    
+    // Disable form controls after device is processed
+    function disableDeviceControls(deviceCard) {
+        deviceCard.querySelectorAll('input, textarea, button.process-device').forEach(el => {
+            el.disabled = true;
+        });
+    }
+    
+    // Update not-checked-in devices table
+    function updateNotCheckedInTable() {
+        if (notCheckedInList.length > 0) {
+            notCheckedInDevices.style.display = 'block';
+            notCheckedInDevicesBody.innerHTML = notCheckedInList.map((device, index) => `
+                <tr>
+                    <td>${device.assetName}</td>
+                    <td>${device.assetType}</td>
+                    <td>${device.ownerName}</td>
+                    <td>${device.serialNumber}</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger remove-device" data-index="${index}">
+                            Remove
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            // Add event listeners to remove buttons
+            document.querySelectorAll('.remove-device').forEach(button => {
+                button.addEventListener('click', function() {
+                    const index = parseInt(this.getAttribute('data-index'));
+                    notCheckedInList.splice(index, 1);
+                    updateNotCheckedInTable();
+                });
+            });
+        } else {
+            notCheckedInDevices.style.display = 'none';
+        }
+    }
+    
+    // Download CSV
+    downloadCSV.addEventListener('click', function() {
+        if (notCheckedInList.length === 0) {
+            errorAlert.textContent = "No devices in the not checked in list.";
+            errorAlert.style.display = 'block';
+            return;
+        }
+        
+        // Create CSV content
+        const headers = ['Asset Tag', 'Type', 'Owner', 'Serial Number'];
+        let csvContent = headers.join(',') + '\n';
+        
+        notCheckedInList.forEach(device => {
+            const row = [
+                device.assetName,
+                device.assetType,
+                device.ownerName,
+                device.serialNumber
+            ].map(value => `"${value}"`);
+            csvContent += row.join(',') + '\n';
+        });
+        
+        // Create and trigger download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `not-checked-in-devices-${new Date().toISOString().slice(0, 10)}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+    
+    // Add event listeners for the search form
+    const searchForm = document.getElementById('assetSearchForm');
+    const searchButton = document.getElementById('searchButton');
+    
+    // Handle form submission (when user presses Enter)
+    searchForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const value = assetInput.value.trim();
+        if (value) fetchAssetInfo(value);
+    });
+    
+    // Handle search button click
+    searchButton.addEventListener('click', function() {
+        const value = assetInput.value.trim();
+        if (value) fetchAssetInfo(value);
+    });
     
     // Handle asset input changes
     assetInput.addEventListener('input', function(e) {
@@ -246,9 +775,30 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 500);
     });
     
-    // If there's an initial asset name, fetch its details
+    // Handle asset input changes
+    assetInput.addEventListener('input', function(e) {
+        clearTimeout(loadingTimeout);
+        loadingTimeout = setTimeout(() => {
+            const value = e.target.value.trim();
+            if (value) fetchAssetInfo(value);
+        }, 500);
+    });
+    
+    // Clear messages when scanning a new asset
+    assetInput.addEventListener('focus', function() {
+        if (document.activeElement === this) {
+            errorAlert.style.display = 'none';
+            successAlert.style.display = 'none';
+        }
+    });
+    
+    // Handle initial asset name without automatic processing
+    // This only loads the asset information but won't check it in
     if (assetInput.value) {
-        fetchAssetInfo(assetInput.value);
+        const initialValue = assetInput.value.trim();
+        if (initialValue) {
+            fetchAssetInfo(initialValue);
+        }
     }
 });
 </script>
