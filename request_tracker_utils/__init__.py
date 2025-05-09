@@ -1,5 +1,5 @@
 from flask import Flask, render_template, url_for, jsonify, request
-from request_tracker_utils.routes import label_routes, tag_routes, device_routes
+from request_tracker_utils.routes import label_routes, tag_routes, device_routes, student_routes
 
 def request_wants_json():
     """Check if the request prefers JSON response.
@@ -23,6 +23,7 @@ def create_app():
     app.register_blueprint(label_routes.bp)
     app.register_blueprint(tag_routes.bp)
     app.register_blueprint(device_routes.bp, url_prefix='/devices')
+    app.register_blueprint(student_routes.bp, url_prefix='/students')
 
     # Add homepage route
     @app.route('/')
