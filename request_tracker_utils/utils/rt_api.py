@@ -11,6 +11,7 @@ import logging
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from pathlib import Path
+from request_tracker_utils.config import WORKING_DIR  # Import the working directory from config
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -22,7 +23,10 @@ class PersistentAssetCache:
         self.max_size = max_size
         self.ttl = ttl
         self.lock = threading.RLock()
-        self.cache_file = Path.home() / '.rtutils' / 'asset_cache.json'
+        
+        # Use the configured working directory instead of home directory
+        cache_dir = Path(WORKING_DIR) / 'cache'
+        self.cache_file = cache_dir / 'asset_cache.json'
         
         # Ensure cache directory exists
         self.cache_file.parent.mkdir(parents=True, exist_ok=True)
