@@ -18,8 +18,12 @@ class AssetTagManager:
             config: Application configuration dictionary
         """
         self.config = config
-        self.sequence_file = "asset_tag_sequence.txt"
-        self.log_file = "asset_tag_confirmations.log"
+        # Use absolute paths with the working directory
+        working_dir = config.get("WORKING_DIR", "/var/lib/request-tracker-utils")
+        # Ensure working directory exists
+        os.makedirs(working_dir, exist_ok=True)
+        self.sequence_file = os.path.join(working_dir, "asset_tag_sequence.txt")
+        self.log_file = os.path.join(working_dir, "asset_tag_confirmations.log")
         self.prefix = config.get("PREFIX", "W12-")
     
     def get_current_sequence(self):

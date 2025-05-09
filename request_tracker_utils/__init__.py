@@ -14,7 +14,14 @@ def request_wants_json():
             request.accept_mimetypes['text/html'])
 
 def create_app():
-    app = Flask(__name__)
+    # Create Flask app with custom instance path from config
+    import os
+    from request_tracker_utils.config import WORKING_DIR
+    
+    # Ensure the working directory exists
+    os.makedirs(WORKING_DIR, exist_ok=True)
+    
+    app = Flask(__name__, instance_path=WORKING_DIR)
 
     # Load configuration
     app.config.from_object('request_tracker_utils.config')
