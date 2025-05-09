@@ -1,0 +1,988 @@
+{% extends 'base.html' %}
+
+{% block title %}Student Device Check-in Tracker{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <!-- Breadcrumb Navigation -->
+  <nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">Home</a></li>
+      <li class="breadcrumb-item"><a href="/devices">Devices</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Student Device Check-in</li>
+    </ol>
+  </nav>
+
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1 class="mb-3">Student Device Check-in Tracker</h1>
+      <p class="lead">Track student device check-ins for the {{ current_year }} school year.</p>
+    </div>
+  </div>
+
+  <!-- Dashboard Cards -->
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="card bg-primary text-white h-100">
+        <div class="card-body">
+          <h5 class="card-title">Total Students</h5>
+          <h2 class="display-4">{{ stats.total_students }}</h2>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <div class="card bg-success text-white h-100">
+        <div class="card-body">
+          <h5 class="card-title">Checked In</h5>
+          <h2 class="display-4">{{ stats.checked_in }}</h2>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <div class="card bg-warning text-dark h-100">
+        <div class="card-body">
+          <h5 class="card-title">Pending</h5>
+          <h2 class="display-4">{{ stats.not_checked_in }}</h2>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <div class="card bg-info text-white h-100">
+        <div class="card-body">
+          <h5 class="card-title">Completion Rate</h5>
+          <h2 class="display-4">{{ "%.1f"|format(stats.completion_rate) }}%</h2>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body d-flex justify-content-between">
+          <div>
+            <button id="refreshStudentsBtn" class="btn btn-outline-primary me-2">
+              <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+            <a href="{{ url_for('students.student_import') }}" class="btn btn-outline-success me-2">
+              <i class="bi bi-file-earmark-arrow-up"></i> Import Students
+            </a>
+            <a href="{{ url_for('students.student_export') }}" class="btn btn-outline-secondary me-2">
+              <i class="bi bi-file-earmark-arrow-down"></i> Export CSV
+            </a>
+            <button id="clearAllStudentsBtn" class="btn btn-outline-danger me-2">
+              <i class="bi bi-trash"></i> Clear All Students
+            </button>
+          </div>
+          <div>
+            <button id="addStudentBtn" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStudentModal">
+              <i class="bi bi-person-plus"></i> Add Student
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Student Filtering Controls -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label for="filterGrade" class="form-label">Grade</label>
+              <select id="filterGrade" class="form-select" multiple size="4">
+                <option value="K">Kindergarten</option>
+                <option value="1">1st Grade</option>
+                <option value="2">2nd Grade</option>
+                <option value="3">3rd Grade</option>
+                <option value="4">4th Grade</option>
+                <option value="5">5th Grade</option>
+                <option value="6">6th Grade</option>
+                <option value="7">7th Grade</option>
+                <option value="8">8th Grade</option>
+                <option value="9">9th Grade</option>
+                <option value="10">10th Grade</option>
+                <option value="11">11th Grade</option>
+                <option value="12">12th Grade</option>
+              </select>
+              <div class="form-text">Hold Ctrl/Cmd to select multiple grades</div>
+            </div>
+            
+            <div class="col-md-3">
+              <label for="filterStatus" class="form-label">Status</label>
+              <select id="filterStatus" class="form-select">
+                <option value="">All Statuses</option>
+                <option value="checked_in">Checked In</option>
+                <option value="not_checked_in">Not Checked In</option>
+              </select>
+            </div>
+            
+            <div class="col-md-6">
+              <label for="searchStudent" class="form-label">Search</label>
+              <input type="text" class="form-control" id="searchStudent" placeholder="Search by name or ID">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Student List -->
+  <div class="card mb-4">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+      <h2 class="h5 mb-0">Student List</h2>
+      <span id="studentCount" class="badge bg-light text-dark">{{ students|length }} students</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover mb-0" id="studentTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>First Name</th>
+              <th>Last Name</th>
+              <th>Grade</th>
+              <th>Status</th>
+              <th>Check-in Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for student in students %}
+            <tr class="student-row" data-student-id="{{ student.id }}">
+              <td>{{ student.id }}</td>
+              <td>{{ student.first_name }}</td>
+              <td>{{ student.last_name }}</td>
+              <td>{{ student.grade }}</td>
+              <td>
+                {% if student.device_checked_in %}
+                <span class="badge bg-success">Checked In</span>
+                {% else %}
+                <span class="badge bg-warning text-dark">Pending</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if student.check_in_date %}
+                {{ student.check_in_date|replace('T', ' ')|truncate(16, true, '') }}
+                {% else %}
+                -
+                {% endif %}
+              </td>
+              <td>
+                <div class="btn-group btn-group-sm">
+                  <button class="btn btn-outline-primary view-student" data-student-id="{{ student.id }}">
+                    <i class="bi bi-eye"></i>
+                  </button>
+                  <button class="btn btn-outline-success check-in-device" data-student-id="{{ student.id }}" 
+                          {% if student.device_checked_in %}disabled{% endif %}>
+                    <i class="bi bi-box-arrow-in-down"></i>
+                  </button>
+                  <button class="btn btn-outline-warning check-out-device" data-student-id="{{ student.id }}"
+                          {% if not student.device_checked_in %}disabled{% endif %}>
+                    <i class="bi bi-box-arrow-up"></i>
+                  </button>
+                  <button class="btn btn-outline-danger delete-student" data-student-id="{{ student.id }}">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7" class="text-center py-4">No students found. Click "Add Student" to get started.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Student Modal -->
+  <div class="modal fade" id="addStudentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Student</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="addStudentForm">
+            <div class="mb-3">
+              <label for="studentId" class="form-label">Student ID</label>
+              <input type="text" class="form-control" id="studentId" required>
+            </div>
+            <div class="mb-3">
+              <label for="firstName" class="form-label">First Name</label>
+              <input type="text" class="form-control" id="firstName" required>
+            </div>
+            <div class="mb-3">
+              <label for="lastName" class="form-label">Last Name</label>
+              <input type="text" class="form-control" id="lastName" required>
+            </div>
+            <div class="mb-3">
+              <label for="grade" class="form-label">Grade</label>
+              <select class="form-select" id="grade">
+                <option value="K">Kindergarten</option>
+                <option value="1">1st Grade</option>
+                <option value="2">2nd Grade</option>
+                <option value="3">3rd Grade</option>
+                <option value="4">4th Grade</option>
+                <option value="5">5th Grade</option>
+                <option value="6">6th Grade</option>
+                <option value="7">7th Grade</option>
+                <option value="8">8th Grade</option>
+                <option value="9">9th Grade</option>
+                <option value="10">10th Grade</option>
+                <option value="11">11th Grade</option>
+                <option value="12">12th Grade</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="rtUserId" class="form-label">RT User ID (optional)</label>
+              <input type="text" class="form-control" id="rtUserId">
+              <div class="form-text">The Request Tracker user ID for device lookup</div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="saveStudentBtn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- View Student Modal -->
+  <div class="modal fade" id="viewStudentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="viewStudentTitle">Student Details</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <div class="card h-100">
+                <div class="card-header">
+                  <h5>Student Information</h5>
+                </div>
+                <div class="card-body">
+                  <ul class="list-group list-group-flush" id="studentDetails">
+                    <!-- Student details populated by JavaScript -->
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <div class="card h-100">
+                <div class="card-header">
+                  <h5>Device Information</h5>
+                </div>
+                <div class="card-body" id="deviceInfo">
+                  <!-- Device info populated by JavaScript -->
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="card">
+            <div class="card-header">
+              <h5>RT Device Lookup</h5>
+            </div>
+            <div class="card-body" id="rtDeviceLookup">
+              <!-- RT device lookup populated by JavaScript -->
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <p class="mb-2 text-muted">Lookup devices assigned to this student in RT</p>
+                </div>
+                <button class="btn btn-outline-primary" id="lookupRTDevicesBtn">
+                  <i class="bi bi-search"></i> Lookup RT Devices
+                </button>
+              </div>
+              
+              <!-- Placeholder for RT devices display -->
+              <div id="rtDevicesContainer" class="mt-3" style="display: none;">
+                <h6 class="border-bottom pb-2">Assigned Devices in RT</h6>
+                <div id="rtDevicesList">
+                  <!-- RT Devices populated by JavaScript -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-success" id="checkInSelectedDeviceBtn" style="display: none;">
+            <i class="bi bi-box-arrow-in-down"></i> Check In Selected Device
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Check In Device Modal -->
+  <div class="modal fade" id="checkInModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="checkInTitle">Check In Device</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to mark this student's device as checked in?</p>
+          
+          <div class="card">
+            <div class="card-body">
+              <h6>Student Information</h6>
+              <p id="checkInStudentInfo">Student Name: <span id="checkInStudentName"></span></p>
+              
+              <div class="mb-3">
+                <label for="assetId" class="form-label">Asset ID (optional)</label>
+                <input type="text" class="form-control" id="assetId">
+                <div class="form-text">Enter the device's asset ID if available</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-success" id="confirmCheckInBtn">Confirm Check In</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal fade" id="deleteStudentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Delete Student</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to delete this student?</p>
+          <div class="alert alert-danger">
+            <strong>Warning:</strong> This action cannot be undone.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clear All Students Confirmation Modal -->
+  <div class="modal fade" id="clearAllStudentsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title">Clear All Students</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <strong>Warning!</strong> This action will remove <span id="studentCountToRemove" class="fw-bold">{{ stats.total_students }}</span> students from the system.
+          </div>
+          
+          <p>This is a permanent action and will:</p>
+          <ul>
+            <li>Delete all student records for the {{ current_year }} school year</li>
+            <li>Reset check-in status statistics</li>
+            <li>Remove all assigned device information</li>
+          </ul>
+          
+          <p class="mb-0">You should only proceed if you want to start fresh (such as at the beginning of a new school year).</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-danger" id="confirmClearAllBtn">
+            <i class="bi bi-trash"></i> Clear All Students
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+</div>
+
+<!-- Toast Messages -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+  <div id="successToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header bg-success text-white">
+      <i class="bi bi-check-circle me-2"></i>
+      <strong class="me-auto">Success</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="successToastMessage">
+      Operation completed successfully.
+    </div>
+  </div>
+</div>
+
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+  <div id="errorToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header bg-danger text-white">
+      <i class="bi bi-exclamation-circle me-2"></i>
+      <strong class="me-auto">Error</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="errorToastMessage">
+      An error occurred.
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Initialize variables
+  let currentStudentId = null;
+  let studentData = null;
+  let rtDevices = null;
+  
+  // Initialize Bootstrap components
+  const successToast = new bootstrap.Toast(document.getElementById('successToast'));
+  const errorToast = new bootstrap.Toast(document.getElementById('errorToast'));
+  const addStudentModal = new bootstrap.Modal(document.getElementById('addStudentModal'));
+  const viewStudentModal = new bootstrap.Modal(document.getElementById('viewStudentModal'));
+  const checkInModal = new bootstrap.Modal(document.getElementById('checkInModal'));
+  const deleteStudentModal = new bootstrap.Modal(document.getElementById('deleteStudentModal'));
+  const clearAllStudentsModal = new bootstrap.Modal(document.getElementById('clearAllStudentsModal'));
+  
+  // Add student form submission
+  document.getElementById('saveStudentBtn').addEventListener('click', function() {
+    const form = document.getElementById('addStudentForm');
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+    
+    const studentData = {
+      id: document.getElementById('studentId').value,
+      first_name: document.getElementById('firstName').value,
+      last_name: document.getElementById('lastName').value,
+      grade: document.getElementById('grade').value
+    };
+    
+    // Add RT User ID if provided
+    const rtUserId = document.getElementById('rtUserId').value;
+    if (rtUserId) {
+      studentData.rt_user_id = rtUserId;
+    }
+    
+    fetch('/api/students', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(studentData)
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        showToast('successToast', 'Student added successfully');
+        addStudentModal.hide();
+        
+        // Refresh the page to show the new student
+        window.location.reload();
+      } else {
+        throw new Error(data.error || 'Failed to add student');
+      }
+    })
+    .catch(error => {
+      showToast('errorToast', error.message);
+    });
+  });
+  
+  // Refresh students button
+  document.getElementById('refreshStudentsBtn').addEventListener('click', function() {
+    window.location.reload();
+  });
+  
+  // View student
+  document.querySelectorAll('.view-student').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const studentId = this.dataset.studentId;
+      fetchStudentDetails(studentId);
+    });
+  });
+  
+  // Check in student device
+  document.querySelectorAll('.check-in-device').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const studentId = this.dataset.studentId;
+      currentStudentId = studentId;
+      
+      // Find student name
+      const row = document.querySelector(`.student-row[data-student-id="${studentId}"]`);
+      const firstName = row.cells[1].textContent;
+      const lastName = row.cells[2].textContent;
+      
+      // Update the modal
+      document.getElementById('checkInStudentName').textContent = `${firstName} ${lastName}`;
+      document.getElementById('assetId').value = '';
+      
+      // Show the modal
+      checkInModal.show();
+    });
+  });
+  
+  // Confirm check in
+  document.getElementById('confirmCheckInBtn').addEventListener('click', function() {
+    const assetId = document.getElementById('assetId').value;
+    
+    // Prepare data for the check-in
+    const checkInData = {};
+    
+    // If asset ID provided, include it
+    if (assetId) {
+      checkInData.asset_data = {
+        id: assetId
+      };
+    }
+    
+    fetch(`/api/students/${currentStudentId}/check-in`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(checkInData)
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        showToast('successToast', 'Device checked in successfully');
+        checkInModal.hide();
+        
+        // Refresh the page to update the UI
+        window.location.reload();
+      } else {
+        throw new Error(data.error || 'Failed to check in device');
+      }
+    })
+    .catch(error => {
+      showToast('errorToast', error.message);
+    });
+  });
+  
+  // Check out student device
+  document.querySelectorAll('.check-out-device').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const studentId = this.dataset.studentId;
+      
+      if (confirm('Are you sure you want to mark this device as not checked in?')) {
+        fetch(`/api/students/${studentId}/check-out`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            showToast('successToast', 'Device marked as not checked in');
+            
+            // Refresh the page to update the UI
+            window.location.reload();
+          } else {
+            throw new Error(data.error || 'Failed to update device status');
+          }
+        })
+        .catch(error => {
+          showToast('errorToast', error.message);
+        });
+      }
+    });
+  });
+  
+  // Delete student
+  document.querySelectorAll('.delete-student').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const studentId = this.dataset.studentId;
+      currentStudentId = studentId;
+      
+      // Show confirmation modal
+      deleteStudentModal.show();
+    });
+  });
+  
+  // Confirm delete
+  document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+    fetch(`/api/students/${currentStudentId}`, {
+      method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        showToast('successToast', 'Student deleted successfully');
+        deleteStudentModal.hide();
+        
+        // Refresh the page to update the UI
+        window.location.reload();
+      } else {
+        throw new Error(data.error || 'Failed to delete student');
+      }
+    })
+    .catch(error => {
+      showToast('errorToast', error.message);
+    });
+  });
+  
+  // Clear All Students button
+  document.getElementById('clearAllStudentsBtn').addEventListener('click', function() {
+    // Show the confirmation modal
+    clearAllStudentsModal.show();
+  });
+  
+  // Confirm Clear All Students
+  document.getElementById('confirmClearAllBtn').addEventListener('click', function() {
+    // Show loading state
+    const confirmBtn = this;
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+    
+    fetch('/api/students/clear-all', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      // Hide the modal
+      clearAllStudentsModal.hide();
+      
+      if (data.success) {
+        showToast('successToast', `Successfully removed ${data.count} students`);
+        
+        // Refresh the page after a short delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        throw new Error(data.error || 'An error occurred');
+      }
+    })
+    .catch(error => {
+      // Hide the modal
+      clearAllStudentsModal.hide();
+      
+      // Show error message
+      showToast('errorToast', error.message);
+      
+      // Reset button state
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = '<i class="bi bi-trash"></i> Clear All Students';
+    });
+  });
+  
+  // Filtering and search functionality
+  document.getElementById('filterGrade').addEventListener('change', filterStudents);
+  document.getElementById('filterStatus').addEventListener('change', filterStudents);
+  document.getElementById('searchStudent').addEventListener('input', filterStudents);
+  
+  function filterStudents() {
+    // Get selected grades (multiple selection)
+    const gradeFilter = Array.from(document.getElementById('filterGrade').selectedOptions).map(option => option.value);
+    const statusFilter = document.getElementById('filterStatus').value;
+    const searchTerm = document.getElementById('searchStudent').value.toLowerCase();
+    
+    let visibleCount = 0;
+    
+    document.querySelectorAll('.student-row').forEach(row => {
+      const grade = row.cells[3].textContent;
+      const isCheckedIn = row.cells[4].textContent.trim().includes('Checked In');
+      const firstName = row.cells[1].textContent.toLowerCase();
+      const lastName = row.cells[2].textContent.toLowerCase();
+      const studentId = row.cells[0].textContent.toLowerCase();
+      
+      // Check grade filter - show row if no grades selected or if grade is in selected grades
+      const gradeMatch = gradeFilter.length === 0 || gradeFilter.includes(grade);
+      
+      // Check status filter
+      let statusMatch = true;
+      if (statusFilter === 'checked_in') {
+        statusMatch = isCheckedIn;
+      } else if (statusFilter === 'not_checked_in') {
+        statusMatch = !isCheckedIn;
+      }
+      
+      // Check search term
+      const searchMatch = 
+        !searchTerm || 
+        firstName.includes(searchTerm) || 
+        lastName.includes(searchTerm) || 
+        studentId.includes(searchTerm) ||
+        `${firstName} ${lastName}`.includes(searchTerm);
+      
+      // Show or hide the row
+      if (gradeMatch && statusMatch && searchMatch) {
+        row.style.display = '';
+        visibleCount++;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+    
+    // Update the student count
+    document.getElementById('studentCount').textContent = `${visibleCount} students`;
+  }
+  
+  // Fetch student details for the view modal
+  function fetchStudentDetails(studentId) {
+    currentStudentId = studentId;
+    
+    fetch(`/api/students/${studentId}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        
+        studentData = data;
+        
+        // Update modal title
+        document.getElementById('viewStudentTitle').textContent = 
+          `Student Details: ${data.first_name} ${data.last_name}`;
+        
+        // Populate student details
+        const studentDetailsList = document.getElementById('studentDetails');
+        studentDetailsList.innerHTML = `
+          <li class="list-group-item"><strong>ID:</strong> ${data.id}</li>
+          <li class="list-group-item"><strong>Name:</strong> ${data.first_name} ${data.last_name}</li>
+          <li class="list-group-item"><strong>Grade:</strong> ${data.grade}</li>
+          <li class="list-group-item"><strong>Status:</strong> 
+            ${data.device_checked_in 
+              ? '<span class="badge bg-success">Checked In</span>' 
+              : '<span class="badge bg-warning text-dark">Not Checked In</span>'}
+          </li>
+          ${data.check_in_date 
+            ? `<li class="list-group-item"><strong>Check-in Date:</strong> ${data.check_in_date.replace('T', ' ').substring(0, 16)}</li>` 
+            : ''}
+          ${data.rt_user_id 
+            ? `<li class="list-group-item"><strong>RT User ID:</strong> ${data.rt_user_id}</li>` 
+            : ''}
+        `;
+        
+        // Populate device info
+        const deviceInfoContainer = document.getElementById('deviceInfo');
+        if (data.device_info) {
+          deviceInfoContainer.innerHTML = `
+            <ul class="list-group list-group-flush">
+              <li class="list-group-item"><strong>Asset ID:</strong> ${data.device_info.asset_id || 'N/A'}</li>
+              <li class="list-group-item"><strong>Asset Tag:</strong> ${data.device_info.asset_tag || 'N/A'}</li>
+              <li class="list-group-item"><strong>Device Type:</strong> ${data.device_info.device_type || 'N/A'}</li>
+              <li class="list-group-item"><strong>Serial Number:</strong> ${data.device_info.serial_number || 'N/A'}</li>
+              <li class="list-group-item"><strong>Check-in Timestamp:</strong> ${data.device_info.check_in_timestamp 
+                ? data.device_info.check_in_timestamp.replace('T', ' ').substring(0, 16)
+                : 'N/A'}</li>
+            </ul>
+          `;
+        } else {
+          deviceInfoContainer.innerHTML = `
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle me-2"></i>
+              No device check-in information available.
+            </div>
+          `;
+        }
+        
+        // Setup RT device lookup
+        const rtDeviceLookupBtn = document.getElementById('lookupRTDevicesBtn');
+        const rtDevicesContainer = document.getElementById('rtDevicesContainer');
+        rtDevicesContainer.style.display = 'none';
+        
+        // Reset the RT devices list
+        rtDevices = null;
+        document.getElementById('checkInSelectedDeviceBtn').style.display = 'none';
+        
+        // Show the student details modal
+        viewStudentModal.show();
+      })
+      .catch(error => {
+        showToast('errorToast', error.message);
+      });
+  }
+  
+  // RT device lookup
+  document.getElementById('lookupRTDevicesBtn').addEventListener('click', function() {
+    if (!studentData || !studentData.rt_user_id) {
+      document.getElementById('rtDevicesList').innerHTML = `
+        <div class="alert alert-warning">
+          <i class="bi bi-exclamation-triangle me-2"></i>
+          This student doesn't have an RT User ID assigned.
+        </div>
+      `;
+      document.getElementById('rtDevicesContainer').style.display = 'block';
+      return;
+    }
+    
+    // Show loading indicator
+    document.getElementById('rtDevicesList').innerHTML = `
+      <div class="text-center py-3">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2">Loading devices from RT...</p>
+      </div>
+    `;
+    document.getElementById('rtDevicesContainer').style.display = 'block';
+    
+    // Fetch devices from RT
+    fetch(`/api/rt-lookup/student/${currentStudentId}?rt_user_id=${studentData.rt_user_id}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        
+        rtDevices = data.assets;
+        
+        if (rtDevices && rtDevices.length > 0) {
+          // Create a table of devices
+          let devicesHtml = `
+            <table class="table table-sm table-striped">
+              <thead>
+                <tr>
+                  <th>Select</th>
+                  <th>Asset Tag</th>
+                  <th>Type</th>
+                  <th>Serial Number</th>
+                </tr>
+              </thead>
+              <tbody>
+          `;
+          
+          rtDevices.forEach((device, index) => {
+            // Extract device details
+            const assetTag = device.Name || 'N/A';
+            
+            // Extract device type and serial from CustomFields
+            let deviceType = 'N/A';
+            let serialNumber = 'N/A';
+            
+            if (device.CustomFields) {
+              device.CustomFields.forEach(field => {
+                if (field.name === 'Type' && field.values && field.values.length > 0) {
+                  deviceType = field.values[0];
+                }
+                if (field.name === 'Serial Number' && field.values && field.values.length > 0) {
+                  serialNumber = field.values[0];
+                }
+              });
+            }
+            
+            devicesHtml += `
+              <tr>
+                <td>
+                  <input type="radio" name="rtDeviceSelect" id="rtDevice${index}" value="${device.id}" data-index="${index}">
+                </td>
+                <td>${assetTag}</td>
+                <td>${deviceType}</td>
+                <td>${serialNumber}</td>
+              </tr>
+            `;
+          });
+          
+          devicesHtml += `
+              </tbody>
+            </table>
+          `;
+          
+          document.getElementById('rtDevicesList').innerHTML = devicesHtml;
+          
+          // Add event listeners for radio buttons
+          document.querySelectorAll('input[name="rtDeviceSelect"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+              // Show the check-in button when a device is selected
+              document.getElementById('checkInSelectedDeviceBtn').style.display = 'block';
+            });
+          });
+          
+          // Show the check-in button in the modal footer
+          document.getElementById('checkInSelectedDeviceBtn').style.display = 
+            studentData.device_checked_in ? 'none' : 'block';
+        } else {
+          document.getElementById('rtDevicesList').innerHTML = `
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle me-2"></i>
+              No devices assigned to this student in RT.
+            </div>
+          `;
+        }
+      })
+      .catch(error => {
+        document.getElementById('rtDevicesList').innerHTML = `
+          <div class="alert alert-danger">
+            <i class="bi bi-exclamation-circle me-2"></i>
+            Error looking up devices: ${error.message}
+          </div>
+        `;
+      });
+  });
+  
+  // Check in selected device from RT
+  document.getElementById('checkInSelectedDeviceBtn').addEventListener('click', function() {
+    const selectedRadio = document.querySelector('input[name="rtDeviceSelect"]:checked');
+    
+    if (!selectedRadio) {
+      showToast('errorToast', 'Please select a device to check in');
+      return;
+    }
+    
+    const deviceIndex = parseInt(selectedRadio.dataset.index);
+    const selectedDevice = rtDevices[deviceIndex];
+    
+    // Check in the device using the API
+    fetch(`/api/students/${currentStudentId}/check-in`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        asset_data: selectedDevice
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        showToast('successToast', 'Device checked in successfully');
+        viewStudentModal.hide();
+        
+        // Refresh the page to update the UI
+        window.location.reload();
+      } else {
+        throw new Error(data.error || 'Failed to check in device');
+      }
+    })
+    .catch(error => {
+      showToast('errorToast', error.message);
+    });
+  });
+  
+  // Toast helper function
+  function showToast(toastId, message) {
+    const toast = document.getElementById(toastId);
+    const toastMessage = document.getElementById(`${toastId}Message`);
+    toastMessage.textContent = message;
+    
+    const bsToast = bootstrap.Toast.getInstance(toast) || new bootstrap.Toast(toast);
+    bsToast.show();
+  }
+});
+</script>
+{% endblock %}

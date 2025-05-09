@@ -2,3 +2,4 @@
 from . import label_routes
 from . import tag_routes
 from . import device_routes
+from . import student_routes
