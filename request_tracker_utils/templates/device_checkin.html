@@ -16,7 +16,12 @@
   <div class="row mb-4">
     <div class="col-12">
       <h1 class="mb-3">Device Check-in</h1>
-      <p class="lead">Scan or enter a device asset tag to begin check-in process.</p>
+      <div class="d-flex justify-content-between align-items-center">
+        <p class="lead mb-0">Scan or enter a device asset tag to begin check-in process.</p>
+        <a href="{{ url_for('devices.checkin_logs') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-file-earmark-spreadsheet me-1"></i> View Check-in Logs
+        </a>
+      </div>
     </div>
   </div>
 
@@ -241,7 +246,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let notCheckedInList = [];
 
     // Function to generate HTML for device details and check-in options
-    function generateDeviceTemplate(device, isMainDevice = false) {
+    function generateDeviceTemplate(device, isMainDevice = false, owner) {
         // Get device information
         const assetId = device.id;
         const assetName = device.Name || 'N/A';
@@ -252,6 +257,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const macAddress = device.CustomFields?.find(f => f.name === 'Mac Address')?.values[0] || 'N/A';
         const internalName = device.CustomFields?.find(f => f.name === 'Internal Name')?.values[0] || 'N/A';
         const status = device.Status || 'N/A';
+        
+        // Check if owner is Nobody
+        const isNobodyOwner = owner && (owner.id === "Nobody" || owner.name === "Nobody");
         
         // Check if this device is a Chromebook
         const isChromebook = assetType.toLowerCase().includes('chromebook');
@@ -293,7 +301,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                 rows="2"></textarea>
                     </div>
                     
-                    <!-- Check-in status options -->
+                    ${!isNobodyOwner ? `
+                    <!-- Check-in status options (only shown if owner is not Nobody) -->
                     <div class="mb-3">
                         <label class="form-label">Check-in Status</label>
                         <div class="form-check">
@@ -320,8 +329,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             </label>
                         </div>
                     </div>
+                    ` : `
+                    <!-- Show message when device is already checked in -->
+                    <div class="alert alert-info mb-3">
+                        <i class="bi bi-info-circle me-2"></i>
+                        This device is already checked in (Owner: Nobody).
+                    </div>
+                    <input type="hidden" name="checkInStatus-${assetId}" id="checkedIn-${assetId}" value="checked-in" data-asset-id="${assetId}">
+                    `}
 
-                    <!-- Create Ticket Option -->
+                    <!-- Create Ticket Option - Always available -->
                     <div class="form-check mb-3">
                         <input class="form-check-input create-ticket" 
                             type="checkbox" 
@@ -347,7 +364,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <!-- Action Button -->
                     <div class="mt-3 text-end">
                         <button class="btn ${isMainDevice ? 'btn-primary' : 'btn-outline-primary'} process-device" data-asset-id="${assetId}">
-                            Process Check-in
+                            ${isNobodyOwner ? 'Create Ticket' : 'Process Check-in'}
                         </button>
                     </div>
                 </div>
@@ -390,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Display owner information in the left column
             ownerDetails.innerHTML = `
-                <div class="alert alert-info mb-0">
+                <div class="alert ${owner.id === "Nobody" ? 'alert-warning' : 'alert-info'} mb-0">
                     <h4 class="alert-heading mb-2">Current Owner</h4>
                     <p class="mb-0"><strong>${owner.display_name || owner.name || 'No Owner Assigned'}</strong></p>
                     <small class="text-muted">${owner.id ? `(${owner.id})` : ''}</small>
@@ -398,12 +415,12 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
             
             // Display primary device in the primary device container
-            primaryDeviceContainer.innerHTML = generateDeviceTemplate(asset, true);
+            primaryDeviceContainer.innerHTML = generateDeviceTemplate(asset, true, owner);
             
             // Display other devices
             if (data.other_assets && data.other_assets.length > 0) {
                 otherDevices.innerHTML = data.other_assets.map(device => 
-                    generateDeviceTemplate(device, false)
+                    generateDeviceTemplate(device, false, owner)
                 ).join('');
                 otherDevicesContainer.style.display = 'block';
             } else {

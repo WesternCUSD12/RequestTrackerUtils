@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app, send_file
 from ..utils.rt_api import find_asset_by_name, get_assets_by_owner, fetch_asset_data, fetch_user_data, rt_api_request, update_asset_custom_field
 import logging
 import urllib.parse
@@ -6,6 +6,9 @@ import requests
 import json
 import time
 import traceback
+import os
+import csv
+import datetime
 
 bp = Blueprint('devices', __name__)
 logger = logging.getLogger(__name__)
@@ -178,9 +181,12 @@ def get_asset_info(asset_name):
         logger.info(f"Owner Name: {owner_info['display_name']}")
         logger.info(f"Owner Numeric ID: {owner_info['numeric_id']}")
 
-        # Get other devices for this owner if we have one
+        # Get other devices for this owner if we have one and if the owner is not "Nobody"
         other_assets = []
-        if owner_info['numeric_id']:  # Use numeric_id instead of id
+        if owner_info['id'] == "Nobody" or owner_info['name'] == "Nobody":
+            # If owner is Nobody, don't look up other assets
+            logger.info(f"Owner is 'Nobody' - skipping lookup of other devices")
+        elif owner_info['numeric_id']:  # Use numeric_id instead of id
             logger.info(f"\n=== Looking up other assets for owner {owner_info['numeric_id']} ===")
             try:
                 other_assets = get_assets_by_owner(owner_info['numeric_id'], exclude_id=asset_id)
@@ -263,6 +269,32 @@ def update_asset():
             else:
                 final_description = "Broken Screen"
         
+        # Get owner info before changing it (for logging purposes)
+        owner_info = {}
+        owner_data = current_asset.get('Owner', {})
+        if isinstance(owner_data, dict) and 'id' in owner_data:
+            try:
+                user_data = fetch_user_data(owner_data.get('id'))
+                owner_info = {
+                    'id': owner_data.get('id'),
+                    'display_name': user_data.get('RealName', user_data.get('Name', owner_data.get('id')))
+                }
+            except Exception as e:
+                logger.error(f"Error fetching owner info for logging: {e}")
+                owner_info = {'id': owner_data.get('id'), 'display_name': owner_data.get('id')}
+        elif isinstance(owner_data, str) and owner_data:
+            try:
+                user_data = fetch_user_data(owner_data)
+                owner_info = {
+                    'id': owner_data,
+                    'display_name': user_data.get('RealName', user_data.get('Name', owner_data))
+                }
+            except Exception as e:
+                logger.error(f"Error fetching owner info for logging: {e}")
+                owner_info = {'id': owner_data, 'display_name': owner_data}
+        else:
+            owner_info = {'id': None, 'display_name': 'None'}
+        
         # Update the asset owner to "Nobody" if requested
         if set_owner_to_nobody:
             try:
@@ -320,6 +352,46 @@ def update_asset():
                     "assetUpdated": set_owner_to_nobody  # Indicate if asset was updated
                 }), 500
         
+        # Log the check-in to CSV if the asset owner was updated
+        if set_owner_to_nobody:
+            try:
+                # Get the current user from the session or default to "web-user"
+                current_user = "web-user"  # This can be enhanced later with actual user authentication
+                
+                # Import and use the CSV logger with fallback location handling
+                from ..utils.csv_logger import DeviceCheckInLogger
+                
+                # Try to use the default configured directory first
+                try:
+                    csv_logger = DeviceCheckInLogger()
+                except (OSError, FileNotFoundError) as e:
+                    logger.warning(f"Could not use configured log directory for check-in logging: {e}")
+                    
+                    # Use a directory in the Flask instance folder instead
+                    from flask import current_app
+                    instance_logs_dir = os.path.join(current_app.instance_path, 'logs')
+                    os.makedirs(instance_logs_dir, exist_ok=True)
+                    logger.info(f"Using alternative log directory for check-in logging: {instance_logs_dir}")
+                    csv_logger = DeviceCheckInLogger(log_dir=instance_logs_dir)
+                
+                # Log the check-in
+                log_result = csv_logger.log_checkin(
+                    asset_data=current_asset,
+                    owner_info=owner_info,
+                    ticket_id=ticket_id,
+                    description=final_description,
+                    broken_screen=broken_screen,
+                    user=current_user
+                )
+                if log_result:
+                    logger.info(f"Device check-in logged to CSV for asset {asset_name}")
+                else:
+                    logger.error(f"Failed to log device check-in for asset {asset_name}")
+            except Exception as e:
+                # Log the error but don't fail the request
+                logger.error(f"Error logging check-in to CSV: {e}")
+                logger.error(traceback.format_exc())
+        
         return jsonify({
             "success": True,
             "assetId": asset_id,
@@ -333,4 +405,200 @@ def update_asset():
         logger.error(traceback.format_exc())
         return jsonify({
             "error": f"Failed to process request: {str(e)}"
+        }), 500
+
+@bp.route('/checkin-logs')
+def checkin_logs():
+    """Display a list of available check-in log files"""
+    try:
+        # Import and use the CSV logger
+        from ..utils.csv_logger import DeviceCheckInLogger
+        
+        # Create a temporary directory in the instance folder if the configured directory isn't working
+        try:
+            csv_logger = DeviceCheckInLogger()
+        except (OSError, FileNotFoundError) as e:
+            logger.warning(f"Could not use configured log directory: {e}")
+            
+            # Use a directory in the Flask instance folder instead
+            from flask import current_app
+            instance_logs_dir = os.path.join(current_app.instance_path, 'logs')
+            os.makedirs(instance_logs_dir, exist_ok=True)
+            logger.info(f"Using alternative log directory: {instance_logs_dir}")
+            csv_logger = DeviceCheckInLogger(log_dir=instance_logs_dir)
+        
+        log_files = csv_logger.get_available_logs()
+        
+        return render_template('checkin_logs.html', logs=log_files)
+        
+    except Exception as e:
+        logger.error(f"Error displaying check-in logs: {e}")
+        logger.error(traceback.format_exc())
+        
+        # Check if the error.html template exists before trying to render it
+        template_exists = os.path.exists(os.path.join(
+            current_app.root_path, 'templates', 'error.html'
+        ))
+        
+        if template_exists:
+            return render_template('error.html', error=f"Failed to load check-in logs: {str(e)}")
+        else:
+            # Fallback to a simple error message if the template doesn't exist
+            return f"<h1>Error</h1><p>Failed to load check-in logs: {str(e)}</p>", 500
+
+@bp.route('/download-checkin-log/<filename>')
+def download_checkin_log(filename):
+    """Download a specific check-in log file"""
+    try:
+        # Validate filename (only allow checkins_*.csv pattern)
+        if not filename.startswith('checkins_') or not filename.endswith('.csv'):
+            return jsonify({
+                "error": "Invalid log filename"
+            }), 400
+            
+        # Try multiple possible locations for the log file
+        possible_paths = []
+        
+        # Path in the configured working directory
+        working_dir = current_app.config.get('WORKING_DIR', '/var/lib/request-tracker-utils')
+        possible_paths.append(os.path.join(working_dir, 'logs', filename))
+        
+        # Path in the Flask instance folder (which we might be using as fallback)
+        instance_logs_dir = os.path.join(current_app.instance_path, 'logs')
+        possible_paths.append(os.path.join(instance_logs_dir, filename))
+        
+        # Check the nested logs folder that was found in the workspace structure
+        nested_logs_dir = os.path.join(current_app.instance_path, 'logs', 'logs')
+        possible_paths.append(os.path.join(nested_logs_dir, filename))
+        
+        # Find the first existing file path
+        log_file_path = None
+        for path in possible_paths:
+            if os.path.exists(path) and os.path.isfile(path):
+                log_file_path = path
+                logger.info(f"Found log file at: {log_file_path}")
+                break
+        
+        if not log_file_path:
+            logger.error(f"Log file not found. Searched in: {possible_paths}")
+            return jsonify({
+                "error": f"Log file '{filename}' not found"
+            }), 404
+            
+        # Return the file for download
+        return send_file(
+            log_file_path, 
+            as_attachment=True,
+            download_name=filename,
+            mimetype='text/csv'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error downloading check-in log: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "error": f"Failed to download log file: {str(e)}"
+        }), 500
+
+@bp.route('/preview-checkin-log/<filename>')
+def preview_checkin_log(filename):
+    """Preview a specific check-in log file in the browser"""
+    try:
+        # Validate filename (only allow checkins_*.csv pattern)
+        if not filename.startswith('checkins_') or not filename.endswith('.csv'):
+            return jsonify({
+                "error": "Invalid log filename"
+            }), 400
+            
+        # Try multiple possible locations for the log file
+        possible_paths = []
+        
+        # Path in the configured working directory
+        working_dir = current_app.config.get('WORKING_DIR', '/var/lib/request-tracker-utils')
+        possible_paths.append(os.path.join(working_dir, 'logs', filename))
+        
+        # Path in the Flask instance folder (which we might be using as fallback)
+        instance_logs_dir = os.path.join(current_app.instance_path, 'logs')
+        possible_paths.append(os.path.join(instance_logs_dir, filename))
+        
+        # Check the nested logs folder that was found in the workspace structure
+        nested_logs_dir = os.path.join(current_app.instance_path, 'logs', 'logs')
+        possible_paths.append(os.path.join(nested_logs_dir, filename))
+        
+        # Find the first existing file path
+        log_file_path = None
+        for path in possible_paths:
+            if os.path.exists(path) and os.path.isfile(path):
+                log_file_path = path
+                logger.info(f"Found log file at: {log_file_path}")
+                break
+        
+        if not log_file_path:
+            logger.error(f"Log file not found. Searched in: {possible_paths}")
+            return jsonify({
+                "error": f"Log file '{filename}' not found"
+            }), 404
+        
+        # Read the CSV file content - with pagination support
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)  # Show 50 rows per page by default
+        
+        # Read the CSV file
+        csv_data = []
+        headers = []
+        
+        with open(log_file_path, 'r', newline='') as csvfile:
+            reader = csv.reader(csvfile)
+            headers = next(reader)  # Get the header row
+            
+            # Store all rows (potentially inefficient for very large files)
+            all_rows = list(reader)
+            
+            # Calculate pagination
+            total_rows = len(all_rows)
+            total_pages = max(1, (total_rows + per_page - 1) // per_page)
+            
+            # Clamp current page to valid range
+            page = max(1, min(page, total_pages))
+            
+            # Get the rows for the current page
+            start_idx = (page - 1) * per_page
+            end_idx = min(start_idx + per_page, total_rows)
+            
+            csv_data = all_rows[start_idx:end_idx]
+        
+        # Parse date from filename for display (format: checkins_YYYY-MM-DD.csv)
+        date_str = filename[9:-4]  # Remove "checkins_" prefix and ".csv" suffix
+        try:
+            # Convert to datetime for formatting
+            log_date = datetime.datetime.strptime(date_str, '%Y-%m-%d')
+            # Format as a readable date
+            display_date = log_date.strftime('%A, %B %d, %Y')  # e.g., "Thursday, May 9, 2025"
+        except ValueError:
+            display_date = date_str
+            
+        # Calculate pagination values for display
+        start_row = (page - 1) * per_page + 1
+        end_row = min(page * per_page, total_rows)
+            
+        # Return the preview template with the CSV data
+        return render_template(
+            'csv_preview.html', 
+            filename=filename,
+            display_date=display_date,
+            headers=headers, 
+            rows=csv_data,
+            page=page,
+            per_page=per_page,
+            total_pages=total_pages,
+            total_rows=total_rows,
+            start_row=start_row,
+            end_row=end_row
+        )
+            
+    except Exception as e:
+        logger.error(f"Error previewing check-in log: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "error": f"Failed to preview log file: {str(e)}"
         }), 500
