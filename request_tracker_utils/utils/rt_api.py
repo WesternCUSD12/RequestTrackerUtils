@@ -581,6 +581,7 @@ def find_asset_by_name(asset_name, config=None):
         
     except Exception as e:
         if config is None:  # Only log if using current_app
+            from flask import current_app
             current_app.logger.error(f"Error finding asset by name: {e}")
         raise Exception(f"Failed to find asset by name in RT: {e}")
 
@@ -618,10 +619,7 @@ def update_asset_custom_field(asset_id, field_name, field_value, config=None):
 
 def get_assets_by_owner(owner, exclude_id=None, config=None):
     """
-    KEY FUNCTION: Fetch all assets belonging to a specific owner in Request Tracker
-    
-    This function is critical to the device check-in workflow as it retrieves all devices
-    associated with a user, enabling batch processing of multiple devices owned by the same person.
+    Fetch all assets owned by a specific owner, optionally excluding one asset by ID.
     
     Args:
         owner (str): The owner's identifier to search for (numeric ID)
@@ -739,50 +737,3 @@ def fetch_user_data(user_id, config=None):
         if config is None:
             current_app.logger.error(f"Error processing user data for ID {user_id}: {str(e)}")
         raise Exception(f"Error processing user data: {str(e)}")
-
-def create_ticket(ticket_data, config=None):
-    """
-    Create a new ticket in RT using the correct API format.
-    
-    Args:
-        ticket_data (dict): Dictionary containing ticket fields (Queue, Subject, Content, etc.)
-        config (dict, optional): Configuration dictionary, defaults to current_app.config
-        
-    Returns:
-        dict: The newly created ticket data including ID
-        
-    Raises:
-        Exception: If there's an error creating the ticket
-    """
-    if not ticket_data:
-        raise ValueError("Ticket data is missing or invalid")
-    
-    if 'Queue' not in ticket_data:
-        raise ValueError("Ticket must specify a Queue")
-        
-    try:
-        # Log the creation attempt
-        from flask import current_app
-        logger.info(f"Creating new ticket with data: {json.dumps(ticket_data)}")
-        
-        # RT API expects ticket creation at the /ticket endpoint (singular), not /tickets
-        response = rt_api_request("POST", "/ticket", data=ticket_data, config=config)
-        
-        # Log the response for debugging
-        logger.info(f"Ticket creation response: {json.dumps(response)}")
-        
-        # Check if we have a valid response (should contain an ID)
-        if not response or 'id' not in response:
-            logger.error(f"Failed to create ticket - no ID in response: {response}")
-            raise Exception(f"Failed to create ticket: Invalid response from RT API")
-            
-        return response
-        
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error creating ticket: {e}")
-        logger.error(f"Ticket data: {json.dumps(ticket_data)}")
-        raise Exception(f"Failed to create ticket in RT: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error creating ticket: {e}")
-        logger.error(f"Ticket data: {json.dumps(ticket_data)}")
-        raise Exception(f"Error creating ticket: {str(e)}")

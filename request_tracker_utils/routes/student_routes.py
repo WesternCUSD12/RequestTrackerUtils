@@ -11,9 +11,9 @@ import io
 bp = Blueprint('students', __name__)
 logger = logging.getLogger(__name__)
 
-@bp.route('/student-checkin', strict_slashes=False)
-def student_checkin_list():
-    """Display the list of students and their device check-in status"""
+@bp.route('/student-devices', strict_slashes=False)
+def student_device_list():
+    """Display the list of students and their device check-in status with grade filtering"""
     try:
         # Initialize student tracker
         tracker = StudentDeviceTracker()
@@ -24,14 +24,53 @@ def student_checkin_list():
         # Get all students
         students = tracker.get_all_students()
         
+        # Fetch RT devices for students who have rt_user_id - using numeric ID
+        for student in students:
+            if 'rt_user_id' in student and student['rt_user_id']:
+                try:
+                    # Use numeric ID directly if it's a number, otherwise try to fetch user to get numeric ID
+                    if student['rt_user_id'].isdigit():
+                        numeric_id = student['rt_user_id']
+                        rt_devices = get_assets_by_owner(numeric_id)
+                    else:
+                        # For usernames, try to fetch the user first to get numeric ID
+                        user_data = fetch_user_data(student['rt_user_id'])
+                        
+                        # Extract numeric ID from hyperlinks
+                        numeric_id = None
+                        hyperlinks = user_data.get('_hyperlinks', [])
+                        for link in hyperlinks:
+                            if link.get('ref') == 'self' and link.get('type') == 'user':
+                                numeric_id = str(link.get('id'))
+                                logger.info(f"Found numeric user ID: {numeric_id} for username: {student['rt_user_id']}")
+                                break
+                        
+                        if numeric_id:
+                            # Use numeric ID to fetch assets
+                            rt_devices = get_assets_by_owner(numeric_id)
+                        else:
+                            # Fallback to username if numeric ID not found
+                            rt_devices = get_assets_by_owner(student['rt_user_id'])
+                            
+                    student['rt_devices'] = rt_devices
+                except Exception as device_err:
+                    logger.warning(f"Failed to fetch RT devices for student {student.get('id')}: {device_err}")
+                    student['rt_devices'] = []
+            else:
+                student['rt_devices'] = []
+        
+        # Get available grades from students
+        grades = sorted(set(student.get('grade') for student in students if student.get('grade')))
+        
         return render_template(
-            'student_checkin.html', 
+            'student_devices.html', 
             students=students, 
             stats=stats,
+            grades=grades,
             current_year=tracker.current_school_year
         )
     except Exception as e:
-        logger.error(f"Error loading student checkin list: {e}")
+        logger.error(f"Error loading student device list: {e}")
         logger.error(traceback.format_exc())
         
         # Check if error.html template exists
@@ -40,9 +79,15 @@ def student_checkin_list():
         ))
         
         if template_exists:
-            return render_template('error.html', error=f"Failed to load student check-in list: {str(e)}")
+            return render_template('error.html', error=f"Failed to load student device list: {str(e)}")
         else:
-            return f"<h1>Error</h1><p>Failed to load student check-in list: {str(e)}</p>", 500
+            return f"<h1>Error</h1><p>Failed to load student device list: {str(e)}</p>", 500
+
+# Add a route alias for backward compatibility
+@bp.route('/student-checkin', strict_slashes=False)
+def student_checkin_list():
+    """Redirect to the student device list for backward compatibility"""
+    return redirect(url_for('students.student_device_list'))
 
 @bp.route('/api/students', methods=['GET'])
 def get_students():
@@ -50,6 +95,41 @@ def get_students():
     try:
         tracker = StudentDeviceTracker()
         students = tracker.get_all_students()
+        
+        # Fetch RT devices for students who have rt_user_id
+        for student in students:
+            if 'rt_user_id' in student and student['rt_user_id']:
+                try:
+                    # Use numeric ID directly if it's a number, otherwise try to fetch user to get numeric ID
+                    if student['rt_user_id'].isdigit():
+                        numeric_id = student['rt_user_id']
+                        rt_devices = get_assets_by_owner(numeric_id)
+                    else:
+                        # For usernames, try to fetch the user first to get numeric ID
+                        user_data = fetch_user_data(student['rt_user_id'])
+                        
+                        # Extract numeric ID from hyperlinks
+                        numeric_id = None
+                        hyperlinks = user_data.get('_hyperlinks', [])
+                        for link in hyperlinks:
+                            if link.get('ref') == 'self' and link.get('type') == 'user':
+                                numeric_id = str(link.get('id'))
+                                logger.info(f"Found numeric user ID: {numeric_id} for username: {student['rt_user_id']}")
+                                break
+                        
+                        if numeric_id:
+                            # Use numeric ID to fetch assets
+                            rt_devices = get_assets_by_owner(numeric_id)
+                        else:
+                            # Fallback to username if numeric ID not found
+                            rt_devices = get_assets_by_owner(student['rt_user_id'])
+                            
+                    student['rt_devices'] = rt_devices
+                except Exception as device_err:
+                    logger.warning(f"Failed to fetch RT devices for student {student.get('id')}: {device_err}")
+                    student['rt_devices'] = []
+            else:
+                student['rt_devices'] = []
         
         return jsonify({
             "students": students,
@@ -71,6 +151,40 @@ def get_student(student_id):
         student = tracker.get_student(student_id)
         
         if student:
+            # If the student has an RT user ID, fetch their devices
+            if 'rt_user_id' in student and student['rt_user_id']:
+                try:
+                    # Use numeric ID directly if it's a number, otherwise try to fetch user to get numeric ID
+                    if student['rt_user_id'].isdigit():
+                        numeric_id = student['rt_user_id']
+                        rt_devices = get_assets_by_owner(numeric_id)
+                    else:
+                        # For usernames, try to fetch the user first to get numeric ID
+                        user_data = fetch_user_data(student['rt_user_id'])
+                        
+                        # Extract numeric ID from hyperlinks
+                        numeric_id = None
+                        hyperlinks = user_data.get('_hyperlinks', [])
+                        for link in hyperlinks:
+                            if link.get('ref') == 'self' and link.get('type') == 'user':
+                                numeric_id = str(link.get('id'))
+                                logger.info(f"Found numeric user ID: {numeric_id} for username: {student['rt_user_id']}")
+                                break
+                        
+                        if numeric_id:
+                            # Use numeric ID to fetch assets
+                            rt_devices = get_assets_by_owner(numeric_id)
+                        else:
+                            # Fallback to username if numeric ID not found
+                            rt_devices = get_assets_by_owner(student['rt_user_id'])
+                            
+                    student['rt_devices'] = rt_devices
+                except Exception as device_err:
+                    logger.warning(f"Failed to fetch RT devices for student {student_id}: {device_err}")
+                    student['rt_devices'] = []
+            else:
+                student['rt_devices'] = []
+                
             return jsonify(student)
         else:
             return jsonify({
@@ -284,9 +398,40 @@ def rt_lookup_student_devices(student_id):
             return jsonify({
                 "error": "RT user ID is required"
             }), 400
-        
-        # Get the assets assigned to this user from RT
-        assets = get_assets_by_owner(rt_user_id)
+            
+        # Use numeric ID directly if it's a number, otherwise try to fetch user to get numeric ID
+        if rt_user_id.isdigit():
+            numeric_id = rt_user_id
+            assets = get_assets_by_owner(numeric_id)
+            logger.info(f"Using provided numeric ID: {numeric_id}")
+        else:
+            try:
+                # For usernames, try to fetch the user first to get numeric ID
+                from ..utils.rt_api import fetch_user_data
+                logger.info(f"Looking up numeric ID for username: {rt_user_id}")
+                user_data = fetch_user_data(rt_user_id)
+                
+                # Extract numeric ID from hyperlinks
+                numeric_id = None
+                hyperlinks = user_data.get('_hyperlinks', [])
+                for link in hyperlinks:
+                    if link.get('ref') == 'self' and link.get('type') == 'user':
+                        numeric_id = str(link.get('id'))
+                        logger.info(f"Found numeric user ID: {numeric_id} for username: {rt_user_id}")
+                        break
+                
+                if numeric_id:
+                    # Use numeric ID to fetch assets
+                    logger.info(f"Using numeric ID {numeric_id} to fetch assets for {rt_user_id}")
+                    assets = get_assets_by_owner(numeric_id)
+                else:
+                    # Fallback to username if numeric ID not found
+                    logger.warning(f"Could not find numeric ID for {rt_user_id}, falling back to username")
+                    assets = get_assets_by_owner(rt_user_id)
+            except Exception as user_err:
+                logger.error(f"Error fetching user data for {rt_user_id}: {user_err}")
+                # Fallback to username
+                assets = get_assets_by_owner(rt_user_id)
         
         # Return the assets
         return jsonify({
@@ -325,5 +470,58 @@ def clear_all_students():
         logger.error(traceback.format_exc())
         return jsonify({
             "error": "Failed to clear student data",
+            "details": str(e)
+        }), 500
+
+@bp.route('/api/students/filter', methods=['GET'])
+def filter_students():
+    """API endpoint to filter students by multiple grades"""
+    try:
+        # Get filter parameters
+        grades = request.args.getlist('grade')
+        status = request.args.get('status')
+        search = request.args.get('search')
+        
+        tracker = StudentDeviceTracker()
+        all_students = tracker.get_all_students()
+        
+        # Filter students based on parameters
+        filtered_students = []
+        for student in all_students:
+            # Filter by grade (if specified)
+            if grades and student.get('grade') not in grades:
+                continue
+                
+            # Filter by status (if specified)
+            if status == 'checked_in' and not student.get('device_checked_in'):
+                continue
+            elif status == 'not_checked_in' and student.get('device_checked_in'):
+                continue
+                
+            # Filter by search term (if specified)
+            if search:
+                search_lower = search.lower()
+                first_name = student.get('first_name', '').lower()
+                last_name = student.get('last_name', '').lower()
+                student_id = str(student.get('id', '')).lower()
+                
+                if (search_lower not in first_name and 
+                    search_lower not in last_name and
+                    search_lower not in student_id and
+                    search_lower not in f"{first_name} {last_name}"):
+                    continue
+            
+            filtered_students.append(student)
+        
+        return jsonify({
+            "students": filtered_students,
+            "count": len(filtered_students),
+            "total": len(all_students)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error filtering students: {e}")
+        return jsonify({
+            "error": "Failed to filter students",
             "details": str(e)
         }), 500
