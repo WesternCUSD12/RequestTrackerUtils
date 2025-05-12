@@ -581,7 +581,6 @@ def find_asset_by_name(asset_name, config=None):
         
     except Exception as e:
         if config is None:  # Only log if using current_app
-            from flask import current_app
             current_app.logger.error(f"Error finding asset by name: {e}")
         raise Exception(f"Failed to find asset by name in RT: {e}")
 
@@ -619,7 +618,10 @@ def update_asset_custom_field(asset_id, field_name, field_value, config=None):
 
 def get_assets_by_owner(owner, exclude_id=None, config=None):
     """
-    Fetch all assets owned by a specific owner, optionally excluding one asset by ID.
+    KEY FUNCTION: Fetch all assets belonging to a specific owner in Request Tracker
+    
+    This function is critical to the device check-in workflow as it retrieves all devices
+    associated with a user, enabling batch processing of multiple devices owned by the same person.
     
     Args:
         owner (str): The owner's identifier to search for (numeric ID)
