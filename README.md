@@ -10,15 +10,19 @@ RequestTracker Utils is a Flask-based application designed to manage asset tags 
 
 4. **Batch Processing**: Efficiently handle multiple assets at once for tasks like batch label printing or asset updates.
 
+5. **Device Ownership Management**: Identify all devices belonging to a user and process them together for efficient check-in/check-out workflows.
+
 ## Features
 
 ### Asset Tag Management
+
 - Generate sequential asset tags with customizable prefixes (default: W12-)
 - Automatically assign tags to new assets in Request Tracker
 - Maintain audit logs of all tag assignments
 - Update asset names in RT to match assigned tags
 
 ### Label Printing
+
 - Generate professional-quality asset labels for printing
 - Include QR codes for quick access to RT asset details
 - Include barcodes for scanning
@@ -26,9 +30,17 @@ RequestTracker Utils is a Flask-based application designed to manage asset tags 
 - Print batch labels with one label per page
 
 ### RT Integration
+
 - Seamless integration with Request Tracker API
 - Webhook support for automatic asset tag assignment
 - Batch processing for multiple assets
+
+### Device Ownership Management
+
+- Efficiently retrieve all devices belonging to a specific user
+- Associate multiple devices with a single user
+- Process device check-ins in batch for users with multiple devices
+- Automatically generate comprehensive device lists for inventory management
 
 ## Requirements
 
@@ -262,11 +274,14 @@ To automatically assign asset tags when assets are created in Request Tracker, c
    - Action: User Defined
    - Template: User Defined
 3. In the Custom Condition code, add:
+
 ```perl
 return 1 if $self->TransactionObj->Type eq 'Create' && $self->TransactionObj->ObjectType eq 'RT::Asset';
 return 0;
 ```
+
 4. In the Custom Action code, add:
+
 ```perl
 use LWP::UserAgent;
 use JSON;
@@ -283,7 +298,7 @@ $asset->Load($asset_id);
 eval {
   # Create a user agent for making HTTP requests
   my $ua = LWP::UserAgent->new(timeout => 10);
-  
+
   # Send POST request to the webhook with the asset ID
   my $response = $ua->post(
     $webhook_url,
@@ -294,20 +309,20 @@ eval {
       timestamp => time()
     })
   );
-  
+
   # Check if the request was successful
   if ($response->is_success) {
     # Parse the JSON response
     my $result = decode_json($response->decoded_content);
-    
+
     # If the webhook assigned a tag, update the asset name in RT
     if ($result->{asset_tag}) {
       my $new_tag = $result->{asset_tag};
-      
+
       # Update the asset's name
       $RT::Logger->info("Updating asset #$asset_id name to '$new_tag'");
       $asset->SetName($new_tag);
-      
+
       # Log the result
       $RT::Logger->info("Asset #$asset_id name updated to: " . $asset->Name);
     } else {
@@ -327,6 +342,7 @@ if ($@) {
 # Return success regardless of webhook result to avoid affecting RT
 return 1;
 ```
+
 5. Apply to: Assets
 6. Set appropriate Queue/Catalog restrictions if needed
 7. Save the Scrip
