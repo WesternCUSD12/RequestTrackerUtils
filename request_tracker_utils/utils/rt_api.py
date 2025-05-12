@@ -24,12 +24,32 @@ class PersistentAssetCache:
         self.ttl = ttl
         self.lock = threading.RLock()
         
-        # Use the configured working directory instead of home directory
-        cache_dir = Path(WORKING_DIR) / 'cache'
+        # Use a platform-independent path in the user's home directory
+        try:
+            # Primary approach: Use the application's working directory if available
+            from flask import current_app
+            instance_path = current_app.instance_path
+            cache_dir = Path(instance_path) / 'cache'
+            logger.info(f"Using app instance directory for cache: {cache_dir}")
+        except (ImportError, RuntimeError):
+            # Fallback: Use the user's home directory
+            cache_dir = Path.home() / '.rtutils' / 'cache'
+            logger.info(f"Using home directory for cache: {cache_dir}")
+        
         self.cache_file = cache_dir / 'asset_cache.json'
         
         # Ensure cache directory exists
-        self.cache_file.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Created or verified cache directory: {self.cache_file.parent}")
+        except Exception as e:
+            logger.warning(f"Failed to create cache directory at {self.cache_file.parent}: {e}")
+            # Final fallback: Use a temporary directory
+            import tempfile
+            temp_dir = Path(tempfile.gettempdir()) / 'rtutils_cache'
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            self.cache_file = temp_dir / 'asset_cache.json'
+            logger.info(f"Using temporary directory for cache: {self.cache_file}")
         
         # Load existing cache from file
         self._load_cache()

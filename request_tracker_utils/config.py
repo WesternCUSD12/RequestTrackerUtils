@@ -1,11 +1,35 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path
+import platform
 
 # Load environment variables from the .env file
 load_dotenv()
 
+# Determine platform-appropriate working directory
+def get_default_working_dir():
+    """Return a platform-appropriate default working directory."""
+    system = platform.system()
+    if system == "Darwin":  # macOS
+        # Use the user's home directory on macOS
+        return str(Path.home().joinpath(".rtutils").absolute())
+    elif system == "Linux":
+        # Use the traditional Linux path
+        return "/var/lib/request-tracker-utils"
+    else:
+        # Fallback for other platforms (Windows, etc.)
+        return str(Path.home().joinpath(".rtutils").absolute())
+
 RT_TOKEN = os.getenv("RT_TOKEN", "default-token-if-not-set")
-WORKING_DIR = os.getenv("WORKING_DIR", "/var/lib/request-tracker-utils")  # Default working directory
+
+# Ensure WORKING_DIR is always an absolute path
+working_dir_env = os.getenv("WORKING_DIR")
+if working_dir_env:
+    # Convert to absolute path if environment variable is provided
+    WORKING_DIR = os.path.abspath(working_dir_env)
+else:
+    # Use the default working directory
+    WORKING_DIR = get_default_working_dir()
 
 RT_URL = os.getenv("RT_URL", "https://tickets.wc-12.com")  # Default RT URL
 API_ENDPOINT = "/REST/2.0"
