@@ -334,7 +334,18 @@ def update_asset():
                 # Use the specialized create_ticket function instead of rt_api_request directly
                 from ..utils.rt_api import create_ticket
                 logger.info(f"Creating ticket with data: {json.dumps(ticket_data)}")
-                ticket_response = create_ticket(ticket_data)
+                
+                # Call create_ticket with individual parameters from the ticket_data dictionary
+                subject = ticket_data["Subject"]
+                content = ticket_data["Content"]
+                queue = ticket_data["Queue"]
+                
+                # Pass the parameters correctly
+                ticket_response = create_ticket(
+                    subject=subject, 
+                    body=content, 
+                    queue=queue
+                )
                 logger.info(f"Ticket creation response: {json.dumps(ticket_response)}")
                 
                 # Extract ticket ID from response

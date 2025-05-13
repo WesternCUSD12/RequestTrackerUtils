@@ -13,6 +13,22 @@ from urllib3.util.retry import Retry
 from pathlib import Path
 from request_tracker_utils.config import WORKING_DIR  # Import the working directory from config
 
+# Define explicitly which functions can be imported from this module
+__all__ = [
+    'PersistentAssetCache',
+    'asset_cache',
+    'create_retry_session',
+    'sanitize_json',
+    'rt_api_request',
+    'fetch_asset_data', 
+    'search_assets',
+    'find_asset_by_name',
+    'update_asset_custom_field',
+    'get_assets_by_owner',
+    'fetch_user_data',
+    'create_ticket'
+]
+
 # Configure logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -761,3 +777,67 @@ def fetch_user_data(user_id, config=None):
         if config is None:
             current_app.logger.error(f"Error processing user data for ID {user_id}: {str(e)}")
         raise Exception(f"Error processing user data: {str(e)}")
+
+def create_ticket(subject, body, queue=None, requestor=None, status=None, owner=None, config=None):
+    """
+    Create a new ticket in Request Tracker.
+    
+    Args:
+        subject (str): The subject of the ticket
+        body (str): The content/description of the ticket
+        queue (str, optional): The queue to create the ticket in (defaults to config value or 'General')
+        requestor (str, optional): The email address of the requestor
+        status (str, optional): The initial status of the ticket (e.g., 'new', 'open')
+        owner (str, optional): The owner of the ticket
+        config (dict, optional): Configuration dictionary, defaults to current_app.config
+        
+    Returns:
+        dict: The newly created ticket data including its ID
+        
+    Raises:
+        Exception: If there's an error creating the ticket
+    """
+    try:
+        if config is None:
+            from flask import current_app
+            config = current_app.config
+            logger.info(f"Creating new ticket: {subject}")
+        
+        # Use the default queue from configuration or fallback to 'General'
+        if queue is None:
+            queue = config.get('RT_DEFAULT_QUEUE', 'General')
+            
+        # Prepare ticket data
+        ticket_data = {
+            "Subject": subject,
+            "Queue": queue,
+            "Content": body
+        }
+        
+        # Add optional fields if provided
+        if requestor:
+            ticket_data["Requestor"] = requestor
+            
+        if status:
+            ticket_data["Status"] = status
+            
+        if owner:
+            ticket_data["Owner"] = owner
+            
+        # Make the API request to create the ticket
+        response = rt_api_request("POST", "/ticket", data=ticket_data, config=config)
+        
+        if not response or 'id' not in response:
+            error_msg = f"Failed to create ticket: Invalid response from RT API"
+            logger.error(error_msg)
+            logger.error(f"Response: {response}")
+            raise Exception(error_msg)
+            
+        logger.info(f"Successfully created ticket #{response.get('id')}")
+        return response
+        
+    except Exception as e:
+        error_msg = f"Failed to create ticket: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise Exception(error_msg)
