@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from flask import current_app
 import json
+import io
+from .db import get_db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -14,60 +16,49 @@ class StudentDeviceTracker:
     """Utility for tracking student device check-ins across the school year"""
     
     def __init__(self, data_dir=None):
-        """
-        Initialize the student device tracker
-        
-        Args:
-            data_dir (str, optional): Directory to store tracker data files. If None, uses WORKING_DIR from config.
-        """
-        if data_dir is None:
-            self.data_dir = Path(current_app.config.get('WORKING_DIR', '/var/lib/request-tracker-utils'))
+        """Initialize the tracker"""
+        # Determine the current school year (Aug-Jul)
+        today = datetime.datetime.now()
+        if today.month >= 8:  # August and later is new school year
+            start_year = today.year
         else:
-            self.data_dir = Path(data_dir)
-            
-        # Ensure the student_data directory exists
-        self.student_data_path = self.data_dir / 'student_data'
+            start_year = today.year - 1
+        self.current_school_year = f"{start_year}-{start_year + 1}"
         
-        # Try to create the directory
-        try:
-            self.student_data_path.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Using student data directory at: {self.student_data_path}")
-        except (OSError, FileNotFoundError) as e:
-            logger.warning(f"Failed to create student data directory at {self.student_data_path}: {e}")
-            
-            # Fall back to using the instance folder as in the device_routes.py implementation
+        # Set up the data directory
+        if data_dir is None:
             try:
-                # Import is already at the top level, no need to import here again
-                instance_data_dir = Path(current_app.instance_path) / 'student_data'
-                instance_data_dir.mkdir(parents=True, exist_ok=True)
-                self.student_data_path = instance_data_dir
-                logger.info(f"Using alternative student data directory: {self.student_data_path}")
-            except Exception as nested_e:
-                logger.error(f"Failed to create student data directory: {nested_e}")
-                raise
+                data_dir = Path(current_app.instance_path) / 'student_data'
+                data_dir.mkdir(parents=True, exist_ok=True)
+                self.student_data_path = data_dir
+            except Exception as e:
+                logger.error(f"Error setting up data directory from Flask app: {e}")
+                try:
+                    # Import is already at the top level, no need to import here again
+                    instance_data_dir = Path(current_app.instance_path) / 'student_data'
+                    instance_data_dir.mkdir(parents=True, exist_ok=True)
+                    self.student_data_path = instance_data_dir
+                    logger.info(f"Using alternative student data directory: {self.student_data_path}")
+                except Exception as nested_e:
+                    logger.error(f"Failed to create student data directory: {nested_e}")
+                    raise
+        else:
+            self.student_data_path = Path(data_dir)
+            self.student_data_path.mkdir(parents=True, exist_ok=True)
         
         # Define the path for the current school year's tracking file
         self._set_current_year_file()
+        
+        # If migrating from JSON, check if we need to import existing data
+        self._migrate_json_to_sqlite_if_needed()
     
     def _set_current_year_file(self):
         """Set the current school year's tracking file"""
-        today = datetime.datetime.now()
+        filename = f"student_devices_{self.current_school_year}.json"
+        self.current_tracker_file = str(self.student_data_path / filename)
         
-        # Calculate academic year (if before July, it's previous year-current year; if July or after, it's current year-next year)
-        if today.month < 7:
-            # Spring semester - academic year started last year
-            start_year = today.year - 1
-            end_year = today.year
-        else:
-            # Fall semester - academic year starts this year
-            start_year = today.year
-            end_year = today.year + 1
-        
-        self.current_school_year = f"{start_year}-{end_year}"
-        self.current_tracker_file = self.student_data_path / f"student_devices_{self.current_school_year}.json"
-        
-        # Check if we need to create a new file
-        if not self.current_tracker_file.exists():
+        # Create the file if it doesn't exist
+        if not os.path.exists(self.current_tracker_file):
             self._create_new_tracker_file()
     
     def _create_new_tracker_file(self):
@@ -90,7 +81,7 @@ class StudentDeviceTracker:
             raise
     
     def _load_tracker_data(self):
-        """Load the current tracker data from file"""
+        """Load the current tracker data (for compatibility or migration)"""
         try:
             with open(self.current_tracker_file, 'r') as f:
                 return json.load(f)
@@ -99,7 +90,7 @@ class StudentDeviceTracker:
             return None
     
     def _save_tracker_data(self, data):
-        """Save tracker data to file with locking for concurrency"""
+        """Save tracker data to file with locking for concurrency (for compatibility)"""
         try:
             # Update the last updated timestamp
             data["last_updated"] = datetime.datetime.now().isoformat()
@@ -120,7 +111,79 @@ class StudentDeviceTracker:
         except Exception as e:
             logger.error(f"Error saving tracker data: {e}")
             return False
-    
+            
+    def _migrate_json_to_sqlite_if_needed(self):
+        """Check if we need to migrate data from JSON to SQLite"""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Check if students table is empty
+            cursor.execute("SELECT COUNT(*) FROM students")
+            count = cursor.fetchone()[0]
+            
+            if count == 0:
+                # Table is empty, check if we have JSON data to migrate
+                json_data = self._load_tracker_data()
+                if json_data and "students" in json_data and json_data["students"]:
+                    logger.info("Migrating student data from JSON to SQLite")
+                    
+                    for student_id, student_data in json_data["students"].items():
+                        # Extract device info from the student data
+                        device_info = student_data.pop("device_info", None)
+                        device_checked_in = 1 if student_data.get("device_checked_in", False) else 0
+                        
+                        # Insert student
+                        cursor.execute(
+                            """
+                            INSERT INTO students (
+                                id, first_name, last_name, grade, rt_user_id, 
+                                device_checked_in, check_in_date
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                student_id,
+                                student_data.get("first_name"),
+                                student_data.get("last_name"),
+                                student_data.get("grade"),
+                                student_data.get("rt_user_id"),
+                                device_checked_in,
+                                student_data.get("check_in_date")
+                            )
+                        )
+                        
+                        # Insert device info if available
+                        if device_info:
+                            cursor.execute(
+                                """
+                                INSERT INTO device_info (
+                                    student_id, asset_id, asset_tag, device_type,
+                                    serial_number, check_in_timestamp
+                                ) VALUES (?, ?, ?, ?, ?, ?)
+                                """,
+                                (
+                                    student_id,
+                                    device_info.get("asset_id"),
+                                    device_info.get("asset_tag"),
+                                    device_info.get("device_type"),
+                                    device_info.get("serial_number"),
+                                    device_info.get("check_in_timestamp")
+                                )
+                            )
+                    
+                    conn.commit()
+                    logger.info(f"Successfully migrated {len(json_data['students'])} students from JSON to SQLite")
+            else:
+                logger.info(f"SQLite database already contains {count} students, no migration needed")
+                
+        except Exception as e:
+            logger.error(f"Error checking/migrating JSON data to SQLite: {e}")
+            if 'conn' in locals():
+                conn.rollback()
+        finally:
+            if 'conn' in locals():
+                conn.close()
+                
     def get_all_students(self):
         """
         Get all students in the tracking system
@@ -128,19 +191,53 @@ class StudentDeviceTracker:
         Returns:
             list: List of student data dictionaries
         """
-        data = self._load_tracker_data()
-        if not data:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Get all students
+            cursor.execute("""
+                SELECT s.*, 
+                       d.asset_id, d.asset_tag, d.device_type, 
+                       d.serial_number, d.check_in_timestamp 
+                FROM students s
+                LEFT JOIN device_info d ON s.id = d.student_id
+            """)
+            
+            rows = cursor.fetchall()
+            students = []
+            
+            # Process the results into a list of dictionaries
+            for row in rows:
+                student = dict(row)
+                student['device_checked_in'] = bool(student['device_checked_in'])
+                
+                # Add device_info if available
+                if student['asset_id']:
+                    student['device_info'] = {
+                        'asset_id': student['asset_id'],
+                        'asset_tag': student['asset_tag'],
+                        'device_type': student['device_type'],
+                        'serial_number': student['serial_number'],
+                        'check_in_timestamp': student['check_in_timestamp']
+                    }
+                
+                # Remove the extra fields that were joined from device_info
+                for field in ['asset_id', 'asset_tag', 'device_type', 'serial_number', 'check_in_timestamp']:
+                    if field in student:
+                        del student[field]
+                
+                students.append(student)
+            
+            # Sort by last name, then first name
+            return sorted(students, key=lambda s: (s.get("last_name", ""), s.get("first_name", "")))
+            
+        except Exception as e:
+            logger.error(f"Error getting all students: {e}")
             return []
-        
-        # Convert dictionary to list of student objects with their IDs included
-        students = []
-        for student_id, student_data in data["students"].items():
-            student_info = student_data.copy()
-            student_info["id"] = student_id
-            students.append(student_info)
-        
-        # Sort by last name, then first name
-        return sorted(students, key=lambda s: (s.get("last_name", ""), s.get("first_name", "")))
+        finally:
+            if 'conn' in locals():
+                conn.close()
     
     def get_student(self, student_id):
         """
@@ -152,47 +249,121 @@ class StudentDeviceTracker:
         Returns:
             dict: Student data or None if not found
         """
-        data = self._load_tracker_data()
-        if not data or student_id not in data["students"]:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Get the student
+            cursor.execute("""
+                SELECT s.*, 
+                       d.asset_id, d.asset_tag, d.device_type, 
+                       d.serial_number, d.check_in_timestamp 
+                FROM students s
+                LEFT JOIN device_info d ON s.id = d.student_id
+                WHERE s.id = ?
+            """, (student_id,))
+            
+            row = cursor.fetchone()
+            if not row:
+                return None
+                
+            student = dict(row)
+            student['device_checked_in'] = bool(student['device_checked_in'])
+            
+            # Add device_info if available
+            if student['asset_id']:
+                student['device_info'] = {
+                    'asset_id': student['asset_id'],
+                    'asset_tag': student['asset_tag'],
+                    'device_type': student['device_type'],
+                    'serial_number': student['serial_number'],
+                    'check_in_timestamp': student['check_in_timestamp']
+                }
+            
+            # Remove the extra fields that were joined from device_info
+            for field in ['asset_id', 'asset_tag', 'device_type', 'serial_number', 'check_in_timestamp']:
+                if field in student:
+                    del student[field]
+            
+            return student
+            
+        except Exception as e:
+            logger.error(f"Error getting student {student_id}: {e}")
             return None
-        
-        student_data = data["students"][student_id].copy()
-        student_data["id"] = student_id
-        return student_data
+        finally:
+            if 'conn' in locals():
+                conn.close()
     
     def add_update_student(self, student_id, student_data):
         """
-        Add or update a student in the tracking system
+        Add or update a student
         
         Args:
             student_id (str): Student ID or username
-            student_data (dict): Student data including first_name, last_name, etc.
+            student_data (dict): Student data
             
         Returns:
             bool: Success status
         """
-        data = self._load_tracker_data()
-        if not data:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Check if the student exists
+            cursor.execute("SELECT 1 FROM students WHERE id = ?", (student_id,))
+            exists = cursor.fetchone() is not None
+            
+            if exists:
+                # Update the student
+                update_fields = []
+                params = []
+                
+                # Prepare update fields and params
+                for field in ['first_name', 'last_name', 'grade', 'rt_user_id']:
+                    if field in student_data:
+                        update_fields.append(f"{field} = ?")
+                        params.append(student_data[field])
+                
+                if update_fields:
+                    # Add the student_id as the last parameter
+                    params.append(student_id)
+                    
+                    # Execute the update
+                    cursor.execute(
+                        f"UPDATE students SET {', '.join(update_fields)} WHERE id = ?",
+                        params
+                    )
+            else:
+                # Insert new student
+                cursor.execute(
+                    """
+                    INSERT INTO students (
+                        id, first_name, last_name, grade, rt_user_id, 
+                        device_checked_in, check_in_date
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        student_id,
+                        student_data.get("first_name"),
+                        student_data.get("last_name"),
+                        student_data.get("grade"),
+                        student_data.get("rt_user_id"),
+                        0,  # Default to device not checked in
+                        None  # Default to no check-in date
+                    )
+                )
+            
+            conn.commit()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error adding/updating student {student_id}: {e}")
+            if 'conn' in locals():
+                conn.rollback()
             return False
-        
-        # Create or update student
-        if student_id not in data["students"]:
-            data["students"][student_id] = {}
-        
-        # Update student data
-        for key, value in student_data.items():
-            if key != "id":  # Skip the ID field as we're using it as the key
-                data["students"][student_id][key] = value
-        
-        # Add tracking data if not present
-        if "device_checked_in" not in data["students"][student_id]:
-            data["students"][student_id]["device_checked_in"] = False
-        
-        if "check_in_date" not in data["students"][student_id]:
-            data["students"][student_id]["check_in_date"] = None
-        
-        # Save the updated data
-        return self._save_tracker_data(data)
+        finally:
+            if 'conn' in locals():
+                conn.close()
     
     def remove_student(self, student_id):
         """
@@ -204,15 +375,27 @@ class StudentDeviceTracker:
         Returns:
             bool: Success status
         """
-        data = self._load_tracker_data()
-        if not data or student_id not in data["students"]:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Delete the student (device_info will be deleted via ON DELETE CASCADE)
+            cursor.execute("DELETE FROM students WHERE id = ?", (student_id,))
+            
+            # Check if any rows were affected
+            affected = cursor.rowcount > 0
+            
+            conn.commit()
+            return affected
+            
+        except Exception as e:
+            logger.error(f"Error removing student {student_id}: {e}")
+            if 'conn' in locals():
+                conn.rollback()
             return False
-        
-        # Remove student
-        del data["students"][student_id]
-        
-        # Save the updated data
-        return self._save_tracker_data(data)
+        finally:
+            if 'conn' in locals():
+                conn.close()
     
     def mark_device_checked_in(self, student_id, asset_data=None):
         """
@@ -220,47 +403,67 @@ class StudentDeviceTracker:
         
         Args:
             student_id (str): Student ID or username
-            asset_data (dict, optional): Asset data from the check-in
+            asset_data (dict): Asset data from RT
             
         Returns:
             bool: Success status
         """
-        data = self._load_tracker_data()
-        if not data:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Update the student's check-in status
+            check_in_date = datetime.datetime.now().isoformat()
+            cursor.execute(
+                "UPDATE students SET device_checked_in = 1, check_in_date = ? WHERE id = ?",
+                (check_in_date, student_id)
+            )
+            
+            # Delete any existing device info
+            cursor.execute("DELETE FROM device_info WHERE student_id = ?", (student_id,))
+            
+            # Add device info if provided
+            if asset_data:
+                device_type = ""
+                serial_number = ""
+                
+                # Extract device type and serial from CustomFields
+                if 'CustomFields' in asset_data:
+                    for field in asset_data['CustomFields']:
+                        if field.get('name') == 'Type' and field.get('values'):
+                            device_type = field['values'][0]
+                        elif field.get('name') == 'Serial Number' and field.get('values'):
+                            serial_number = field['values'][0]
+                
+                # Insert device info
+                cursor.execute(
+                    """
+                    INSERT INTO device_info (
+                        student_id, asset_id, asset_tag, device_type,
+                        serial_number, check_in_timestamp
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        student_id,
+                        asset_data.get("id", ""),
+                        asset_data.get("Name", ""),
+                        device_type,
+                        serial_number,
+                        datetime.datetime.now().isoformat()
+                    )
+                )
+            
+            conn.commit()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error marking device checked in for student {student_id}: {e}")
+            if 'conn' in locals():
+                conn.rollback()
             return False
-        
-        # Create student if they don't exist
-        if student_id not in data["students"]:
-            data["students"][student_id] = {
-                "device_checked_in": False,
-                "check_in_date": None,
-            }
-        
-        # Mark device as checked in
-        data["students"][student_id]["device_checked_in"] = True
-        data["students"][student_id]["check_in_date"] = datetime.datetime.now().isoformat()
-        
-        # Store asset data if provided
-        if asset_data:
-            # Extract basic asset details
-            device_info = {
-                "asset_id": asset_data.get("id", ""),
-                "asset_tag": asset_data.get("Name", ""),
-                "check_in_timestamp": datetime.datetime.now().isoformat()
-            }
-            
-            # Extract device type and serial from CustomFields
-            if 'CustomFields' in asset_data:
-                for field in asset_data['CustomFields']:
-                    if field.get('name') == 'Type' and field.get('values'):
-                        device_info["device_type"] = field['values'][0]
-                    elif field.get('name') == 'Serial Number' and field.get('values'):
-                        device_info["serial_number"] = field['values'][0]
-            
-            data["students"][student_id]["device_info"] = device_info
-        
-        # Save the updated data
-        return self._save_tracker_data(data)
+        finally:
+            if 'conn' in locals():
+                conn.close()
     
     def mark_device_not_checked_in(self, student_id):
         """
@@ -272,20 +475,30 @@ class StudentDeviceTracker:
         Returns:
             bool: Success status
         """
-        data = self._load_tracker_data()
-        if not data or student_id not in data["students"]:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Update the student's check-in status
+            cursor.execute(
+                "UPDATE students SET device_checked_in = 0, check_in_date = NULL WHERE id = ?",
+                (student_id,)
+            )
+            
+            # Delete any device info
+            cursor.execute("DELETE FROM device_info WHERE student_id = ?", (student_id,))
+            
+            conn.commit()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error marking device not checked in for student {student_id}: {e}")
+            if 'conn' in locals():
+                conn.rollback()
             return False
-        
-        # Mark device as not checked in
-        data["students"][student_id]["device_checked_in"] = False
-        data["students"][student_id]["check_in_date"] = None
-        
-        # Remove device info if present
-        if "device_info" in data["students"][student_id]:
-            del data["students"][student_id]["device_info"]
-        
-        # Save the updated data
-        return self._save_tracker_data(data)
+        finally:
+            if 'conn' in locals():
+                conn.close()
     
     def import_students_from_csv(self, csv_file):
         """
@@ -295,33 +508,24 @@ class StudentDeviceTracker:
             csv_file (str): Path to CSV file
             
         Returns:
-            dict: Import summary with counts
+            dict: Result with counts of added, updated, and failed
         """
         try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            added = 0
+            updated = 0
+            failed = 0
+            
             with open(csv_file, 'r', newline='') as f:
                 reader = csv.DictReader(f)
                 
-                # Track counts
-                added = 0
-                updated = 0
-                failed = 0
-                
-                # Load current data
-                data = self._load_tracker_data()
-                if not data:
-                    return {"error": "Could not load tracker data"}
-                
-                # Process each row
                 for row in reader:
                     try:
-                        # Determine student ID (try common fields)
-                        student_id = None
-                        for id_field in ['id', 'student_id', 'username']:
-                            if id_field in row and row[id_field]:
-                                student_id = row[id_field]
-                                break
+                        # Get student ID from the row
+                        student_id = row.get('id', '').strip()
                         
-                        # Skip if no ID found
                         if not student_id:
                             logger.warning(f"Skipping row, no student ID found: {row}")
                             failed += 1
@@ -334,74 +538,107 @@ class StudentDeviceTracker:
                                 student_data[key] = value
                         
                         # Check if student exists
-                        if student_id in data["students"]:
+                        cursor.execute("SELECT 1 FROM students WHERE id = ?", (student_id,))
+                        exists = cursor.fetchone() is not None
+                        
+                        if exists:
                             # Update existing student
-                            for key, value in student_data.items():
-                                data["students"][student_id][key] = value
-                            updated += 1
-                        else:
-                            # Add new student
-                            data["students"][student_id] = student_data
-                            # Initialize tracking fields
-                            data["students"][student_id]["device_checked_in"] = False
-                            data["students"][student_id]["check_in_date"] = None
-                            added += 1
+                            update_fields = []
+                            params = []
                             
+                            # Prepare update fields and params
+                            for field in ['first_name', 'last_name', 'grade', 'rt_user_id']:
+                                if field in student_data:
+                                    update_fields.append(f"{field} = ?")
+                                    params.append(student_data[field])
+                            
+                            if update_fields:
+                                # Add the student_id as the last parameter
+                                params.append(student_id)
+                                
+                                # Execute the update
+                                cursor.execute(
+                                    f"UPDATE students SET {', '.join(update_fields)} WHERE id = ?",
+                                    params
+                                )
+                                updated += 1
+                        else:
+                            # Insert new student
+                            cursor.execute(
+                                """
+                                INSERT INTO students (
+                                    id, first_name, last_name, grade, rt_user_id, 
+                                    device_checked_in, check_in_date
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                                """,
+                                (
+                                    student_id,
+                                    student_data.get("first_name"),
+                                    student_data.get("last_name"),
+                                    student_data.get("grade"),
+                                    student_data.get("rt_user_id"),
+                                    0,  # Default to device not checked in
+                                    None  # Default to no check-in date
+                                )
+                            )
+                            added += 1
+                    
                     except Exception as row_error:
                         logger.error(f"Error processing student row: {row_error}")
                         failed += 1
+            
+            conn.commit()
+            
+            return {
+                "success": True,
+                "added": added,
+                "updated": updated,
+                "failed": failed
+            }
                 
-                # Save the updated data
-                if self._save_tracker_data(data):
-                    return {
-                        "success": True,
-                        "added": added,
-                        "updated": updated,
-                        "failed": failed
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "error": "Failed to save data"
-                    }
-                    
         except Exception as e:
             logger.error(f"Error importing students from CSV: {e}")
+            if 'conn' in locals():
+                conn.rollback()
             return {
                 "success": False,
                 "error": str(e)
             }
+        finally:
+            if 'conn' in locals():
+                conn.close()
     
     def export_students_to_csv(self, include_device_info=True):
         """
-        Export students to a CSV string
+        Export students to a CSV file
         
         Args:
-            include_device_info (bool): Whether to include device information
+            include_device_info (bool): Whether to include device info in the export
             
         Returns:
-            str: CSV content
+            str: CSV data
         """
         try:
+            # Get all students
             students = self.get_all_students()
+            
             if not students:
                 return ""
             
-            import io
-            output = io.StringIO()
-            
             # Determine fields to include
-            if include_device_info:
-                fieldnames = ["id", "first_name", "last_name", "grade", "device_checked_in", "check_in_date"]
-                # Add device_info fields if any student has them
-                for student in students:
-                    if "device_info" in student:
-                        for key in student["device_info"].keys():
-                            if key not in fieldnames:
-                                fieldnames.append(key)
-            else:
-                fieldnames = ["id", "first_name", "last_name", "grade", "device_checked_in", "check_in_date"]
+            fieldnames = ["id", "first_name", "last_name", "grade", "rt_user_id"]
             
+            if include_device_info:
+                fieldnames.extend(["device_checked_in", "check_in_date"])
+                
+                # Check if any student has device info
+                has_device_info = any("device_info" in student for student in students)
+                
+                if has_device_info:
+                    fieldnames.extend(["asset_id", "asset_tag", "device_type", "serial_number"])
+            
+            # Create CSV in memory
+            output = io.StringIO()
             writer = csv.DictWriter(output, fieldnames=fieldnames)
             writer.writeheader()
             
@@ -426,7 +663,7 @@ class StudentDeviceTracker:
     
     def get_student_from_asset(self, asset_id):
         """
-        Find a student based on an asset ID
+        Get a student by asset ID
         
         Args:
             asset_id (str): Asset ID from RT
@@ -434,18 +671,49 @@ class StudentDeviceTracker:
         Returns:
             dict: Student data or None if not found
         """
-        data = self._load_tracker_data()
-        if not data:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT s.*
+                FROM students s
+                JOIN device_info d ON s.id = d.student_id
+                WHERE d.asset_id = ?
+            """, (asset_id,))
+            
+            row = cursor.fetchone()
+            if not row:
+                return None
+                
+            student = dict(row)
+            student['device_checked_in'] = bool(student['device_checked_in'])
+            
+            # Get device info
+            cursor.execute("""
+                SELECT * FROM device_info 
+                WHERE student_id = ?
+            """, (student['id'],))
+            
+            device_row = cursor.fetchone()
+            if device_row:
+                device_info = dict(device_row)
+                student['device_info'] = {
+                    'asset_id': device_info['asset_id'],
+                    'asset_tag': device_info['asset_tag'],
+                    'device_type': device_info['device_type'],
+                    'serial_number': device_info['serial_number'],
+                    'check_in_timestamp': device_info['check_in_timestamp']
+                }
+            
+            return student
+            
+        except Exception as e:
+            logger.error(f"Error getting student from asset {asset_id}: {e}")
             return None
-        
-        # Search each student for the asset
-        for student_id, student_data in data["students"].items():
-            if "device_info" in student_data and student_data["device_info"].get("asset_id") == asset_id:
-                result = student_data.copy()
-                result["id"] = student_id
-                return result
-        
-        return None
+        finally:
+            if 'conn' in locals():
+                conn.close()
     
     def clear_all_students(self):
         """
@@ -455,68 +723,78 @@ class StudentDeviceTracker:
             dict: Result with count of removed students
         """
         try:
-            data = self._load_tracker_data()
-            if not data:
-                return {
-                    "success": False,
-                    "error": "Could not load tracker data"
-                }
+            conn = get_db_connection()
+            cursor = conn.cursor()
             
-            # Count students before clearing
-            student_count = len(data["students"])
+            # Get the current count of students
+            cursor.execute("SELECT COUNT(*) FROM students")
+            student_count = cursor.fetchone()[0]
             
-            # Clear students but keep other metadata
-            data["students"] = {}
-            data["last_updated"] = datetime.datetime.now().isoformat()
+            # Delete all device_info records
+            cursor.execute("DELETE FROM device_info")
             
-            # Save the updated data
-            if self._save_tracker_data(data):
-                logger.info(f"Cleared {student_count} students from the tracker")
-                return {
-                    "success": True,
-                    "count": student_count
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": "Failed to save cleared data"
-                }
+            # Delete all student records
+            cursor.execute("DELETE FROM students")
+            
+            conn.commit()
+            
+            logger.info(f"Cleared {student_count} students from the tracker")
+            return {
+                "success": True,
+                "count": student_count
+            }
                 
         except Exception as e:
             logger.error(f"Error clearing students: {e}")
+            if 'conn' in locals():
+                conn.rollback()
             return {
                 "success": False,
                 "error": str(e)
             }
-            
+        finally:
+            if 'conn' in locals():
+                conn.close()
+    
     def get_statistics(self):
         """
-        Get statistics about the student device check-in status
+        Get statistics on students and device check-ins
         
         Returns:
             dict: Statistics
         """
-        data = self._load_tracker_data()
-        if not data:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Get total student count
+            cursor.execute("SELECT COUNT(*) FROM students")
+            total_students = cursor.fetchone()[0]
+            
+            # Get checked in count
+            cursor.execute("SELECT COUNT(*) FROM students WHERE device_checked_in = 1")
+            checked_in = cursor.fetchone()[0]
+            
+            # Calculate completion rate
+            completion_rate = 0
+            if total_students > 0:
+                completion_rate = (checked_in / total_students) * 100
+            
+            return {
+                "total_students": total_students,
+                "checked_in": checked_in,
+                "not_checked_in": total_students - checked_in,
+                "completion_rate": completion_rate
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting statistics: {e}")
             return {
                 "total_students": 0,
                 "checked_in": 0,
                 "not_checked_in": 0,
                 "completion_rate": 0
             }
-        
-        total_students = len(data["students"])
-        checked_in = sum(1 for s in data["students"].values() if s.get("device_checked_in"))
-        not_checked_in = total_students - checked_in
-        
-        completion_rate = 0
-        if total_students > 0:
-            completion_rate = (checked_in / total_students) * 100
-        
-        return {
-            "school_year": self.current_school_year,
-            "total_students": total_students,
-            "checked_in": checked_in,
-            "not_checked_in": not_checked_in,
-            "completion_rate": completion_rate
-        }
+        finally:
+            if 'conn' in locals():
+                conn.close()

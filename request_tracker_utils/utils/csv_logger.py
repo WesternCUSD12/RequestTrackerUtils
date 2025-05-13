@@ -1,16 +1,18 @@
 import csv
 import os
+import io
 import time
 import fcntl
 import datetime
 import logging
 from pathlib import Path
 from flask import current_app
+from .db import get_db_connection
 
 logger = logging.getLogger(__name__)
 
 class DeviceCheckInLogger:
-    """Utility for logging device check-in activities to a CSV file with concurrency support"""
+    """Utility for logging device check-in activities to a CSV file and database with concurrency support"""
     
     def __init__(self, log_dir=None):
         """
@@ -86,7 +88,7 @@ class DeviceCheckInLogger:
     
     def log_checkin(self, asset_data, owner_info, ticket_id, description, broken_screen, user):
         """
-        Log a device check-in event to the CSV file
+        Log a device check-in event to the CSV file and database
         
         Args:
             asset_data (dict): Asset data from RT
@@ -95,6 +97,9 @@ class DeviceCheckInLogger:
             description (str): Ticket description
             broken_screen (bool): Whether the screen was marked as broken
             user (str): Username of person doing the check-in
+            
+        Returns:
+            bool: Success status
         """
         # Make sure we're using the correct log file for current day
         self._set_current_log_file()
@@ -102,6 +107,9 @@ class DeviceCheckInLogger:
         try:
             # Prepare row data
             now = datetime.datetime.now()
+            unix_timestamp = int(time.time())
+            date_str = now.strftime('%Y-%m-%d')
+            time_str = now.strftime('%H:%M:%S')
             
             # Get asset details
             asset_id = asset_data.get('id', '')
@@ -121,31 +129,64 @@ class DeviceCheckInLogger:
             # Previous owner name
             previous_owner = owner_info.get('display_name', 'None')
             
-            # Write to CSV with file locking to handle concurrent access
+            # Prepare row data for both CSV and database
+            row_data = [
+                unix_timestamp,                       # Unix timestamp
+                date_str,                             # Date in YYYY-MM-DD format
+                time_str,                             # Time in HH:MM:SS format
+                asset_id,                             # RT Asset ID
+                asset_tag,                            # Asset tag
+                device_type,                          # Device type
+                serial_number,                        # Serial number
+                previous_owner,                       # Previous owner
+                ticket_id or '',                      # Ticket ID (if created)
+                'Yes' if ticket_id else 'No',         # Has ticket (string for CSV)
+                description or '',                    # Ticket description
+                'Yes' if broken_screen else 'No',     # Broken screen (string for CSV)
+                user or 'Unknown'                     # Checked by
+            ]
+            
+            # 1. Write to CSV with file locking to handle concurrent access
             with open(self.current_log_file, 'a', newline='') as csvfile:
                 # Use file locking to prevent concurrent write issues
                 fcntl.flock(csvfile, fcntl.LOCK_EX)
                 
                 try:
                     writer = csv.writer(csvfile)
-                    writer.writerow([
-                        int(time.time()),                      # Unix timestamp
-                        now.strftime('%Y-%m-%d'),              # Date in YYYY-MM-DD format
-                        now.strftime('%H:%M:%S'),              # Time in HH:MM:SS format
-                        asset_id,                              # RT Asset ID
-                        asset_tag,                             # Asset tag
-                        device_type,                           # Device type
-                        serial_number,                         # Serial number
-                        previous_owner,                        # Previous owner
-                        ticket_id or '',                       # Ticket ID (if created)
-                        'Yes' if ticket_id else 'No',          # Has ticket
-                        description or '',                     # Ticket description
-                        'Yes' if broken_screen else 'No',      # Broken screen
-                        user or 'Unknown'                      # Checked by
-                    ])
+                    writer.writerow(row_data)
                 finally:
                     # Always release the lock
                     fcntl.flock(csvfile, fcntl.LOCK_UN)
+            
+            # 2. Write to database
+            conn = get_db_connection()
+            try:
+                cursor = conn.cursor()
+                
+                # Convert the boolean values to integers for database storage
+                has_ticket_int = 1 if ticket_id else 0
+                broken_screen_int = 1 if broken_screen else 0
+                
+                cursor.execute('''
+                INSERT INTO device_logs (
+                    timestamp, date, time, asset_id, asset_tag, device_type,
+                    serial_number, previous_owner, ticket_id, has_ticket,
+                    ticket_description, broken_screen, checked_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    unix_timestamp, date_str, time_str, asset_id, asset_tag, 
+                    device_type, serial_number, previous_owner, ticket_id or None,
+                    has_ticket_int, description or '', broken_screen_int, user or 'Unknown'
+                ))
+                
+                conn.commit()
+                
+            except Exception as db_error:
+                logger.error(f"Error logging check-in to database: {db_error}")
+                conn.rollback()
+                # Continue even if database logging fails
+            finally:
+                conn.close()
                     
             logger.info(f"Logged check-in for asset {asset_tag} by {user}")
             return True
@@ -202,3 +243,109 @@ class DeviceCheckInLogger:
         except Exception as e:
             logger.error(f"Error getting available logs: {e}")
             return []
+    
+    def get_logs_by_date(self, date_str):
+        """
+        Get logs for a specific date from the database
+        
+        Args:
+            date_str (str): Date string in YYYY-MM-DD format
+            
+        Returns:
+            list: List of log entries as dictionaries
+        """
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                "SELECT * FROM device_logs WHERE date = ? ORDER BY timestamp DESC",
+                (date_str,)
+            )
+            
+            # Convert rows to dictionaries
+            logs = []
+            for row in cursor.fetchall():
+                log_entry = dict(row)
+                # Convert database integers back to Yes/No for display consistency
+                log_entry['has_ticket'] = 'Yes' if log_entry['has_ticket'] else 'No'
+                log_entry['broken_screen'] = 'Yes' if log_entry['broken_screen'] else 'No'
+                logs.append(log_entry)
+                
+            return logs
+            
+        except Exception as e:
+            logger.error(f"Error fetching logs from database for date {date_str}: {e}")
+            return []
+        finally:
+            if 'conn' in locals():
+                conn.close()
+                
+    def export_logs_to_csv(self, date_str=None, start_date=None, end_date=None):
+        """
+        Export logs to CSV format
+        
+        Args:
+            date_str (str, optional): Single date to export (YYYY-MM-DD format)
+            start_date (str, optional): Start date range (YYYY-MM-DD format)
+            end_date (str, optional): End date range (YYYY-MM-DD format)
+            
+        Returns:
+            str: CSV data as string
+        """
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Build the query based on input parameters
+            if date_str:
+                query = "SELECT * FROM device_logs WHERE date = ? ORDER BY timestamp"
+                params = (date_str,)
+            elif start_date and end_date:
+                query = "SELECT * FROM device_logs WHERE date >= ? AND date <= ? ORDER BY date, timestamp"
+                params = (start_date, end_date)
+            else:
+                # Default to all logs if no date parameters provided
+                query = "SELECT * FROM device_logs ORDER BY date DESC, timestamp DESC"
+                params = ()
+                
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            # Generate CSV
+            output = io.StringIO()
+            writer = csv.writer(output)
+            
+            # Write header
+            writer.writerow([
+                'Timestamp', 'Date', 'Time', 'Asset ID', 'Asset Tag', 
+                'Device Type', 'Serial Number', 'Previous Owner', 'Ticket ID',
+                'Has Ticket', 'Ticket Description', 'Broken Screen', 'Checked By'
+            ])
+            
+            # Write data rows
+            for row in rows:
+                writer.writerow([
+                    row['timestamp'], 
+                    row['date'],
+                    row['time'],
+                    row['asset_id'],
+                    row['asset_tag'],
+                    row['device_type'],
+                    row['serial_number'],
+                    row['previous_owner'],
+                    row['ticket_id'] or '',
+                    'Yes' if row['has_ticket'] else 'No',
+                    row['ticket_description'] or '',
+                    'Yes' if row['broken_screen'] else 'No',
+                    row['checked_by']
+                ])
+            
+            return output.getvalue()
+            
+        except Exception as e:
+            logger.error(f"Error exporting logs to CSV: {e}")
+            return ""
+        finally:
+            if 'conn' in locals():
+                conn.close()
