@@ -10,10 +10,12 @@ import json
 import glob
 import logging
 from pathlib import Path
+from flask import Flask
 
 # Add parent directory to path so we can import request_tracker_utils modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from request_tracker_utils.utils.db import get_db_connection
+from request_tracker_utils.utils.db import get_db_connection, init_db
+from request_tracker_utils.config import WORKING_DIR
 
 # Configure logging
 logging.basicConfig(
@@ -21,6 +23,9 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Create a minimal Flask app for the database context
+app = Flask(__name__, instance_path=WORKING_DIR)
 
 def import_student_json_file(file_path):
     """Import a single JSON file into the database"""
@@ -39,91 +44,95 @@ def import_student_json_file(file_path):
         school_year = data.get('school_year', 'Unknown')
         logger.info(f"Found {len(students)} students for school year {school_year}")
         
-        conn = get_db_connection()
-        try:
-            cursor = conn.cursor()
-            added = 0
-            updated = 0
+        with app.app_context():
+            # Ensure database is initialized
+            init_db()
             
-            for student_id, student_data in students.items():
-                # Check if student exists
-                cursor.execute("SELECT 1 FROM students WHERE id = ?", (student_id,))
-                exists = cursor.fetchone() is not None
+            conn = get_db_connection()
+            try:
+                cursor = conn.cursor()
+                added = 0
+                updated = 0
                 
-                # Prepare data for insertion/update
-                device_checked_in = 1 if student_data.get('device_checked_in', False) else 0
-                check_in_date = student_data.get('check_in_date')
+                for student_id, student_data in students.items():
+                    # Check if student exists
+                    cursor.execute("SELECT 1 FROM students WHERE id = ?", (student_id,))
+                    exists = cursor.fetchone() is not None
+                    
+                    # Prepare data for insertion/update
+                    device_checked_in = 1 if student_data.get('device_checked_in', False) else 0
+                    check_in_date = student_data.get('check_in_date')
+                    
+                    if exists:
+                        # Update existing student
+                        cursor.execute("""
+                            UPDATE students SET
+                                first_name = ?,
+                                last_name = ?,
+                                grade = ?,
+                                rt_user_id = ?,
+                                device_checked_in = ?,
+                                check_in_date = ?
+                            WHERE id = ?
+                        """, (
+                            student_data.get('first_name'),
+                            student_data.get('last_name'),
+                            student_data.get('grade'),
+                            student_data.get('rt_user_id'),
+                            device_checked_in,
+                            check_in_date,
+                            student_id
+                        ))
+                        updated += 1
+                    else:
+                        # Insert new student
+                        cursor.execute("""
+                            INSERT INTO students (
+                                id, first_name, last_name, grade, rt_user_id,
+                                device_checked_in, check_in_date
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            student_id,
+                            student_data.get('first_name'),
+                            student_data.get('last_name'),
+                            student_data.get('grade'),
+                            student_data.get('rt_user_id'),
+                            device_checked_in,
+                            check_in_date
+                        ))
+                        added += 1
+                        
+                    # Process device_info if present
+                    device_info = student_data.get('device_info')
+                    if device_info and device_checked_in:
+                        # Delete any existing device info
+                        cursor.execute("DELETE FROM device_info WHERE student_id = ?", (student_id,))
+                        
+                        # Insert device info
+                        cursor.execute("""
+                            INSERT INTO device_info (
+                                student_id, asset_id, asset_tag, device_type,
+                                serial_number, check_in_timestamp
+                            ) VALUES (?, ?, ?, ?, ?, ?)
+                        """, (
+                            student_id,
+                            device_info.get('asset_id', ''),
+                            device_info.get('asset_tag', ''),
+                            device_info.get('device_type', ''),
+                            device_info.get('serial_number', ''),
+                            device_info.get('check_in_timestamp', check_in_date)
+                        ))
                 
-                if exists:
-                    # Update existing student
-                    cursor.execute("""
-                        UPDATE students SET
-                            first_name = ?,
-                            last_name = ?,
-                            grade = ?,
-                            rt_user_id = ?,
-                            device_checked_in = ?,
-                            check_in_date = ?
-                        WHERE id = ?
-                    """, (
-                        student_data.get('first_name'),
-                        student_data.get('last_name'),
-                        student_data.get('grade'),
-                        student_data.get('rt_user_id'),
-                        device_checked_in,
-                        check_in_date,
-                        student_id
-                    ))
-                    updated += 1
-                else:
-                    # Insert new student
-                    cursor.execute("""
-                        INSERT INTO students (
-                            id, first_name, last_name, grade, rt_user_id,
-                            device_checked_in, check_in_date
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        student_id,
-                        student_data.get('first_name'),
-                        student_data.get('last_name'),
-                        student_data.get('grade'),
-                        student_data.get('rt_user_id'),
-                        device_checked_in,
-                        check_in_date
-                    ))
-                    added += 1
-                    
-                # Process device_info if present
-                device_info = student_data.get('device_info')
-                if device_info and device_checked_in:
-                    # Delete any existing device info
-                    cursor.execute("DELETE FROM device_info WHERE student_id = ?", (student_id,))
-                    
-                    # Insert device info
-                    cursor.execute("""
-                        INSERT INTO device_info (
-                            student_id, asset_id, asset_tag, device_type,
-                            serial_number, check_in_timestamp
-                        ) VALUES (?, ?, ?, ?, ?, ?)
-                    """, (
-                        student_id,
-                        device_info.get('asset_id', ''),
-                        device_info.get('asset_tag', ''),
-                        device_info.get('device_type', ''),
-                        device_info.get('serial_number', ''),
-                        device_info.get('check_in_timestamp', check_in_date)
-                    ))
-            
-            conn.commit()
-            logger.info(f"Successfully imported {added} new students and updated {updated} existing students from {file_path}")
-            return added + updated
-            
-        except Exception as e:
-            logger.error(f"Error importing student data: {e}")
-            conn.rollback()
-            return 0
-        finally:
-            conn.close()
+                conn.commit()
+                logger.info(f"Successfully imported {added} new students and updated {updated} existing students from {file_path}")
+                return added + updated
+                
+            except Exception as e:
+                logger.error(f"Error importing student data: {e}")
+                conn.rollback()
+                return 0
+            finally:
+                conn.close()
     
     except Exception as e:
         logger.error(f"Error opening or parsing JSON file {file_path}: {e}")

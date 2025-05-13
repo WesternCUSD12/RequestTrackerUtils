@@ -1,5 +1,6 @@
 from flask import Flask, render_template, url_for, jsonify, request
 from request_tracker_utils.routes import label_routes, tag_routes, device_routes, student_routes
+from .utils.db import init_db  # Import the database initialization function
 
 def request_wants_json():
     """Check if the request prefers JSON response.
@@ -25,6 +26,10 @@ def create_app():
 
     # Load configuration
     app.config.from_object('request_tracker_utils.config')
+
+    # Initialize database
+    with app.app_context():
+        init_db()
 
     # Register blueprints
     app.register_blueprint(label_routes.bp)

@@ -9,10 +9,12 @@ import csv
 import glob
 import logging
 from pathlib import Path
+from flask import Flask
 
 # Add parent directory to path so we can import request_tracker_utils modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from request_tracker_utils.utils.db import get_db_connection
+from request_tracker_utils.utils.db import get_db_connection, init_db
+from request_tracker_utils.config import WORKING_DIR
 
 # Configure logging
 logging.basicConfig(
@@ -20,6 +22,9 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Create a minimal Flask app for the database context
+app = Flask(__name__, instance_path=WORKING_DIR)
 
 def import_csv_file(file_path):
     """Import a single CSV file into the database"""
@@ -33,76 +38,80 @@ def import_csv_file(file_path):
         
     date_str = filename[9:-4]  # Remove "checkins_" prefix and ".csv" suffix
     
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        imported_count = 0
+    with app.app_context():
+        # Ensure database is initialized
+        init_db()
         
-        # Check if we already have entries for this date
-        cursor.execute("SELECT COUNT(*) FROM device_logs WHERE date = ?", (date_str,))
-        existing_count = cursor.fetchone()[0]
-        
-        if existing_count > 0:
-            logger.warning(f"Found {existing_count} existing records for date {date_str}. Skipping to avoid duplicates.")
-            logger.warning(f"To reimport this file, first delete existing records with: DELETE FROM device_logs WHERE date = '{date_str}'")
-            return 0
-        
-        # Open and parse CSV file
-        with open(file_path, 'r', newline='') as csvfile:
-            reader = csv.reader(csvfile)
-            headers = next(reader)  # Skip header row
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            imported_count = 0
             
-            # Process each row
-            for row in reader:
-                if len(row) < 12:  # Ensure we have enough columns
-                    logger.warning(f"Skipping row with insufficient data: {row}")
-                    continue
+            # Check if we already have entries for this date
+            cursor.execute("SELECT COUNT(*) FROM device_logs WHERE date = ?", (date_str,))
+            existing_count = cursor.fetchone()[0]
+            
+            if existing_count > 0:
+                logger.warning(f"Found {existing_count} existing records for date {date_str}. Skipping to avoid duplicates.")
+                logger.warning(f"To reimport this file, first delete existing records with: DELETE FROM device_logs WHERE date = '{date_str}'")
+                return 0
+            
+            # Open and parse CSV file
+            with open(file_path, 'r', newline='') as csvfile:
+                reader = csv.reader(csvfile)
+                headers = next(reader)  # Skip header row
                 
-                try:
-                    # Extract data from row
-                    timestamp = int(row[0]) if row[0].isdigit() else 0
-                    date = row[1]
-                    time = row[2]
-                    asset_id = row[3]
-                    asset_tag = row[4]
-                    device_type = row[5]
-                    serial_number = row[6]
-                    previous_owner = row[7]
-                    ticket_id = row[8] if row[8] else None
-                    has_ticket = 1 if row[9].lower() == 'yes' else 0
-                    ticket_description = row[10]
-                    broken_screen = 1 if row[11].lower() == 'yes' else 0
-                    checked_by = row[12] if len(row) > 12 else 'Unknown'
+                # Process each row
+                for row in reader:
+                    if len(row) < 12:  # Ensure we have enough columns
+                        logger.warning(f"Skipping row with insufficient data: {row}")
+                        continue
                     
-                    # Insert into database
-                    cursor.execute('''
-                    INSERT INTO device_logs (
-                        timestamp, date, time, asset_id, asset_tag, device_type,
-                        serial_number, previous_owner, ticket_id, has_ticket,
-                        ticket_description, broken_screen, checked_by
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        timestamp, date, time, asset_id, asset_tag, device_type,
-                        serial_number, previous_owner, ticket_id, has_ticket,
-                        ticket_description, broken_screen, checked_by
-                    ))
-                    imported_count += 1
-                    
-                except Exception as e:
-                    logger.error(f"Error importing row: {e}")
-                    logger.error(f"Row data: {row}")
-                    
-        # Commit changes
-        conn.commit()
-        logger.info(f"Successfully imported {imported_count} records from {filename}")
-        return imported_count
-        
-    except Exception as e:
-        logger.error(f"Error importing file {file_path}: {e}")
-        conn.rollback()
-        return 0
-    finally:
-        conn.close()
+                    try:
+                        # Extract data from row
+                        timestamp = int(row[0]) if row[0].isdigit() else 0
+                        date = row[1]
+                        time = row[2]
+                        asset_id = row[3]
+                        asset_tag = row[4]
+                        device_type = row[5]
+                        serial_number = row[6]
+                        previous_owner = row[7]
+                        ticket_id = row[8] if row[8] else None
+                        has_ticket = 1 if row[9].lower() == 'yes' else 0
+                        ticket_description = row[10]
+                        broken_screen = 1 if row[11].lower() == 'yes' else 0
+                        checked_by = row[12] if len(row) > 12 else 'Unknown'
+                        
+                        # Insert into database
+                        cursor.execute('''
+                        INSERT INTO device_logs (
+                            timestamp, date, time, asset_id, asset_tag, device_type,
+                            serial_number, previous_owner, ticket_id, has_ticket,
+                            ticket_description, broken_screen, checked_by
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            timestamp, date, time, asset_id, asset_tag, device_type,
+                            serial_number, previous_owner, ticket_id, has_ticket,
+                            ticket_description, broken_screen, checked_by
+                        ))
+                        imported_count += 1
+                        
+                    except Exception as e:
+                        logger.error(f"Error importing row: {e}")
+                        logger.error(f"Row data: {row}")
+                        
+            # Commit changes
+            conn.commit()
+            logger.info(f"Successfully imported {imported_count} records from {filename}")
+            return imported_count
+            
+        except Exception as e:
+            logger.error(f"Error importing file {file_path}: {e}")
+            conn.rollback()
+            return 0
+        finally:
+            conn.close()
 
 def find_csv_files(directories):
     """Find all check-in CSV files in the specified directories"""
