@@ -413,6 +413,7 @@ def checkin_logs():
     try:
         # Import and use the CSV logger
         from ..utils.csv_logger import DeviceCheckInLogger
+        from ..utils.db import get_db_connection
         
         # Create a temporary directory in the instance folder if the configured directory isn't working
         try:
@@ -427,9 +428,53 @@ def checkin_logs():
             logger.info(f"Using alternative log directory: {instance_logs_dir}")
             csv_logger = DeviceCheckInLogger(log_dir=instance_logs_dir)
         
-        log_files = csv_logger.get_available_logs()
+        # Get the CSV file logs
+        file_logs = csv_logger.get_available_logs()
         
-        return render_template('checkin_logs.html', logs=log_files)
+        # Get unique dates from the database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("SELECT DISTINCT date FROM device_logs ORDER BY date DESC")
+            db_dates = [row['date'] for row in cursor.fetchall()]
+            
+            # For dates that don't exist as CSV files but exist in database, add them to the logs list
+            existing_dates = {log['filename'][9:-4] for log in file_logs}  # Extract dates from filenames
+            
+            for date_str in db_dates:
+                if date_str not in existing_dates:
+                    # This date exists in DB but not as a CSV file
+                    try:
+                        # Get device count for this date
+                        cursor.execute("SELECT COUNT(*) as count FROM device_logs WHERE date = ?", (date_str,))
+                        row_count = cursor.fetchone()['count']
+                        
+                        # Convert to datetime for formatting
+                        log_date = datetime.datetime.strptime(date_str, '%Y-%m-%d')
+                        # Format as a readable date
+                        display_date = log_date.strftime('%A, %B %d, %Y')
+                        
+                        # Create a new log entry
+                        filename = f"checkins_{date_str}.csv"
+                        file_logs.append({
+                            'filename': filename,
+                            'path': None,  # No physical file exists
+                            'date': display_date,
+                            'size': 0,  # No file size since it's only in database
+                            'modified': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            'device_count': row_count,
+                            'db_only': True  # Flag to indicate this is only in the database
+                        })
+                    except Exception as date_error:
+                        logger.error(f"Error processing database date {date_str}: {date_error}")
+        finally:
+            conn.close()
+            
+        # Sort all logs by date (newest first)
+        file_logs.sort(key=lambda x: x['filename'], reverse=True)
+        
+        return render_template('checkin_logs.html', logs=file_logs)
         
     except Exception as e:
         logger.error(f"Error displaying check-in logs: {e}")
@@ -456,7 +501,10 @@ def download_checkin_log(filename):
                 "error": "Invalid log filename"
             }), 400
             
-        # Try multiple possible locations for the log file
+        # Extract the date from the filename (checkins_YYYY-MM-DD.csv)
+        date_str = filename[9:-4]  # Remove "checkins_" prefix and ".csv" suffix
+        
+        # Option 1: Try to get the file directly (legacy support)
         possible_paths = []
         
         # Path in the configured working directory
@@ -479,19 +527,39 @@ def download_checkin_log(filename):
                 logger.info(f"Found log file at: {log_file_path}")
                 break
         
-        if not log_file_path:
-            logger.error(f"Log file not found. Searched in: {possible_paths}")
-            return jsonify({
-                "error": f"Log file '{filename}' not found"
-            }), 404
+        # Option 2: If file doesn't exist or we're using newer database logs, export from the database
+        from ..utils.csv_logger import DeviceCheckInLogger
+        csv_logger = DeviceCheckInLogger()
+        
+        if log_file_path:
+            # If the file exists, use that directly
+            return send_file(
+                log_file_path, 
+                as_attachment=True,
+                download_name=filename,
+                mimetype='text/csv'
+            )
+        else:
+            # Generate CSV content from database
+            csv_data = csv_logger.export_logs_to_csv(date_str=date_str)
             
-        # Return the file for download
-        return send_file(
-            log_file_path, 
-            as_attachment=True,
-            download_name=filename,
-            mimetype='text/csv'
-        )
+            if not csv_data:
+                return jsonify({
+                    "error": f"No log data found for date: {date_str}"
+                }), 404
+                
+            # Create an in-memory file
+            from io import BytesIO
+            buffer = BytesIO()
+            buffer.write(csv_data.encode('utf-8'))
+            buffer.seek(0)
+            
+            return send_file(
+                buffer,
+                as_attachment=True,
+                download_name=filename,
+                mimetype='text/csv'
+            )
         
     except Exception as e:
         logger.error(f"Error downloading check-in log: {e}")
@@ -510,7 +578,92 @@ def preview_checkin_log(filename):
                 "error": "Invalid log filename"
             }), 400
             
-        # Try multiple possible locations for the log file
+        # Extract the date from the filename (checkins_YYYY-MM-DD.csv)
+        date_str = filename[9:-4]  # Remove "checkins_" prefix and ".csv" suffix
+        
+        # Parse date for display (format: checkins_YYYY-MM-DD.csv)
+        try:
+            # Convert to datetime for formatting
+            log_date = datetime.datetime.strptime(date_str, '%Y-%m-%d')
+            # Format as a readable date
+            display_date = log_date.strftime('%A, %B %d, %Y')  # e.g., "Thursday, May 9, 2025"
+        except ValueError:
+            display_date = date_str
+        
+        # Get pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)  # Show 50 rows per page by default
+        
+        # Option 1: Try to get logs from the database first
+        from ..utils.csv_logger import DeviceCheckInLogger
+        csv_logger = DeviceCheckInLogger()
+        db_logs = csv_logger.get_logs_by_date(date_str)
+        
+        if db_logs:
+            # We have logs in the database, use those
+            logger.info(f"Found {len(db_logs)} log entries in the database for date {date_str}")
+            
+            # Calculate pagination
+            total_rows = len(db_logs)
+            total_pages = max(1, (total_rows + per_page - 1) // per_page)
+            
+            # Clamp current page to valid range
+            page = max(1, min(page, total_pages))
+            
+            # Get the data for the current page
+            start_idx = (page - 1) * per_page
+            end_idx = min(start_idx + per_page, total_rows)
+            page_logs = db_logs[start_idx:end_idx]
+            
+            # Convert logs to a format compatible with the template
+            headers = [
+                'Timestamp', 'Date', 'Time', 'Asset ID', 'Asset Tag', 
+                'Device Type', 'Serial Number', 'Previous Owner', 'Ticket ID',
+                'Has Ticket', 'Ticket Description', 'Broken Screen', 'Checked By'
+            ]
+            
+            # Format rows as lists (like CSV reader output)
+            rows = []
+            for log in page_logs:
+                row = [
+                    log.get('timestamp', ''),
+                    log.get('date', ''),
+                    log.get('time', ''),
+                    log.get('asset_id', ''),
+                    log.get('asset_tag', ''),
+                    log.get('device_type', ''),
+                    log.get('serial_number', ''),
+                    log.get('previous_owner', ''),
+                    log.get('ticket_id', ''),
+                    log.get('has_ticket', ''),
+                    log.get('ticket_description', ''),
+                    log.get('broken_screen', ''),
+                    log.get('checked_by', ''),
+                ]
+                rows.append(row)
+            
+            # Calculate pagination values for display
+            start_row = (page - 1) * per_page + 1
+            end_row = min(page * per_page, total_rows)
+            
+            # Render the template with data from the database
+            logger.info(f"Rendering preview from database logs, page {page} of {total_pages}")
+            return render_template(
+                'csv_preview.html', 
+                filename=filename,
+                display_date=display_date,
+                headers=headers, 
+                rows=rows,
+                page=page,
+                per_page=per_page,
+                total_pages=total_pages,
+                total_rows=total_rows,
+                start_row=start_row,
+                end_row=end_row,
+                from_database=True
+            )
+        
+        # Option 2: If not in database, try to get the file directly
         possible_paths = []
         
         # Path in the configured working directory
@@ -534,16 +687,12 @@ def preview_checkin_log(filename):
                 break
         
         if not log_file_path:
-            logger.error(f"Log file not found. Searched in: {possible_paths}")
+            logger.error(f"Log file not found in filesystem and no database entries. Searched in: {possible_paths}")
             return jsonify({
-                "error": f"Log file '{filename}' not found"
+                "error": f"No log data found for date: {date_str}"
             }), 404
         
         # Read the CSV file content - with pagination support
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 50, type=int)  # Show 50 rows per page by default
-        
-        # Read the CSV file
         csv_data = []
         headers = []
         
@@ -567,21 +716,12 @@ def preview_checkin_log(filename):
             
             csv_data = all_rows[start_idx:end_idx]
         
-        # Parse date from filename for display (format: checkins_YYYY-MM-DD.csv)
-        date_str = filename[9:-4]  # Remove "checkins_" prefix and ".csv" suffix
-        try:
-            # Convert to datetime for formatting
-            log_date = datetime.datetime.strptime(date_str, '%Y-%m-%d')
-            # Format as a readable date
-            display_date = log_date.strftime('%A, %B %d, %Y')  # e.g., "Thursday, May 9, 2025"
-        except ValueError:
-            display_date = date_str
-            
         # Calculate pagination values for display
         start_row = (page - 1) * per_page + 1
         end_row = min(page * per_page, total_rows)
-            
+        
         # Return the preview template with the CSV data
+        logger.info(f"Rendering preview from CSV file, page {page} of {total_pages}")
         return render_template(
             'csv_preview.html', 
             filename=filename,
@@ -593,7 +733,8 @@ def preview_checkin_log(filename):
             total_pages=total_pages,
             total_rows=total_rows,
             start_row=start_row,
-            end_row=end_row
+            end_row=end_row,
+            from_database=False
         )
             
     except Exception as e:
