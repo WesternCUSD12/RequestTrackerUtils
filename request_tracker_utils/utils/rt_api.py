@@ -674,13 +674,11 @@ def update_user_custom_field(user_id, field_name, field_value, config=None):
     Raises:
         Exception: If there's an error updating the user custom field
     """
+    # Updated JSON format to match the working curl command format
     data = {
-        "CustomFields": [
-            {
-                "name": field_name,
-                "values": [field_value]
-            }
-        ]
+        "CustomFields": {
+            field_name: field_value
+        }
     }
     
     try:
