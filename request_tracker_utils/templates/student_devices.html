@@ -26,7 +26,8 @@
       <div class="card bg-primary text-white h-100">
         <div class="card-body">
           <h5 class="card-title">Total Students</h5>
-          <h2 class="display-4">{{ stats.total_students }}</h2>
+          <h2 class="display-4" id="stat-total-students">{{ stats.total_students }}</h2>
+          <p class="card-text small" id="stat-total-label">All students</p>
         </div>
       </div>
     </div>
@@ -35,7 +36,8 @@
       <div class="card bg-success text-white h-100">
         <div class="card-body">
           <h5 class="card-title">Checked In</h5>
-          <h2 class="display-4">{{ stats.checked_in }}</h2>
+          <h2 class="display-4" id="stat-checked-in">{{ stats.checked_in }}</h2>
+          <p class="card-text small" id="stat-checked-label">All students</p>
         </div>
       </div>
     </div>
@@ -44,7 +46,8 @@
       <div class="card bg-warning text-dark h-100">
         <div class="card-body">
           <h5 class="card-title">Pending</h5>
-          <h2 class="display-4">{{ stats.not_checked_in }}</h2>
+          <h2 class="display-4" id="stat-not-checked-in">{{ stats.not_checked_in }}</h2>
+          <p class="card-text small" id="stat-pending-label">All students</p>
         </div>
       </div>
     </div>
@@ -53,7 +56,8 @@
       <div class="card bg-info text-white h-100">
         <div class="card-body">
           <h5 class="card-title">Completion Rate</h5>
-          <h2 class="display-4">{{ "%.1f"|format(stats.completion_rate) }}%</h2>
+          <h2 class="display-4" id="stat-completion-rate">{{ "%.1f"|format(stats.completion_rate) }}%</h2>
+          <p class="card-text small" id="stat-rate-label">All students</p>
         </div>
       </div>
     </div>
@@ -67,6 +71,9 @@
           <div>
             <button id="refreshStudentsBtn" class="btn btn-outline-primary me-2">
               <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+            <button id="checkRtAssignmentsBtn" class="btn btn-outline-info me-2">
+              <i class="bi bi-check-circle"></i> Check RT Assignments
             </button>
             <a href="{{ url_for('students.student_import') }}" class="btn btn-outline-success me-2">
               <i class="bi bi-file-earmark-arrow-up"></i> Import Students
@@ -433,6 +440,40 @@ document.addEventListener('DOMContentLoaded', function() {
     loadStudents();
   });
   
+  // Check RT Assignments button
+  document.getElementById('checkRtAssignmentsBtn').addEventListener('click', function() {
+    if (confirm("This will check all students in RT to verify if they have devices assigned to them. Students without assigned devices will be marked as 'Checked In'. Continue?")) {
+      // Show loading spinner in the button
+      const button = this;
+      const originalText = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Checking...`;
+      
+      // Call the API endpoint
+      fetch('/api/students/check-rt-assignments', {
+        method: 'POST'
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showToast('successToast', `${data.updated} students marked as checked in because they have no devices in RT.`);
+          // Reload student data
+          loadStudents();
+        } else {
+          throw new Error(data.error || 'Failed to check RT assignments');
+        }
+      })
+      .catch(error => {
+        showToast('errorToast', `Error: ${error.message}`);
+      })
+      .finally(() => {
+        // Restore button
+        button.disabled = false;
+        button.innerHTML = originalText;
+      });
+    }
+  });
+  
   // Add student form submission
   document.getElementById('saveStudentBtn').addEventListener('click', function() {
     const form = document.getElementById('addStudentForm');
@@ -591,6 +632,70 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Render table
     renderStudentTable(filteredStudents);
+    
+    // Update dashboard statistics based on filtered students
+    updateDashboardStats(filteredStudents);
+  }
+
+  // Update dashboard statistics based on filtered students
+  function updateDashboardStats(students) {
+    // Calculate statistics
+    const totalStudents = students.length;
+    const checkedIn = students.filter(student => student.device_checked_in).length;
+    const notCheckedIn = totalStudents - checkedIn;
+    const completionRate = totalStudents > 0 ? (checkedIn / totalStudents * 100).toFixed(1) : '0.0';
+    
+    // Update statistics in dashboard
+    document.getElementById('stat-total-students').textContent = totalStudents;
+    document.getElementById('stat-checked-in').textContent = checkedIn;
+    document.getElementById('stat-not-checked-in').textContent = notCheckedIn;
+    document.getElementById('stat-completion-rate').textContent = `${completionRate}%`;
+    
+    // Update the labels to indicate they're based on filtered students
+    const filterDescription = getFilterDescription();
+    document.getElementById('stat-total-label').textContent = filterDescription;
+    document.getElementById('stat-checked-label').textContent = filterDescription;
+    document.getElementById('stat-pending-label').textContent = filterDescription;
+    document.getElementById('stat-rate-label').textContent = filterDescription;
+  }
+  
+  // Get a description of the current filter state
+  function getFilterDescription() {
+    const selectedGrades = Array.from(document.querySelectorAll('.grade-filter:checked'))
+      .map(checkbox => checkbox.value);
+    
+    const statusFilter = document.getElementById('statusFilter').value;
+    const searchTerm = document.getElementById('searchInput').value.trim();
+    
+    let description = 'All students';
+    
+    // Add grade filter description
+    if (selectedGrades.length > 0) {
+      if (selectedGrades.length === document.querySelectorAll('.grade-filter').length) {
+        description = 'All grades';
+      } else {
+        description = `Grade${selectedGrades.length > 1 ? 's' : ''} ${selectedGrades.join(', ')}`;
+      }
+    }
+    
+    // Add status filter description
+    if (statusFilter === 'checked_in') {
+      description += ' - Checked in only';
+    } else if (statusFilter === 'not_checked_in') {
+      description += ' - Pending only';
+    }
+    
+    // Add search description
+    if (searchTerm) {
+      description += ` - Search: "${searchTerm}"`;
+    }
+    
+    // If filter is applied, indicate that the stats are filtered
+    if (selectedGrades.length > 0 || statusFilter !== 'all' || searchTerm) {
+      description += ' (filtered)';
+    }
+    
+    return description;
   }
 
   // Render student table with filtered data
@@ -927,13 +1032,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (selectedRadio) {
       // Check in with selected RT device
-      const deviceIndex = parseInt(selectedRadio.dataset.index);
-      const selectedDevice = rtDevices[deviceIndex];
-      
-      checkInStudentDevice(currentStudentId, selectedDevice);
-    } else {
-      // Check in without device info
-      checkInStudentDevice(currentStudentId);
     }
   });
   
