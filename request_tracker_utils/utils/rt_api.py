@@ -24,6 +24,7 @@ __all__ = [
     'search_assets',
     'find_asset_by_name',
     'update_asset_custom_field',
+    'update_user_custom_field',
     'get_assets_by_owner',
     'fetch_user_data',
     'create_ticket'
@@ -656,6 +657,38 @@ def update_asset_custom_field(asset_id, field_name, field_value, config=None):
         if config is None:  # Only log if using current_app
             current_app.logger.error(f"Error updating asset {asset_id} custom field: {e}")
         raise Exception(f"Failed to update asset custom field in RT: {e}")
+
+def update_user_custom_field(user_id, field_name, field_value, config=None):
+    """
+    Update a custom field value for a user in RT.
+    
+    Args:
+        user_id (str): The numeric ID or username of the user to update
+        field_name (str): The name of the custom field to update
+        field_value (str): The new value for the custom field
+        config (dict, optional): Configuration dictionary, defaults to current_app.config
+        
+    Returns:
+        dict: The response from the API
+        
+    Raises:
+        Exception: If there's an error updating the user custom field
+    """
+    data = {
+        "CustomFields": [
+            {
+                "name": field_name,
+                "values": [field_value]
+            }
+        ]
+    }
+    
+    try:
+        return rt_api_request("PUT", f"/user/{user_id}", data=data, config=config)
+    except requests.exceptions.RequestException as e:
+        if config is None:  # Only log if using current_app
+            current_app.logger.error(f"Error updating user {user_id} custom field: {e}")
+        raise Exception(f"Failed to update user custom field in RT: {e}")
 
 def get_assets_by_owner(owner, exclude_id=None, config=None):
     """
