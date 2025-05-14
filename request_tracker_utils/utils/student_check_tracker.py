@@ -125,7 +125,7 @@ class StudentDeviceTracker:
             if count == 0:
                 # Table is empty, check if we have JSON data to migrate
                 json_data = self._load_tracker_data()
-                if json_data and "students" in json_data and json_data["students"]:
+                if (json_data and "students" in json_data and json_data["students"]):
                     logger.info("Migrating student data from JSON to SQLite")
                     
                     for student_id, student_data in json_data["students"].items():
@@ -397,13 +397,14 @@ class StudentDeviceTracker:
             if 'conn' in locals():
                 conn.close()
     
-    def mark_device_checked_in(self, student_id, asset_data=None):
+    def mark_device_checked_in(self, student_id, asset_data=None, is_auto_checkin=False):
         """
         Mark a student's device as checked in
         
         Args:
             student_id (str): Student ID or username
             asset_data (dict): Asset data from RT
+            is_auto_checkin (bool): Whether this is an automatic check-in (no device)
             
         Returns:
             bool: Success status
@@ -452,8 +453,32 @@ class StudentDeviceTracker:
                         datetime.datetime.now().isoformat()
                     )
                 )
+            elif is_auto_checkin:
+                # For auto check-ins, add minimal device info to indicate it was auto-checked
+                cursor.execute(
+                    """
+                    INSERT INTO device_info (
+                        student_id, asset_id, asset_tag, device_type,
+                        serial_number, check_in_timestamp
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        student_id,
+                        "",  # No asset ID
+                        "AUTO",  # Mark as auto-checked
+                        "No Device in RT",
+                        "",
+                        datetime.datetime.now().isoformat()
+                    )
+                )
             
             conn.commit()
+            
+            if is_auto_checkin:
+                logger.info(f"Auto-marked student {student_id} as checked in (no device in RT)")
+            else:
+                logger.info(f"Marked device checked in for student {student_id}")
+                
             return True
             
         except Exception as e:

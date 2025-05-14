@@ -525,3 +525,84 @@ def filter_students():
             "error": "Failed to filter students",
             "details": str(e)
         }), 500
+
+@bp.route('/api/students/check-rt-assignments', methods=['POST'])
+def check_rt_assignments():
+    """
+    Check all students in RT to see if they have devices assigned to them.
+    If a student has no devices in RT, mark them as 'Checked In'.
+    """
+    try:
+        tracker = StudentDeviceTracker()
+        students = tracker.get_all_students()
+        
+        # Track students who were updated
+        updated_count = 0
+        
+        # Process each student who has an RT user ID and is not already checked in
+        for student in students:
+            # Skip students who are already checked in
+            if student.get('device_checked_in'):
+                continue
+                
+            # Skip students without an RT user ID
+            if not student.get('rt_user_id'):
+                continue
+                
+            try:
+                # Get student's RT devices
+                rt_user_id = student.get('rt_user_id')
+                
+                # Use numeric ID directly if it's a number, otherwise try to fetch user to get numeric ID
+                if rt_user_id.isdigit():
+                    numeric_id = rt_user_id
+                    rt_devices = get_assets_by_owner(numeric_id)
+                else:
+                    # For usernames, try to fetch the user first to get numeric ID
+                    try:
+                        from ..utils.rt_api import fetch_user_data
+                        user_data = fetch_user_data(rt_user_id)
+                        
+                        # Extract numeric ID from hyperlinks
+                        numeric_id = None
+                        hyperlinks = user_data.get('_hyperlinks', [])
+                        for link in hyperlinks:
+                            if link.get('ref') == 'self' and link.get('type') == 'user':
+                                numeric_id = str(link.get('id'))
+                                logger.info(f"Found numeric user ID: {numeric_id} for username: {rt_user_id}")
+                                break
+                        
+                        if numeric_id:
+                            # Use numeric ID to fetch assets
+                            rt_devices = get_assets_by_owner(numeric_id)
+                        else:
+                            # Fallback to username if numeric ID not found
+                            rt_devices = get_assets_by_owner(rt_user_id)
+                    except Exception as user_err:
+                        logger.error(f"Error fetching user data for {rt_user_id}: {user_err}")
+                        # Fallback to username
+                        rt_devices = get_assets_by_owner(rt_user_id)
+                
+                # If student has no devices in RT, mark them as checked in
+                if not rt_devices:
+                    logger.info(f"Student {student.get('id')} has no devices in RT - marking as checked in")
+                    if tracker.mark_device_checked_in(student.get('id'), None, is_auto_checkin=True):
+                        updated_count += 1
+                        
+            except Exception as e:
+                logger.warning(f"Error processing RT devices for student {student.get('id')}: {e}")
+                continue
+        
+        return jsonify({
+            "success": True,
+            "updated": updated_count,
+            "message": f"Updated {updated_count} students with no devices in RT"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error checking RT assignments: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "error": "Failed to check RT assignments",
+            "details": str(e)
+        }), 500
