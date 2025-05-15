@@ -784,6 +784,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 <i class="bi bi-box-arrow-up"></i>
               </button>`
             }
+            ${!student.device_checked_in ? 
+              `<button class="btn btn-outline-secondary manual-check-in" title="Manual Check In">
+                <i class="bi bi-person-check"></i> Manual Check In
+              </button>` : ''
+            }
+            ${(student.device_checked_in && student.device_info && student.device_info.asset_tag === 'MANUAL' && student.device_info.device_type === 'No Device') ?
+              `<button class="btn btn-outline-danger undo-manual-check-in" title="Undo Manual Check-In">
+                <i class="bi bi-arrow-counterclockwise"></i> Undo Manual Check-In
+              </button>` : ''
+            }
           </div>
         </td>
       `;
@@ -806,6 +816,70 @@ document.addEventListener('DOMContentLoaded', function() {
           if (confirm(`Are you sure you want to mark ${student.first_name} ${student.last_name}'s device as not checked in?`)) {
             checkOutStudentDevice(student.id);
           }
+        });
+      }
+
+      const manualCheckInBtn = row.querySelector('.manual-check-in');
+      if (manualCheckInBtn) {
+        manualCheckInBtn.addEventListener('click', function() {
+          const row = this.closest('tr');
+          const studentId = row.getAttribute('data-student-id') || currentStudentId;
+          fetch(`/api/students/${studentId}/check-in`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ manual: true })
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              showToast('successToast', 'Student checked in manually');
+              loadStudents();
+            } else {
+              showToast('errorToast', data.error || 'Failed to check in student');
+            }
+          });
+        });
+      }
+
+      const undoManualCheckInBtn = row.querySelector('.undo-manual-check-in');
+      if (undoManualCheckInBtn) {
+        undoManualCheckInBtn.addEventListener('click', function() {
+          const row = this.closest('tr');
+          const studentId = row.getAttribute('data-student-id') || currentStudentId;
+          fetch(`/api/students/${studentId}/undo-manual-check-in`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              showToast('successToast', 'Manual check-in undone');
+              loadStudents();
+            } else {
+              showToast('errorToast', data.error || 'Failed to undo manual check-in');
+            }
+          });
+        });
+      }
+
+      // Undo manual check-in
+      const undoManualBtn = row.querySelector('.undo-manual-check-in');
+      if (undoManualBtn) {
+        undoManualBtn.addEventListener('click', function() {
+          const studentId = row.getAttribute('data-student-id') || currentStudentId;
+          fetch(`/api/students/${studentId}/undo-manual-checkin`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              showToast('successToast', 'Manual check-in has been undone');
+              loadStudents();
+            } else {
+              showToast('errorToast', data.error || 'Failed to undo manual check-in');
+            }
+          });
         });
       }
       

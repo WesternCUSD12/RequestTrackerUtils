@@ -256,14 +256,14 @@ def delete_student(student_id):
 
 @bp.route('/api/students/<student_id>/check-in', methods=['POST'])
 def check_in_student_device(student_id):
-    """API endpoint to mark a student's device as checked in"""
+    """API endpoint to mark a student's device as checked in (device or manual)"""
     try:
-        data = request.json
+        data = request.json or {}
         asset_data = data.get('asset_data')
-        
+        is_manual = data.get('manual', False)
         tracker = StudentDeviceTracker()
-        
-        if tracker.mark_device_checked_in(student_id, asset_data):
+        # If manual is set or no asset_data, treat as manual/auto check-in
+        if tracker.mark_device_checked_in(student_id, asset_data, is_auto_checkin=is_manual or not asset_data):
             return jsonify({
                 "success": True,
                 "message": f"Device for student {student_id} marked as checked in"
@@ -272,7 +272,6 @@ def check_in_student_device(student_id):
             return jsonify({
                 "error": f"Failed to mark device as checked in for student {student_id}"
             }), 500
-            
     except Exception as e:
         logger.error(f"Error marking device checked in for student {student_id}: {e}")
         return jsonify({
@@ -604,5 +603,26 @@ def check_rt_assignments():
         logger.error(traceback.format_exc())
         return jsonify({
             "error": "Failed to check RT assignments",
+            "details": str(e)
+        }), 500
+
+@bp.route('/api/students/<student_id>/undo-manual-checkin', methods=['POST'])
+def undo_manual_checkin(student_id):
+    """API endpoint to undo a manual check-in for a student"""
+    try:
+        tracker = StudentDeviceTracker()
+        if tracker.undo_manual_check_in(student_id):
+            return jsonify({
+                "success": True,
+                "message": f"Manual check-in for student {student_id} has been undone."
+            })
+        else:
+            return jsonify({
+                "error": f"No manual check-in found for student {student_id}."
+            }), 400
+    except Exception as e:
+        logger.error(f"Error undoing manual check-in for student {student_id}: {e}")
+        return jsonify({
+            "error": "Failed to undo manual check-in",
             "details": str(e)
         }), 500

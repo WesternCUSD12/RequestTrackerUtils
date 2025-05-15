@@ -187,6 +187,15 @@
                           {% if not student.device_checked_in %}disabled{% endif %}>
                     <i class="bi bi-box-arrow-up"></i>
                   </button>
+                  <button class="btn btn-outline-secondary manual-check-in" data-student-id="{{ student.id }}" 
+                          {% if student.device_checked_in %}disabled{% endif %}>
+                    <i class="bi bi-person-check"></i> Manual Check In
+                  </button>
+                  {% if student.device_checked_in and student.device_info and student.device_info.asset_tag == 'MANUAL' and student.device_info.device_type == 'No Device' %}
+                  <button class="btn btn-outline-danger undo-manual-check-in" data-student-id="{{ student.id }}">
+                    <i class="bi bi-arrow-counterclockwise"></i> Undo Manual Check-In
+                  </button>
+                  {% endif %}
                   <button class="btn btn-outline-danger delete-student" data-student-id="{{ student.id }}">
                     <i class="bi bi-trash"></i>
                   </button>
@@ -971,6 +980,47 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .catch(error => {
       showToast('errorToast', error.message);
+    });
+  });
+  
+  // Manual check-in
+  document.querySelectorAll('.manual-check-in').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const studentId = this.dataset.studentId;
+      fetch(`/api/students/${studentId}/check-in`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manual: true })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showToast('successToast', 'Student checked in manually');
+          window.location.reload();
+        } else {
+          showToast('errorToast', data.error || 'Failed to check in student');
+        }
+      });
+    });
+  });
+  
+  // Undo manual check-in
+  document.querySelectorAll('.undo-manual-check-in').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const studentId = this.dataset.studentId;
+      fetch(`/api/students/${studentId}/undo-manual-checkin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showToast('successToast', 'Manual check-in has been undone');
+          window.location.reload();
+        } else {
+          showToast('errorToast', data.error || 'Failed to undo manual check-in');
+        }
+      });
     });
   });
   
