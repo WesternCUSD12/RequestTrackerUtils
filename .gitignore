@@ -246,3 +246,5 @@ asset_tag_sequence.txt
 .stfolder/
 .stignore
 syncthing-folder*
+
+google-credentials.json
