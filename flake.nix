@@ -167,6 +167,10 @@
               qrcode
               python-barcode
               python-dotenv
+              google-api-python-client
+              google-auth
+              google-auth-httplib2
+              google-auth-oauthlib
             ];
             # Use pyproject.toml for building
             # format = "pyproject";
