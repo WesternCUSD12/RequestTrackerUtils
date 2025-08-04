@@ -184,10 +184,13 @@ class StudentDeviceTracker:
             if 'conn' in locals():
                 conn.close()
                 
-    def get_all_students(self):
+    def get_all_students(self, limit=None):
         """
         Get all students in the tracking system
         
+        Args:
+            limit (int, optional): Maximum number of students to return
+            
         Returns:
             list: List of student data dictionaries
         """
@@ -195,14 +198,24 @@ class StudentDeviceTracker:
             conn = get_db_connection()
             cursor = conn.cursor()
             
-            # Get all students
-            cursor.execute("""
-                SELECT s.*, 
-                       d.asset_id, d.asset_tag, d.device_type, 
-                       d.serial_number, d.check_in_timestamp 
-                FROM students s
-                LEFT JOIN device_info d ON s.id = d.student_id
-            """)
+            # Get all students (with optional limit)
+            if limit:
+                cursor.execute("""
+                    SELECT s.*, 
+                           d.asset_id, d.asset_tag, d.device_type, 
+                           d.serial_number, d.check_in_timestamp 
+                    FROM students s
+                    LEFT JOIN device_info d ON s.id = d.student_id
+                    LIMIT ?
+                """, (limit,))
+            else:
+                cursor.execute("""
+                    SELECT s.*, 
+                           d.asset_id, d.asset_tag, d.device_type, 
+                           d.serial_number, d.check_in_timestamp 
+                    FROM students s
+                    LEFT JOIN device_info d ON s.id = d.student_id
+                """)
             
             rows = cursor.fetchall()
             students = []
@@ -403,9 +416,9 @@ class StudentDeviceTracker:
         
         Args:
             student_id (str): Student ID or username
-            asset_data (dict): Asset data from RT
-            is_auto_checkin (bool): Whether this is an automatic check-in (no device)
-            
+            asset_data (dict): Asset data from RT (optional)
+            is_auto_checkin (bool): Whether this is a manual/auto check-in (no device)
+        
         Returns:
             bool: Success status
         """
@@ -454,7 +467,7 @@ class StudentDeviceTracker:
                     )
                 )
             elif is_auto_checkin:
-                # For auto check-ins, add minimal device info to indicate it was auto-checked
+                # For manual/auto check-ins, add minimal device info
                 cursor.execute(
                     """
                     INSERT INTO device_info (
@@ -465,8 +478,8 @@ class StudentDeviceTracker:
                     (
                         student_id,
                         "",  # No asset ID
-                        "AUTO",  # Mark as auto-checked
-                        "No Device in RT",
+                        "MANUAL",  # Mark as manual check-in
+                        "No Device",
                         "",
                         datetime.datetime.now().isoformat()
                     )
@@ -475,7 +488,7 @@ class StudentDeviceTracker:
             conn.commit()
             
             if is_auto_checkin:
-                logger.info(f"Auto-marked student {student_id} as checked in (no device in RT)")
+                logger.info(f"Manually marked student {student_id} as checked in (no device)")
             else:
                 logger.info(f"Marked device checked in for student {student_id}")
                 
@@ -820,6 +833,48 @@ class StudentDeviceTracker:
                 "not_checked_in": 0,
                 "completion_rate": 0
             }
+        finally:
+            if 'conn' in locals():
+                conn.close()
+    
+    def undo_manual_check_in(self, student_id):
+        """
+        Undo a manual check-in for a student (removes manual device_info and resets check-in status)
+        Args:
+            student_id (str): Student ID or username
+        Returns:
+            bool: Success status
+        """
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # Only undo if the device_info is a manual check-in (asset_tag == 'MANUAL' and device_type == 'No Device')
+            cursor.execute(
+                "SELECT * FROM device_info WHERE student_id = ? AND asset_tag = ? AND device_type = ?",
+                (student_id, 'MANUAL', 'No Device')
+            )
+            manual_row = cursor.fetchone()
+            if not manual_row:
+                return False  # Not a manual check-in, do nothing
+
+            # Remove the manual device_info row
+            cursor.execute(
+                "DELETE FROM device_info WHERE student_id = ? AND asset_tag = ? AND device_type = ?",
+                (student_id, 'MANUAL', 'No Device')
+            )
+            # Set student as not checked in
+            cursor.execute(
+                "UPDATE students SET device_checked_in = 0, check_in_date = NULL WHERE id = ?",
+                (student_id,)
+            )
+            conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error undoing manual check-in for student {student_id}: {e}")
+            if 'conn' in locals():
+                conn.rollback()
+            return False
         finally:
             if 'conn' in locals():
                 conn.close()
