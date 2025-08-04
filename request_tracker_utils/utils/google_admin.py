@@ -33,7 +33,18 @@ __all__ = [
 
 # Constants
 # Use 'my_customer' as recommended by Google for customerId
+# Note: Battery health data is not currently available in Google Admin SDK API
+# Monitor API updates at: https://developers.google.com/admin-sdk/directory/reference/rest/v1/chromeosdevices
 CHROMEOS_DEVICE_FIELDS = 'deviceId,serialNumber,macAddress,status,lastSync,model,orgUnitPath,annotatedUser,annotatedAssetId'
+
+# Extended fields for hardware monitoring (when using FULL projection)
+# These fields contain CPU, RAM, and disk data but NO battery information
+CHROMEOS_HARDWARE_FIELDS = (
+    'deviceId,serialNumber,macAddress,status,lastSync,model,orgUnitPath,'
+    'annotatedUser,annotatedAssetId,cpuStatusReports,systemRamTotal,'
+    'systemRamFreeReports,diskVolumeReports,cpuInfo,fanInfo,backlightInfo'
+)
+
 DEFAULT_SCOPES = ['https://www.googleapis.com/auth/admin.directory.device.chromeos']
 
 def get_google_admin_service(config: Optional[Dict] = None, scopes: Optional[List[str]] = None):
@@ -502,6 +513,29 @@ def find_chromebook_by_serial_number(
     if devices:
         return devices[0]
     return None
+
+def check_for_battery_fields(device_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Check if battery-related fields are present in device data.
+    This function can help detect when Google adds battery health to the API.
+    
+    Args:
+        device_data: ChromeOS device data from API
+        
+    Returns:
+        Dict containing any battery-related fields found
+    """
+    battery_keywords = ['battery', 'power', 'charge', 'energy']
+    battery_fields = {}
+    
+    for key, value in device_data.items():
+        if any(keyword in key.lower() for keyword in battery_keywords):
+            battery_fields[key] = value
+    
+    if battery_fields:
+        logger.info(f"Battery-related fields detected: {list(battery_fields.keys())}")
+    
+    return battery_fields
 
 if __name__ == "__main__":
     # Simple test if run as a script
