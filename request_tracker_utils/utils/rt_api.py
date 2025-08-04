@@ -27,7 +27,8 @@ __all__ = [
     'update_user_custom_field',
     'get_assets_by_owner',
     'fetch_user_data',
-    'create_ticket'
+    'create_ticket',
+    'update_asset_owner'
 ]
 
 # Configure logging
@@ -808,6 +809,67 @@ def fetch_user_data(user_id, config=None):
         if config is None:
             current_app.logger.error(f"Error processing user data for ID {user_id}: {str(e)}")
         raise Exception(f"Error processing user data: {str(e)}")
+
+def update_asset_owner(asset_id, owner_id, config=None):
+    """
+    Update the owner of an asset in RT.
+    
+    Args:
+        asset_id (str): The ID of the asset to update
+        owner_id (str): The ID of the new owner (or 'Nobody' to remove ownership)
+        config (dict, optional): Configuration dictionary, defaults to current_app.config
+        
+    Returns:
+        dict: Result with success status and message
+        
+    Raises:
+        Exception: If there's an error updating the asset owner
+    """
+    if not asset_id:
+        raise ValueError("Asset ID is missing or invalid")
+    
+    try:
+        logger.info(f"Updating owner of asset {asset_id} to {owner_id}")
+        
+        if config is None:
+            from flask import current_app
+            config = current_app.config
+        
+        # Prepare the data for the API request
+        data = {
+            "Owner": owner_id
+        }
+        
+        # Make the API request to update the asset
+        response = rt_api_request("PUT", f"/asset/{asset_id}", data=data, config=config)
+        
+        # Check if the update was successful
+        if response and 'id' in response:
+            logger.info(f"Successfully updated owner of asset {asset_id} to {owner_id}")
+            return {
+                "success": True,
+                "asset_id": asset_id,
+                "owner_id": owner_id,
+                "message": f"Owner of asset {asset_id} updated to {owner_id}"
+            }
+        else:
+            logger.warning(f"Failed to update owner of asset {asset_id} to {owner_id}")
+            return {
+                "success": False,
+                "asset_id": asset_id,
+                "owner_id": owner_id,
+                "message": f"Failed to update owner of asset {asset_id} to {owner_id}"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error updating owner of asset {asset_id} to {owner_id}: {e}")
+        return {
+            "success": False,
+            "asset_id": asset_id,
+            "owner_id": owner_id,
+            "error": str(e),
+            "message": f"Error updating owner: {str(e)}"
+        }
 
 def create_ticket(subject, body, queue=None, requestor=None, status=None, owner=None, config=None):
     """
