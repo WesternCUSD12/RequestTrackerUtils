@@ -181,9 +181,6 @@
           <tbody id="studentTableBody">
             <!-- Student rows will be inserted here by JavaScript -->
           </tbody>
-          <tfoot id="studentTableFooter" class="border-top">
-            <!-- Footer content (like RT data loading button) will be inserted here -->
-          </tfoot>
         </table>
       </div>
       
@@ -263,9 +260,6 @@
           <button type="button" class="btn btn-warning" id="checkOutDeviceBtn" style="display: none;">
             <i class="bi bi-box-arrow-up"></i> Check Out Device
           </button>
-          <button type="button" class="btn btn-success" id="checkInAllDevicesBtn" style="display: none;">
-            <i class="bi bi-check-all"></i> Check In All Devices
-          </button>
         </div>
       </div>
     </div>
@@ -315,50 +309,6 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="button" class="btn btn-primary" id="saveStudentBtn">Save</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Create Ticket Modal -->
-  <div class="modal fade" id="createTicketModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Create RT Ticket</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <form id="createTicketForm">
-            <div class="mb-3">
-              <label for="ticketSubject" class="form-label">Subject</label>
-              <input type="text" class="form-control" id="ticketSubject" required>
-            </div>
-            <div class="mb-3">
-              <label for="ticketQueue" class="form-label">Queue</label>
-              <select class="form-select" id="ticketQueue">
-                <option value="General">General</option>
-                <option value="IT">IT</option>
-                <option value="Repairs">Repairs</option>
-              </select>
-            </div>
-            <div class="mb-3">
-              <label for="ticketContent" class="form-label">Description</label>
-              <textarea class="form-control" id="ticketContent" rows="5" required></textarea>
-            </div>
-            <!-- Hidden fields for device/student info -->
-            <input type="hidden" id="ticketDeviceId">
-            <input type="hidden" id="ticketDeviceName">
-            <input type="hidden" id="ticketStudentId">
-          </form>
-          <div id="ticketSuccessMessage" class="alert alert-success mt-3" style="display: none;">
-            <i class="bi bi-check-circle me-2"></i>
-            Ticket created successfully! <span id="ticketNumber"></span>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-primary" id="submitTicketBtn">Create Ticket</button>
         </div>
       </div>
     </div>
@@ -421,60 +371,11 @@
 
 {% block scripts %}
 <script>
-// Set the server API port from Flask config
-const API_PORT = {{ api_port }};
-
-// Log the port at start
-console.log('Student Devices: Using API_PORT:', API_PORT);
-
-// Helper function to build API URLs correctly based on environment
-function buildApiUrl(endpoint) {
-  // Ensure endpoint starts with a slash
-  if (!endpoint.startsWith('/')) {
-    endpoint = '/' + endpoint;
-  }
-  
-  const origin = window.location.origin;
-  const hostname = window.location.hostname;
-  const port = window.location.port;
-  
-  let url;
-  
-  if (port === '5000') {
-    url = `http://localhost:${API_PORT}${endpoint}`;
-    // console.log(`[buildApiUrl] Dev server detected (port=${port}), routing to API port ${API_PORT}: ${url}`);
-  } else {
-    url = `${origin}${endpoint}`;
-    // console.log(`[buildApiUrl] Production mode (port=${port}), using same origin: ${url}`);
-  }
-  
-  return url;
-}
-
-// Helper function to escape HTML special characters
-function escapeHtml(unsafe) {
-    if (typeof unsafe !== 'string') {
-        if (unsafe === null || typeof unsafe === 'undefined') return '';
-        try {
-            unsafe = String(unsafe);
-        } catch (e) {
-            return ''; // Or handle error appropriately
-        }
-    }
-    return unsafe
-         .replace(/&/g, "&amp;")
-         .replace(/</g, "&lt;")
-         .replace(/>/g, "&gt;")
-         .replace(/"/g, "&quot;")
-         .replace(/'/g, "&#039;");
-}
-
-
 document.addEventListener('DOMContentLoaded', function() {
   // Initialize variables
   let currentStudentId = null;
-  // let studentData = null; // studentData seems unused, replaced by allStudents
-  // let rtDevices = null; // rtDevices seems unused globally
+  let studentData = null;
+  let rtDevices = null;
   let allStudents = [];
   
   // Initialize Bootstrap components
@@ -483,7 +384,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const addStudentModal = new bootstrap.Modal(document.getElementById('addStudentModal'));
   const viewStudentModal = new bootstrap.Modal(document.getElementById('viewStudentModal'));
   const clearAllStudentsModal = new bootstrap.Modal(document.getElementById('clearAllStudentsModal'));
-  const createTicketModal = new bootstrap.Modal(document.getElementById('createTicketModal'));
   
   // DOM elements
   const loadingIndicator = document.getElementById('loadingIndicator');
@@ -491,7 +391,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const studentTableBody = document.getElementById('studentTableBody');
   const noResultsMessage = document.getElementById('noResultsMessage');
   const studentCount = document.getElementById('studentCount');
-  const studentTableFooter = document.getElementById('studentTableFooter');
   
   // Grade filter checkboxes
   const gradeCheckboxes = document.querySelectorAll('.grade-filter');
@@ -505,7 +404,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const searchInput = document.getElementById('searchInput');
   const clearSearchBtn = document.getElementById('clearSearch');
   
-  console.log('Starting to load student data...');
+  // Initial data load
   loadStudents();
   
   // Add event listeners for filter controls
@@ -514,488 +413,178 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   
   selectAllGradesBtn.addEventListener('click', function() {
-    gradeCheckboxes.forEach(checkbox => checkbox.checked = true);
+    gradeCheckboxes.forEach(checkbox => {
+      checkbox.checked = true;
+    });
     filterStudents();
   });
-
+  
   clearAllGradesBtn.addEventListener('click', function() {
-    gradeCheckboxes.forEach(checkbox => checkbox.checked = false);
+    gradeCheckboxes.forEach(checkbox => {
+      checkbox.checked = false;
+    });
     filterStudents();
   });
-
+  
   statusFilter.addEventListener('change', filterStudents);
+  
   searchInput.addEventListener('input', filterStudents);
-
+  
   clearSearchBtn.addEventListener('click', function() {
     searchInput.value = '';
     filterStudents();
   });
-
-  // Event listener for refresh button
+  
+  // Refresh button
   document.getElementById('refreshStudentsBtn').addEventListener('click', function() {
-    showToast('Refreshing student data...', 'info'); // Using a generic toast for info
     loadStudents();
   });
   
-  // Event listener for "Check RT Assignments" button
+  // Check RT Assignments button
   document.getElementById('checkRtAssignmentsBtn').addEventListener('click', function() {
-    showToast('Checking all RT assignments. This may take a moment.', 'info');
-    // Force re-check for all students, even if loaded.
-    allStudents.forEach(student => {
-        if (student.rt_user_id) {
-            student.rt_devices_loaded = false; 
-            student.rt_load_error = false;
-            // student.rt_devices_loading is handled by loadRTDevicesForVisibleStudents
+    if (confirm("This will check all students in RT to verify if they have devices assigned to them. Students without assigned devices will be marked as 'Checked In'. Continue?")) {
+      // Show loading spinner in the button
+      const button = this;
+      const originalText = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Checking...`;
+      
+      // Call the API endpoint
+      fetch('/api/students/check-rt-assignments', {
+        method: 'POST'
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showToast('successToast', `${data.updated} students marked as checked in because they have no devices in RT.`);
+          // Reload student data
+          loadStudents();
+        } else {
+          throw new Error(data.error || 'Failed to check RT assignments');
         }
-    });
-    loadRTDevicesForVisibleStudents();
+      })
+      .catch(error => {
+        showToast('errorToast', `Error: ${error.message}`);
+      })
+      .finally(() => {
+        // Restore button
+        button.disabled = false;
+        button.innerHTML = originalText;
+      });
+    }
   });
-
-  // Add Student Modal Logic
+  
+  // Add student form submission
   document.getElementById('saveStudentBtn').addEventListener('click', function() {
-    const studentId = document.getElementById('studentId').value;
-    const firstName = document.getElementById('firstName').value;
-    const lastName = document.getElementById('lastName').value;
-    const grade = document.getElementById('grade').value;
-    const rtUserId = document.getElementById('rtUserId').value;
-
-    if (!studentId || !firstName || !lastName || !grade) {
-      showErrorToast('Please fill in all required fields.');
+    const form = document.getElementById('addStudentForm');
+    if (!form.checkValidity()) {
+      form.reportValidity();
       return;
     }
-
-    const studentPayload = {
-      id: studentId,
-      first_name: firstName,
-      last_name: lastName,
-      grade: grade,
-      rt_user_id: rtUserId || null 
+    
+    const studentData = {
+      id: document.getElementById('studentId').value,
+      first_name: document.getElementById('firstName').value,
+      last_name: document.getElementById('lastName').value,
+      grade: document.getElementById('grade').value
     };
-
-    fetch(buildApiUrl('/students'), {
+    
+    // Add RT User ID if provided
+    const rtUserId = document.getElementById('rtUserId').value;
+    if (rtUserId) {
+      studentData.rt_user_id = rtUserId;
+    }
+    
+    fetch('/api/students', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(studentPayload)
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(studentData)
     })
-    .then(response => response.json().then(data => ({ ok: response.ok, data })))
-    .then(({ ok, data }) => {
-      if (ok) {
-        showSuccessToast(data.message || 'Student added successfully.');
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        showToast('successToast', 'Student added successfully');
         addStudentModal.hide();
-        loadStudents(); // Refresh list
+        
+        // Reload students to include the new one
+        loadStudents();
       } else {
-        showErrorToast(data.error || 'Failed to add student.');
+        throw new Error(data.error || 'Failed to add student');
       }
     })
     .catch(error => {
-      console.error('Error adding student:', error);
-      showErrorToast('An error occurred while adding the student.');
+      showToast('errorToast', error.message);
     });
   });
 
-  // Clear All Students Modal Logic
+  // Handle clear all students button
   document.getElementById('clearAllStudentsBtn').addEventListener('click', function() {
+    // Show confirmation modal
     document.getElementById('clearStudentCount').textContent = allStudents.length;
     clearAllStudentsModal.show();
   });
 
+  // Handle confirm clear all students button
   document.getElementById('confirmClearStudentsBtn').addEventListener('click', function() {
-    fetch(buildApiUrl('/students/all'), { method: 'DELETE' })
-    .then(response => response.json().then(data => ({ ok: response.ok, data })))
-    .then(({ ok, data }) => {
-      if (ok) {
-        showSuccessToast(data.message || 'All students cleared.');
-        clearAllStudentsModal.hide();
-        loadStudents(); // Refresh list
-      } else {
-        showErrorToast(data.error || 'Failed to clear students.');
-      }
-    })
-    .catch(error => {
-      console.error('Error clearing students:', error);
-      showErrorToast('An error occurred while clearing students.');
-    });
-  });
-  
-  // Create Ticket Modal Logic
-  document.getElementById('submitTicketBtn').addEventListener('click', function() {
-    const subject = document.getElementById('ticketSubject').value;
-    const queue = document.getElementById('ticketQueue').value;
-    const content = document.getElementById('ticketContent').value;
-    const deviceId = document.getElementById('ticketDeviceId').value;
-    const studentId = document.getElementById('ticketStudentId').value;
-
-    if (!subject || !content) {
-      showErrorToast('Subject and Description are required for the ticket.');
-      return;
-    }
-
-    const ticketPayload = {
-      subject: subject,
-      queue: queue,
-      content: content,
-      device_id: deviceId,
-      student_id: studentId 
-    };
+    // Disable button and show loading state
+    const button = this;
+    const originalText = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
     
-    console.log("Submitting ticket with payload:", ticketPayload);
-
-    fetch(buildApiUrl('/rt/tickets/create'), {
+    fetch('/api/students/clear-all', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ticketPayload)
+      headers: {
+        'Content-Type': 'application/json'
+      }
     })
-    .then(response => response.json().then(data => ({ ok: response.ok, data })))
-    .then(({ ok, data }) => {
-      if (ok && data.ticket_id) {
-        document.getElementById('ticketNumber').textContent = `Ticket #${data.ticket_id}`;
-        document.getElementById('ticketSuccessMessage').style.display = 'block';
-        // Optionally close modal after a delay or keep it open
-        setTimeout(() => {
-            createTicketModal.hide();
-            document.getElementById('ticketSuccessMessage').style.display = 'none'; // Reset for next time
-        }, 3000);
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        showToast('successToast', `Successfully cleared ${data.count} students from the database`);
+        clearAllStudentsModal.hide();
+        
+        // Reload students to update the list
+        loadStudents();
       } else {
-        showErrorToast(data.error || 'Failed to create ticket.');
-        console.error("Ticket creation error response:", data);
+        throw new Error(data.error || 'Failed to clear students');
       }
     })
     .catch(error => {
-      console.error('Error creating ticket:', error);
-      showErrorToast('An error occurred while creating the ticket.');
+      showToast('errorToast', error.message);
+    })
+    .finally(() => {
+      // Restore button state
+      button.disabled = false;
+      button.innerHTML = originalText;
     });
   });
 
-
+  // Load all students from API
   function loadStudents() {
+    // Show loading indicator
     loadingIndicator.style.display = 'block';
     studentTableContainer.style.display = 'none';
     noResultsMessage.style.display = 'none';
-    studentTableFooter.innerHTML = ''; // Clear footer, remove debug button if it was there
-
-    fetch(buildApiUrl('/students'))
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-      })
+    
+    fetch('/api/students')
+      .then(response => response.json())
       .then(data => {
-        allStudents = data.students.map(student => {
-          // Initialize device and RT device related properties
-          student.devices = student.devices || [];
-          if (student.rt_user_id) {
-            student.rt_devices_loaded = false;
-            student.rt_load_error = false;
-            student.rt_devices_loading = false;
-            student.rt_devices = student.rt_devices || [];
-          }
-          return student;
-        });
-        console.log('Students loaded:', allStudents.length);
-        renderStudentTable();
-        loadingIndicator.style.display = 'none';
-        if (allStudents.length > 0) {
-          studentTableContainer.style.display = 'block';
-        } else {
-          noResultsMessage.textContent = 'No students found in the system.';
-          noResultsMessage.style.display = 'block';
+        if (data.error) {
+          throw new Error(data.error);
         }
-        // Automatically load RT devices for visible students after a short delay
-        // This allows the main table to render first.
-        setTimeout(loadRTDevicesForVisibleStudents, 100); // Reduced delay
+        
+        allStudents = data.students;
+        
+        // Apply filters and render table
+        filterStudents();
       })
       .catch(error => {
-        console.error('Error loading students:', error);
+        showToast('errorToast', error.message);
         loadingIndicator.style.display = 'none';
-        studentTableContainer.style.display = 'none';
-        noResultsMessage.textContent = 'Error loading student data. Please try again.';
-        noResultsMessage.style.display = 'block';
-        showErrorToast('Failed to load student data.');
       });
-  }
-
-  function filterStudents() {
-    const selectedGrades = Array.from(gradeCheckboxes)
-      .filter(cb => cb.checked)
-      .map(cb => cb.value);
-    const status = statusFilter.value;
-    const searchTerm = searchInput.value.toLowerCase();
-
-    const filteredStudents = allStudents.filter(student => {
-      const gradeMatch = selectedGrades.length === 0 || selectedGrades.includes(student.grade.toString());
-      const statusMatch = status === 'all' || 
-                          (status === 'checked_in' && student.devices.some(d => d.status === 'Checked In')) ||
-                          (status === 'not_checked_in' && !student.devices.some(d => d.status === 'Checked In'));
-      const searchMatch = !searchTerm || 
-                          student.first_name.toLowerCase().includes(searchTerm) ||
-                          student.last_name.toLowerCase().includes(searchTerm) ||
-                          student.id.toString().toLowerCase().includes(searchTerm);
-      return gradeMatch && statusMatch && searchMatch;
-    });
-    
-    renderStudentTable(filteredStudents);
-    // After filtering, RT devices for newly visible students might need loading
-    // The current loadRTDevicesForVisibleStudents iterates allStudents and checks flags,
-    // so it should eventually pick them up if they weren't loaded.
-    // A more targeted approach could be to call loadRTDevicesForVisibleStudents(filteredStudents)
-    // but the current one is simpler and robust due to flag checks.
-  }
-
-  function generateRtDeviceInfoHtml(student) {
-    if (!student || !student.rt_user_id) {
-        return ''; 
-    }
-
-    if (student.rt_devices_loading) {
-        return `<div class="mt-1"><small class="text-muted"><span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span> Loading RT data...</small></div>`;
-    }
-
-    if (student.rt_devices_loaded) {
-        if (student.rt_load_error) {
-            // Consider adding a retry button here later if manual loading is implemented
-            return '<div class="mt-1"><small class="text-danger">Error loading RT data.</small></div>';
-        } else if (student.rt_devices && student.rt_devices.length > 0) {
-            let rtItems = student.rt_devices.map(device => {
-                const deviceName = escapeHtml(device.Name || 'Unknown Device');
-                const deviceId = escapeHtml(device.Id || 'N/A');
-                return `<li class="list-group-item d-flex justify-content-between align-items-center p-1">
-                          <small>${deviceName} (Asset: ${deviceId})</small>
-                          <button class="btn btn-sm btn-outline-secondary p-0 px-1 create-rt-ticket-btn-inline" 
-                                  data-device-id="${escapeHtml(device.Id)}" 
-                                  data-device-name="${escapeHtml(deviceName)}" 
-                                  data-student-id="${escapeHtml(student.id)}" 
-                                  title="Create RT Ticket for this device">
-                            <i class="bi bi-ticket-detailed"></i>
-                          </button>
-                        </li>`;
-            }).join('');
-            return `<div class="mt-1"><small class="text-muted">RT Devices:</small><ul class="list-group list-group-flush small">${rtItems}</ul></div>`;
-        } else {
-            return '<div class="mt-1"><small class="text-muted">No RT devices found.</small></div>';
-        }
-    } else {
-        // Not loaded yet, and not actively loading implies it's pending initial load.
-        return `<div class="mt-1"><small class="text-muted"><span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span> Loading RT data...</small></div>`;
-    }
-  }
-
-  function generateFullDeviceInfoCellHtml(student) {
-      let deviceInfoContent = '';
-      if (student.devices && student.devices.length > 0) {
-          deviceInfoContent = student.devices.map(device => {
-              const status = escapeHtml(device.status || 'Unknown');
-              const name = escapeHtml(device.name || 'Unnamed Device');
-              const serial = escapeHtml(device.serial_number || 'N/A');
-    // Get IDs of students currently visible in the table
-    const visibleRows = document.querySelectorAll('#studentTableBody tr');
-    if (visibleRows.length === 0) return;
-    
-    console.log(`Loading RT device data for ${visibleRows.length} visible students (one at a time)`);
-    
-    // Process each student one at a time
-    visibleRows.forEach(row => {
-      const studentId = row.getAttribute('data-student-id');
-      if (!studentId) return;
-      
-      // Skip if we already have the RT devices for this student
-      const student = allStudents.find(s => s.id === studentId);
-      if (student && student.rt_devices) return;
-      
-      // Set loading state for the RT device cell
-      const rtDevicesTd = row.querySelector('td:nth-child(6)'); // Adjust index if needed
-      if (rtDevicesTd) {
-        // Preserve existing device info and only add RT loading indicator
-        const deviceInfoContent = rtDevicesTd.innerHTML;
-        // Check if we already have a loading indicator
-        if (!deviceInfoContent.includes('Loading RT data')) {
-          // Keep only the first line of content (device info) and add loading indicator
-          const deviceInfo = deviceInfoContent.split('<div')[0];
-          rtDevicesTd.innerHTML = deviceInfo + '<div class="mt-1"><small class="text-muted"><span class="spinner-border spinner-border-sm text-secondary" role="status"></span> Loading RT data...</small></div>';
-        }
-      }
-      
-      // Fetch RT device data for this student individually
-      fetch(buildApiUrl(`/api/students/${studentId}/rt-devices`), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`Server returned status: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(data => {
-        console.log(`Received RT devices for student ${studentId}:`, data);
-        
-        // Update allStudents array with RT device data
-        const student = allStudents.find(s => s.id === studentId);
-        if (student) {
-          // Make sure we have a proper devices array even if the response format is unexpected
-          student.rt_devices = (data && data.devices) ? data.devices : [];
-          
-          // Log the devices to help diagnose issues
-          console.log(`Student ${studentId} now has ${student.rt_devices.length} RT devices in memory`);
-          
-          // Find the row to update the UI
-          const row = document.querySelector(`#studentTableBody tr[data-student-id="${studentId}"]`);
-          if (row) {
-            // Get the device cell 
-            const rtDevicesTd = row.querySelector('td:nth-child(6)');
-            if (rtDevicesTd) {
-              // Get the current device info (before RT data)
-              let deviceInfoContent = '';
-              if (student.device_checked_in) {
-                const deviceInfo = student.device_info || {};
-                deviceInfoContent = `${deviceInfo.asset_tag || ''} ${deviceInfo.device_type ? '(' + deviceInfo.device_type + ')' : ''}`;
-              } else {
-                deviceInfoContent = '-';
-              }
-              
-              // Build RT device info display
-              let rtInfo = '';
-              if (student.rt_devices.length > 0) {
-                const rtDeviceCount = student.rt_devices.length;
-                const firstDevice = student.rt_devices[0];
-                let deviceType = 'Unknown';
-                
-                // Extract device type from CustomFields if available
-                if (firstDevice.CustomFields) {
-                  const typeField = firstDevice.CustomFields.find(field => field.name === 'Type' && field.values && field.values.length > 0);
-                  if (typeField) {
-                    deviceType = typeField.values[0];
-                  }
-                }
-                
-                // Create RT device info display
-                rtInfo = `<div class="mt-1"><small class="text-muted">RT: ${firstDevice.Name || 'Unknown'} (${deviceType})${
-                  rtDeviceCount > 1 ? ` +${rtDeviceCount - 1} more` : ''
-                }</small></div>`;
-              } else {
-                rtInfo = '<div class="mt-1"><small class="text-muted">No RT devices found</small></div>';
-              }
-              
-              // Replace the entire cell content with updated information
-              rtDevicesTd.innerHTML = deviceInfoContent + rtInfo;
-            }
-          }
-        }
-        
-        // Log update complete for debugging
-        console.log(`RT device info update completed for student ${studentId}`);
-      })
-      .catch(error => {
-        console.error(`Error loading RT devices for student ${studentId}:`, error);
-        // Update the UI to show error state for this student row
-        const row = document.querySelector(`#studentTableBody tr[data-student-id="${studentId}"]`);
-        
-        // Update the student object to prevent repeated attempts to load data
-        const student = allStudents.find(s => s.id === studentId);
-        if (student) {
-          student.rt_devices = []; // Set to empty array to indicate we've tried loading
-          
-          // Update the visible table row
-          if (row) {
-            // Find the device info cell
-            const rtDevicesTd = row.querySelector('td:nth-child(6)'); // 6th column is Device Info
-            if (rtDevicesTd) {
-              // Only replace the RT part of the cell content
-              const deviceInfoContent = rtDevicesTd.innerHTML;
-              if (deviceInfoContent.includes('Loading')) {
-                const updatedContent = deviceInfoContent.replace(
-                  /<div class="mt-1">.*?Loading RT data\.\.\..*?<\/div>/,
-                  '<div class="mt-1"><small class="text-danger">Error loading RT data</small></div>'
-                );
-                rtDevicesTd.innerHTML = updatedContent;
-              }
-            }
-          }
-        }
-      });
-    });
-  }
-  
-  // Update the RT device info in the table
-  function updateRTDeviceInfo(studentIds = null) {
-    // If specific student IDs are provided, only update those rows
-    let rows;
-    if (studentIds) {
-      rows = Array.from(document.querySelectorAll('#studentTableBody tr')).filter(row => 
-        studentIds.includes(row.getAttribute('data-student-id'))
-      );
-    } else {
-      rows = document.querySelectorAll('#studentTableBody tr');
-    }
-    
-    rows.forEach(row => {
-      const studentId = row.getAttribute('data-student-id');
-      const student = allStudents.find(s => s.id === studentId);
-      if (!student) return;
-      
-      const rtDevicesTd = row.querySelector('td:nth-child(6)'); // Adjust index based on table structure
-      if (!rtDevicesTd) return;
-      
-      // Get the current device info content (non-RT part)
-      let deviceInfoContent = '';
-      if (student.device_checked_in && rtDevicesTd.childNodes.length > 0) {
-        // Get the text content of the first line (non-RT part)
-        const firstLine = rtDevicesTd.childNodes[0].textContent;
-        if (firstLine && firstLine.trim() !== '') {
-          deviceInfoContent = firstLine;
-        }
-      }
-      
-      // Prepare the new cell content
-      let cellContent = '';
-      
-      // Add device info if available and student is checked in
-      if (student.device_checked_in) {
-        const deviceInfo = student.device_info || {};
-        cellContent = `${deviceInfo.asset_tag || ''} ${deviceInfo.device_type ? '(' + deviceInfo.device_type + ')' : ''}`;
-      } else {
-        cellContent = '-';
-      }
-      
-      // Add RT device info based on data availability
-      if (student.rt_devices && Array.isArray(student.rt_devices)) {
-        if (student.rt_devices.length > 0) {
-          const rtDeviceCount = student.rt_devices.length;
-          const firstDevice = student.rt_devices[0];
-          let deviceType = 'Unknown';
-          
-          // Extract device type from CustomFields if available
-          if (firstDevice.CustomFields) {
-            const typeField = firstDevice.CustomFields.find(field => field.name === 'Type' && field.values && field.values.length > 0);
-            if (typeField) {
-              deviceType = typeField.values[0];
-            }
-          }
-          
-          // Add RT device info as a div after the main content
-          cellContent += `<div class="mt-1"><small class="text-muted">RT: ${firstDevice.Name || 'Unknown'} (${deviceType})${
-            rtDeviceCount > 1 ? ` +${rtDeviceCount - 1} more` : ''
-          }</small></div>`;
-        } else {
-          // No devices found, add info at the bottom
-          cellContent += '<div class="mt-1"><small class="text-muted">No RT devices found</small></div>';
-        }
-      } else if (Array.isArray(student.rt_devices)) {
-        // Empty array - no devices found
-        cellContent += '<div class="mt-1"><small class="text-muted">No RT devices found</small></div>';
-      } else if (student.rt_user_id) {
-        // RT user ID exists but devices not loaded yet
-        cellContent += '<div class="mt-1"><small class="text-muted">RT data not loaded</small></div>';
-      } else {
-        // No RT user ID assigned
-        cellContent += '<div class="mt-1"><small class="text-muted">No RT user ID</small></div>';
-      }
-      
-      // Update the cell content
-      rtDevicesTd.innerHTML = cellContent;
-    });
   }
 
   // Filter and display students based on selected filters
@@ -1046,38 +635,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update dashboard statistics based on filtered students
     updateDashboardStats(filteredStudents);
-    
-    // After filtering and rendering, determine if RT device data should be loaded
-    const MAX_AUTO_LOAD_COUNT = 50; // Maximum number of students for auto-loading RT data
-    
-    if (filteredStudents.length > 0 && filteredStudents.length <= MAX_AUTO_LOAD_COUNT) {
-      // Only auto-load RT data if there's a reasonable number of students to display
-      loadRTDevicesForVisibleStudents();
-    } else if (filteredStudents.length > MAX_AUTO_LOAD_COUNT) {
-      // Add a button to manually load RT data for larger result sets
-      const loadRtButton = document.createElement('button');
-      loadRtButton.className = 'btn btn-sm btn-outline-secondary mt-2';
-      loadRtButton.innerHTML = '<i class="bi bi-download"></i> Load RT Device Data';
-      loadRtButton.onclick = function() {
-        this.disabled = true;
-        this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Loading...';
-        loadRTDevicesForVisibleStudents();
-        // Remove the button after loading starts
-        setTimeout(() => this.remove(), 2000);
-      };
-      
-      // Add the button to the table container
-      const tableFooter = document.querySelector('#studentTableFooter');
-      if (tableFooter) {
-        // Check if button already exists
-        const existingButton = tableFooter.querySelector('button');
-        if (existingButton) {
-          tableFooter.replaceChild(loadRtButton, existingButton);
-        } else {
-          tableFooter.appendChild(loadRtButton);
-        }
-      }
-    }
   }
 
   // Update dashboard statistics based on filtered students
@@ -1194,12 +751,6 @@ document.addEventListener('DOMContentLoaded', function() {
           rtDeviceInfo += ` +${rtDeviceCount - 1} more`;
         }
         rtDeviceInfo += '</small></div>';
-      } else if (student.rt_user_id) {
-        // If student has RT user ID but devices aren't loaded yet, show loading indicator
-        rtDeviceInfo = `<div class="mt-1"><small class="text-muted"><span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span> Loading RT data...</small></div>`;
-      } else {
-        // No RT user ID available
-        rtDeviceInfo = `<div class="mt-1"><small class="text-muted">No RT user ID</small></div>`;
       }
       
       // Create row content
@@ -1273,7 +824,7 @@ document.addEventListener('DOMContentLoaded', function() {
         manualCheckInBtn.addEventListener('click', function() {
           const row = this.closest('tr');
           const studentId = row.getAttribute('data-student-id') || currentStudentId;
-          fetch(buildApiUrl(`/api/students/${studentId}/check-in`), {
+          fetch(`/api/students/${studentId}/check-in`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ manual: true })
@@ -1295,7 +846,7 @@ document.addEventListener('DOMContentLoaded', function() {
         undoManualCheckInBtn.addEventListener('click', function() {
           const row = this.closest('tr');
           const studentId = row.getAttribute('data-student-id') || currentStudentId;
-          fetch(buildApiUrl(`/api/students/${studentId}/undo-manual-check-in`), {
+          fetch(`/api/students/${studentId}/undo-manual-check-in`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
           })
@@ -1316,7 +867,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (undoManualBtn) {
         undoManualBtn.addEventListener('click', function() {
           const studentId = row.getAttribute('data-student-id') || currentStudentId;
-          fetch(buildApiUrl(`/api/students/${studentId}/undo-manual-checkin`), {
+          fetch(`/api/students/${studentId}/undo-manual-checkin`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
           })
@@ -1341,28 +892,14 @@ document.addEventListener('DOMContentLoaded', function() {
   function showStudentDetails(studentId, action = null) {
     currentStudentId = studentId;
     
-    // Find student in our local data first for faster display
-    const localStudentData = allStudents.find(s => s.id === studentId);
-    
-    // Fetch fresh data from server (which will include RT device data)
-    fetch(buildApiUrl(`/api/students/${studentId}`))
+    fetch(`/api/students/${studentId}`)
       .then(response => response.json())
       .then(data => {
         if (data.error) {
           throw new Error(data.error);
         }
         
-        // If we already displayed data from local cache, update it
-        if (studentData && studentData.id === studentId) {
-          // Update the RT devices if they've been loaded
-          if (data.rt_devices && data.rt_devices.length) {
-            studentData.rt_devices = data.rt_devices;
-            updateRTDevicesInModal();
-          }
-        } else {
-          // First time displaying this student
-          studentData = data;
-        }
+        studentData = data;
         
         // Update modal title
         document.getElementById('viewStudentTitle').textContent = 
@@ -1422,14 +959,6 @@ document.addEventListener('DOMContentLoaded', function() {
         checkInBtn.style.display = data.device_checked_in ? 'none' : 'block';
         checkOutBtn.style.display = data.device_checked_in ? 'block' : 'none';
         
-        // Show/hide Check In All Devices button
-        const checkInAllBtn = document.getElementById('checkInAllDevicesBtn');
-        if (rtDevices && rtDevices.length > 0 && !data.device_checked_in) {
-          checkInAllBtn.style.display = 'block';
-        } else {
-          checkInAllBtn.style.display = 'none';
-        }
-
         // Show the modal
         viewStudentModal.show();
         
@@ -1482,34 +1011,84 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
     document.getElementById('rtDevicesContainer').style.display = 'block';
     
-    // First, check if we already have RT device data in studentData
-    if (studentData.rt_devices && studentData.rt_devices.length > 0) {
-      updateRTDevicesInModal();
-      return;
-    }
-    
-    // Otherwise, fetch devices from RT
-    fetch(buildApiUrl(`/api/rt-lookup/student/${currentStudentId}?rt_user_id=${studentData.rt_user_id}`))
+    // Fetch devices from RT
+    fetch(`/api/rt-lookup/student/${currentStudentId}?rt_user_id=${studentData.rt_user_id}`)
       .then(response => response.json())
       .then(data => {
         if (data.error) {
           throw new Error(data.error);
         }
         
-        // Store the RT devices in studentData for future use
-        studentData.rt_devices = data.assets;
-        
-        // Also update the student in allStudents array
-        const localStudent = allStudents.find(s => s.id === currentStudentId);
-        if (localStudent) {
-          localStudent.rt_devices = data.assets;
-        }
-        
-        // Store rtDevices for the current student to access elsewhere
         rtDevices = data.assets;
         
-        // Update the RT devices display using our helper function
-        updateRTDevicesInModal();
+        if (rtDevices && rtDevices.length > 0) {
+          // Create a table of devices
+          let devicesHtml = `
+            <table class="table table-sm table-striped">
+              <thead>
+                <tr>
+                  <th>Select</th>
+                  <th>Asset Tag</th>
+                  <th>Type</th>
+                  <th>Serial Number</th>
+                </tr>
+              </thead>
+              <tbody>
+          `;
+          
+          rtDevices.forEach((device, index) => {
+            // Extract device details
+            const assetTag = device.Name || 'N/A';
+            
+            // Extract device type and serial from CustomFields
+            let deviceType = 'N/A';
+            let serialNumber = 'N/A';
+            
+            if (device.CustomFields) {
+              device.CustomFields.forEach(field => {
+                if (field.name === 'Type' && field.values && field.values.length > 0) {
+                  deviceType = field.values[0];
+                }
+                if (field.name === 'Serial Number' && field.values && field.values.length > 0) {
+                  serialNumber = field.values[0];
+                }
+              });
+            }
+            
+            devicesHtml += `
+              <tr>
+                <td>
+                  <input type="radio" name="rtDeviceSelect" id="rtDevice${index}" value="${device.id}" data-index="${index}">
+                </td>
+                <td>${assetTag}</td>
+                <td>${deviceType}</td>
+                <td>${serialNumber}</td>
+              </tr>
+            `;
+          });
+          
+          devicesHtml += `
+              </tbody>
+            </table>
+          `;
+          
+          document.getElementById('rtDevicesList').innerHTML = devicesHtml;
+          
+          // Add event listeners for radio buttons
+          document.querySelectorAll('input[name="rtDeviceSelect"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+              // Enable the check-in button when a device is selected
+              document.getElementById('checkInDeviceBtn').disabled = false;
+            });
+          });
+        } else {
+          document.getElementById('rtDevicesList').innerHTML = `
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle me-2"></i>
+              No devices assigned to this student in RT.
+            </div>
+          `;
+        }
       })
       .catch(error => {
         document.getElementById('rtDevicesList').innerHTML = `
@@ -1524,15 +1103,12 @@ document.addEventListener('DOMContentLoaded', function() {
   // Check in selected device
   document.getElementById('checkInDeviceBtn').addEventListener('click', function() {
     const selectedRadio = document.querySelector('input[name="rtDeviceSelect"]:checked');
-    if (!selectedRadio) {
-      showToast('errorToast', 'Please select a device to check in');
-      return;
+    
+    if (selectedRadio) {
+      // Check in with selected RT device
     }
-    const deviceIndex = parseInt(selectedRadio.dataset.index);
-    const selectedDevice = rtDevices[deviceIndex];
-    checkInStudentDevice(currentStudentId, selectedDevice);
   });
-
+  
   // Check out device button
   document.getElementById('checkOutDeviceBtn').addEventListener('click', function() {
     if (confirm(`Are you sure you want to mark this device as not checked in?`)) {
@@ -1544,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function checkInStudentDevice(studentId, deviceData = null) {
     const requestBody = deviceData ? { asset_data: deviceData } : {};
     
-    fetch(buildApiUrl(`/api/students/${studentId}/check-in`), {
+    fetch(`/api/students/${studentId}/check-in`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1570,7 +1146,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Check out student device
   function checkOutStudentDevice(studentId) {
-    fetch(buildApiUrl(`/api/students/${studentId}/check-out`), {
+    fetch(`/api/students/${studentId}/check-out`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1601,263 +1177,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const bsToast = bootstrap.Toast.getInstance(toast) || new bootstrap.Toast(toast);
     bsToast.show();
-  }
-
-  // Check In All Devices button
-  document.getElementById('checkInAllDevicesBtn').addEventListener('click', function() {
-    if (!rtDevices || rtDevices.length === 0) {
-      showToast('errorToast', 'No RT devices found to check in.');
-      return;
-    }
-    const button = this;
-    const originalText = button.innerHTML;
-    button.disabled = true;
-    button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Checking...';
-    fetch(buildApiUrl(`/api/students/${currentStudentId}/check-in-all`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.success) {
-        showToast('successToast', data.message || 'All devices checked in successfully');
-        viewStudentModal.hide();
-        loadStudents();
-      } else {
-        throw new Error(data.error || 'Failed to check in all devices');
-      }
-    })
-    .catch(error => {
-      showToast('errorToast', error.message);
-    })
-    .finally(() => {
-      button.disabled = false;
-      button.innerHTML = originalText;
-    });
-  });
-
-  // Handle creating tickets for devices
-  document.addEventListener('click', function(event) {
-    if (event.target.classList.contains('create-ticket-btn') || 
-        event.target.closest('.create-ticket-btn')) {
-      
-      const button = event.target.classList.contains('create-ticket-btn') ? 
-                     event.target : 
-                     event.target.closest('.create-ticket-btn');
-      
-      // Get data attributes
-      const deviceId = button.dataset.deviceId;
-      const deviceName = button.dataset.deviceName;
-      const deviceType = button.dataset.deviceType;
-      const deviceSerial = button.dataset.deviceSerial;
-      
-      // Set data in modal
-      document.getElementById('ticketDeviceId').value = deviceId;
-      document.getElementById('ticketDeviceName').value = deviceName;
-      document.getElementById('ticketStudentId').value = currentStudentId;
-      
-      // Set default subject with device info
-      document.getElementById('ticketSubject').value = `Issue with ${deviceName} (${deviceType})`;
-      
-      // Populate ticket content with device details
-      document.getElementById('ticketContent').value = 
-        `Device Details:\n` +
-        `- Asset Tag: ${deviceName}\n` +
-        `- Type: ${deviceType}\n` +
-        `- Serial Number: ${deviceSerial}\n` +
-        `- Student: ${studentData.first_name} ${studentData.last_name} (${studentData.id})\n\n` +
-        `Issue Description:\n`;
-      
-      // Hide any previous success message
-      document.getElementById('ticketSuccessMessage').style.display = 'none';
-      
-      // Show modal
-      createTicketModal.show();
-    }
-  });
-  
-  // Handle ticket submission
-  document.getElementById('submitTicketBtn').addEventListener('click', function() {
-    const form = document.getElementById('createTicketForm');
-    if (!form.checkValidity()) {
-      form.reportValidity();
-      return;
-    }
-    
-    const ticketData = {
-      subject: document.getElementById('ticketSubject').value,
-      body: document.getElementById('ticketContent').value,
-      queue: document.getElementById('ticketQueue').value,
-      device_id: document.getElementById('ticketDeviceId').value,
-      device_name: document.getElementById('ticketDeviceName').value,
-      student_id: document.getElementById('ticketStudentId').value
-    };
-    
-    // Disable button while processing
-    const button = this;
-    const originalText = button.innerHTML;
-    button.disabled = true;
-    button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creating...';
-    
-    // Call API to create ticket
-    fetch('/api/tickets/create', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(ticketData)
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.success) {
-        // Show success message
-        document.getElementById('ticketNumber').textContent = `Ticket #${data.ticket_id} created`;
-        document.getElementById('ticketSuccessMessage').style.display = 'block';
-        
-        // Clear form for next use
-        document.getElementById('ticketSubject').value = '';
-        document.getElementById('ticketContent').value = '';
-        
-        // Show toast
-        showToast('successToast', `Ticket #${data.ticket_id} created successfully`);
-      } else {
-        throw new Error(data.error || 'Failed to create ticket');
-      }
-    })
-    .catch(error => {
-      showToast('errorToast', error.message);
-    })
-    .finally(() => {
-      // Re-enable button
-      button.disabled = false;
-      button.innerHTML = originalText;
-    });
-  });
-
-  // Update RT devices in student modal
-  function updateRTDevicesInModal() {
-    if (!studentData || !studentData.rt_devices) return;
-    
-    const rtDevicesList = document.getElementById('rtDevicesList');
-    if (!rtDevicesList) return;
-    
-    // If there are no RT devices, show a message
-    if (!studentData.rt_devices.length) {
-      rtDevicesList.innerHTML = '<div class="alert alert-info">No devices assigned in RT</div>';
-      document.getElementById('rtDevicesContainer').style.display = 'block';
-      return;
-    }
-    
-    // Enable Check In All Devices button if applicable
-    const checkInAllBtn = document.getElementById('checkInAllDevicesBtn');
-    if (checkInAllBtn && !studentData.device_checked_in) {
-      checkInAllBtn.style.display = 'block';
-    }
-    
-    // Build the table display with device data
-    let devicesHtml = `
-      <table class="table table-sm table-striped">
-        <thead>
-          <tr>
-            <th>Select</th>
-            <th>Asset Tag</th>
-            <th>Type</th>
-            <th>Serial Number</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
-    
-    // Process each device
-    studentData.rt_devices.forEach((device, index) => {
-      // Extract device details
-      const assetTag = device.Name || 'N/A';
-      
-      // Extract device type and serial from CustomFields
-      let deviceType = 'Unknown';
-      let serialNumber = 'N/A';
-      
-      if (device.CustomFields) {
-        const typeField = device.CustomFields.find(field => field.name === 'Type' && field.values && field.values.length > 0);
-        if (typeField) {
-          deviceType = typeField.values[0];
-        }
-        
-        const serialField = device.CustomFields.find(field => field.name === 'Serial Number' && field.values && field.values.length > 0);
-        if (serialField) {
-          serialNumber = serialField.values[0];
-        }
-      }
-      
-      devicesHtml += `
-        <tr>
-          <td>
-            <input type="radio" name="rtDeviceSelect" id="rtDevice${index}" value="${device.id}" data-index="${index}">
-          </td>
-          <td>${assetTag}</td>
-          <td>${deviceType}</td>
-          <td>${serialNumber}</td>
-          <td>
-            <button type="button" class="btn btn-sm btn-outline-primary create-ticket-btn" 
-              data-device-id="${device.id}" 
-              data-device-name="${assetTag}" 
-              data-device-type="${deviceType}"
-              data-device-serial="${serialNumber}">
-              <i class="bi bi-ticket-perforated"></i> Create Ticket
-            </button>
-          </td>
-        </tr>
-      `;
-    });
-    
-    devicesHtml += `
-      </tbody>
-    </table>
-    `;
-    rtDevicesList.innerHTML = devicesHtml;
-    document.getElementById('rtDevicesContainer').style.display = 'block';
-    
-    // Add event listeners for radio buttons
-    document.querySelectorAll('input[name="rtDeviceSelect"]').forEach(radio => {
-      radio.addEventListener('change', function() {
-        // Enable the check-in button when a device is selected
-        document.getElementById('checkInDeviceBtn').disabled = false;
-      });
-    });
-    
-    // Add event listeners to Create Ticket buttons
-    rtDevicesList.querySelectorAll('.create-ticket-btn').forEach(button => {
-      button.addEventListener('click', function() {
-        // Set up ticket data
-        document.getElementById('ticketDeviceId').value = this.getAttribute('data-device-id');
-        document.getElementById('ticketDeviceName').value = this.getAttribute('data-device-name');
-        
-        // Create a dynamic subject based on device info
-        const deviceName = this.getAttribute('data-device-name');
-        const deviceType = this.getAttribute('data-device-type');
-        document.getElementById('ticketSubject').value = `Issue with ${deviceName} (${deviceType})`;
-        
-        // Set ticket description with device info
-        const serialNumber = this.getAttribute('data-device-serial');
-        let ticketContent = `Device: ${deviceName}\nType: ${deviceType}`;
-        if (serialNumber) {
-          ticketContent += `\nSerial Number: ${serialNumber}`;
-        }
-        ticketContent += '\n\nDescription of issue:\n';
-        document.getElementById('ticketContent').value = ticketContent;
-        
-        // Store student ID
-        document.getElementById('ticketStudentId').value = currentStudentId;
-        
-        // Hide previous success message
-        document.getElementById('ticketSuccessMessage').style.display = 'none';
-        
-        // Show the modal
-        viewStudentModal.hide();
-        createTicketModal.show();
-      });
-    });
   }
 });
 </script>

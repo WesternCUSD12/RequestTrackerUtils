@@ -514,12 +514,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     throw new Error(updateResult.error || 'Failed to update asset');
                 }
                 
-                // Show success message with student integration info
-                let successMessage = `Device ${assetName} has been checked in successfully.`;
-                if (updateResult.studentUpdated && updateResult.studentInfo) {
-                    successMessage += ` Student ${updateResult.studentInfo.name} has also been marked as checked in.`;
-                }
-                successAlert.textContent = successMessage;
+                // Show success message
+                successAlert.textContent = `Device ${assetName} has been checked in successfully.`;
                 successAlert.style.display = 'block';
                 
                 // Disable the form controls for this device
@@ -530,11 +526,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!deviceCard.querySelector('.alert-success')) {
                     const successIndicator = document.createElement('div');
                     successIndicator.className = 'alert alert-success mt-2 mb-0';
-                    let indicatorText = 'Processed: Owner removed';
-                    if (updateResult.studentUpdated && updateResult.studentInfo) {
-                        indicatorText += ` | Student ${updateResult.studentInfo.name} checked in`;
-                    }
-                    successIndicator.textContent = indicatorText;
+                    successIndicator.textContent = 'Processed: Owner removed';
                     deviceCard.appendChild(successIndicator);
                 }
                 
@@ -654,11 +646,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!deviceCard.querySelector('.alert-success')) {
                         const successIndicator = document.createElement('div');
                         successIndicator.className = 'alert alert-success mt-2 mb-0';
-                        let indicatorText = 'Processed: Owner removed';
-                        if (updateResult.studentUpdated && updateResult.studentInfo) {
-                            indicatorText += ` | Student ${updateResult.studentInfo.name} checked in`;
-                        }
-                        successIndicator.textContent = indicatorText;
+                        successIndicator.textContent = 'Processed: Owner removed';
                         deviceCard.appendChild(successIndicator);
                     }
                 }
