@@ -295,10 +295,44 @@ def update_asset():
         else:
             owner_info = {'id': None, 'display_name': 'None'}
         
+        # Initialize student tracking variables
+        student_updated = False
+        student_info = None
+        
         # Update the asset owner to "Nobody" if requested
         if set_owner_to_nobody:
             try:
                 logger.info(f"Setting owner to Nobody for asset {asset_id}")
+                
+                # STUDENT DEVICE INTEGRATION: Check if this device belongs to a student
+                # and mark them as checked in before updating the RT asset
+                try:
+                    from ..utils.student_check_tracker import StudentDeviceTracker
+                    tracker = StudentDeviceTracker()
+                    
+                    # Look up student by asset ID
+                    student = tracker.get_student_from_asset(asset_id)
+                    if student:
+                        logger.info(f"Found student {student.get('name', student.get('id'))} for asset {asset_id}")
+                        student_info = {
+                            'id': student['id'],
+                            'name': student.get('name', student['id'])
+                        }
+                        
+                        # Mark the student as checked in with the current asset data
+                        if tracker.mark_device_checked_in(student['id'], current_asset):
+                            logger.info(f"Successfully marked student {student['id']} as checked in via device check-in")
+                            student_updated = True
+                        else:
+                            logger.warning(f"Failed to mark student {student['id']} as checked in")
+                    else:
+                        logger.info(f"No student found for asset {asset_id} - proceeding with device check-in only")
+                        
+                except Exception as student_error:
+                    # Log the error but don't fail the device check-in process
+                    logger.error(f"Error during student device integration: {student_error}")
+                    logger.error(traceback.format_exc())
+                
                 # Per RT API - "Nobody" is the username for empty/unassigned owners
                 update_data = {
                     "Owner": "Nobody"
@@ -408,7 +442,9 @@ def update_asset():
             "assetId": asset_id,
             "ownerUpdated": set_owner_to_nobody,
             "ticketCreated": ticket_id is not None,
-            "ticketId": ticket_id
+            "ticketId": ticket_id,
+            "studentUpdated": student_updated,
+            "studentInfo": student_info
         })
         
     except Exception as e:
