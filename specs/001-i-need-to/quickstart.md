@@ -616,6 +616,85 @@ After implementing basic functionality, consider:
 - Check file permissions on `asset_tag_sequence.txt`
 - Verify AssetTagManager initialization
 
+## Implementation Deviations
+
+The following deviations from the original design were made during implementation for improved user experience:
+
+### Label Printing (User Story 2)
+
+**Original Design**: Use hidden iframe with window.print() to trigger browser print dialog
+
+**Actual Implementation**: Use `window.open()` to open label in new tab/window
+
+**Rationale**:
+- Better UX: Users can preview label before printing
+- More reliable: Avoids iframe sandboxing issues in modern browsers
+- Easier troubleshooting: Label URL visible in browser tab
+
+**Code Location**: `request_tracker_utils/static/js/asset_batch.js` - `printLabel()` function
+
+### Clear All Functionality (User Story 3)
+
+**Original Design**: POST endpoint `/assets/batch/clear-form` for server-side clearing
+
+**Actual Implementation**: Client-side only clearing via `sessionStorage.removeItem()`
+
+**Rationale**:
+- Simpler architecture: No server round-trip needed
+- Better performance: Instant clearing
+- Sufficient for use case: sessionStorage is browser-local
+
+**Code Location**: `request_tracker_utils/static/js/asset_batch.js` - `clearAll()` function
+
+### TEST Mode Feature
+
+**Additional Feature**: Added TEST mode toggle to switch between W12 and TEST prefixes
+
+**Implementation**:
+- Separate sequence files for each prefix (`asset_tag_sequence_test.txt`, `asset_tag_sequence_w12.txt`)
+- Toggle switch in asset creation form
+- Independent sequence counters
+- Admin page enhancements for managing both sequences
+
+**Code Locations**:
+- `request_tracker_utils/routes/tag_routes.py` - `AssetTagManager` accepts `prefix` parameter
+- `request_tracker_utils/templates/asset_create.html` - TEST mode toggle switch
+- `request_tracker_utils/static/js/asset_batch.js` - Prefix parameter in API calls
+- `request_tracker_utils/templates/asset_tag_admin.html` - Dual sequence management UI
+
+### Asset Links in Success Messages
+
+**Additional Feature**: Added clickable links to created assets in success messages
+
+**Implementation**:
+- Success message includes link to RT asset display page
+- Opens in new tab with external link icon
+- Provides quick access to verify created asset
+
+**Code Location**: `request_tracker_utils/static/js/asset_batch.js` - `showSuccess()` function
+
+### Breadcrumb Navigation
+
+**Additional Feature**: Added breadcrumb navigation to asset creation form
+
+**Implementation**:
+- Standard Bootstrap breadcrumb component
+- Links back to home page
+- Consistent with other pages in application
+
+**Code Location**: `request_tracker_utils/templates/asset_create.html`
+
+### Home Page Integration
+
+**Additional Feature**: Added batch asset creation link to home page
+
+**Implementation**:
+- Prominent link at top of Web Interfaces section
+- Descriptive subtitle
+- Plus-circle icon for visual consistency
+
+**Code Location**: `request_tracker_utils/templates/index.html`
+
 ## Support
 
 For issues or questions, refer to:
