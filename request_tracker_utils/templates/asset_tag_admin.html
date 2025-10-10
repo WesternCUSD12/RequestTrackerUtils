@@ -6,7 +6,12 @@
 <div class="container py-4">
   <div class="row mb-4">
     <div class="col-12">
-      <h1 class="mb-3">Asset Tag Administration</h1>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="mb-0">Asset Tag Administration</h1>
+        <a href="{{ url_for('asset_routes.asset_form') }}" class="btn btn-primary">
+          <i class="bi bi-plus-circle"></i> Create New Asset
+        </a>
+      </div>
       <p class="lead">View and modify the current asset tag sequence.</p>
       <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
@@ -17,16 +22,17 @@
     </div>
   </div>
 
+  <!-- W12 Column -->
   <div class="row">
-    <!-- Current Sequence Info Card -->
     <div class="col-md-6 mb-4">
-      <div class="card h-100">
+      <!-- W12 Current Sequence Info Card -->
+      <div class="card mb-4">
         <div class="card-header bg-primary text-white">
-          <h2 class="h5 mb-0"><i class="bi bi-info-circle"></i> Current Sequence Info</h2>
+          <h2 class="h5 mb-0"><i class="bi bi-info-circle"></i> W12 Production Sequence</h2>
         </div>
         <div class="card-body">
-          <div class="mb-4">
-            <h3 class="h4 mb-3">Next Asset Tag</h3>
+          <div class="mb-3">
+            <h3 class="h4 mb-3">Next W12 Asset Tag</h3>
             <div class="py-3 px-4 bg-light rounded d-flex align-items-center justify-content-between">
               <span class="h2 mb-0" id="current-tag">{{ next_tag }}</span>
               <div>
@@ -42,37 +48,93 @@
             </div>
           </div>
 
-          <div class="alert alert-info" role="alert">
+          <div class="alert alert-info mb-0" role="alert">
             <i class="bi bi-lightbulb"></i> The next asset created in RT will receive this tag when the webhook is configured.
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- Set New Sequence Card -->
-    <div class="col-md-6 mb-4">
-      <div class="card h-100">
+      
+      <!-- W12 Update Sequence Card -->
+      <div class="card">
         <div class="card-header bg-warning">
-          <h2 class="h5 mb-0"><i class="bi bi-pencil-square"></i> Update Sequence</h2>
+          <h2 class="h5 mb-0"><i class="bi bi-pencil-square"></i> Update W12 Sequence</h2>
         </div>
         <div class="card-body">
-          <form id="update-sequence-form">
+          <form id="update-w12-sequence-form">
             <div class="mb-3">
-              <label for="new-sequence" class="form-label">New Sequence Number</label>
-              <input type="number" class="form-control" id="new-sequence" min="0" required>
-              <div class="form-text">This will set the next asset tag to {{ prefix }}<span id="preview-sequence">####</span></div>
+              <label for="new-w12-sequence" class="form-label">New Sequence Number</label>
+              <input type="number" class="form-control" id="new-w12-sequence" min="0" required>
+              <div class="form-text">Next asset tag: W12-<span id="preview-w12-sequence">####</span></div>
             </div>
             
             <div class="alert alert-warning" role="alert">
-              <i class="bi bi-exclamation-triangle"></i> <strong>Warning:</strong> Changing the sequence number may cause duplicate tags if not used carefully.
+              <i class="bi bi-exclamation-triangle"></i> <strong>Warning:</strong> Changing sequence may cause duplicate tags.
             </div>
             
             <div class="d-grid">
-              <button type="submit" class="btn btn-warning">Update Sequence</button>
+              <button type="submit" class="btn btn-warning">Update W12 Sequence</button>
             </div>
           </form>
           
-          <div class="mt-3" id="update-result" style="display: none;"></div>
+          <div class="mt-3" id="update-w12-result" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- TEST Column -->
+    <div class="col-md-6 mb-4">
+      <!-- TEST Current Sequence Info Card -->
+      <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+          <h2 class="h5 mb-0"><i class="bi bi-info-circle"></i> TEST Sequence</h2>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <h3 class="h4 mb-3">Next TEST Asset Tag</h3>
+            <div class="py-3 px-4 bg-light rounded d-flex align-items-center justify-content-between">
+              <span class="h2 mb-0" id="current-test-tag">Loading...</span>
+              <div>
+                <button class="btn btn-outline-secondary btn-sm mb-1" id="refresh-test-btn" title="Refresh">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+              </div>
+            </div>
+            <div class="small text-muted mt-2">
+              <div><strong>Prefix:</strong> TEST-</div>
+              <div><strong>Current Sequence:</strong> <span id="test-tag-sequence">-</span></div>
+              <div><strong>Last Updated:</strong> <span id="test-last-updated">-</span></div>
+            </div>
+          </div>
+
+          <div class="alert alert-info mb-0" role="alert">
+            <i class="bi bi-flask"></i> TEST sequence for testing asset creation without affecting production numbers.
+          </div>
+        </div>
+      </div>
+      
+      <!-- TEST Update Sequence Card -->
+      <div class="card">
+        <div class="card-header bg-secondary text-white">
+          <h2 class="h5 mb-0"><i class="bi bi-pencil-square"></i> Update TEST Sequence</h2>
+        </div>
+        <div class="card-body">
+          <form id="update-test-sequence-form">
+            <div class="mb-3">
+              <label for="new-test-sequence" class="form-label">New Sequence Number</label>
+              <input type="number" class="form-control" id="new-test-sequence" min="0" required>
+              <div class="form-text">Next asset tag: TEST-<span id="preview-test-sequence">####</span></div>
+            </div>
+            
+            <div class="alert alert-warning" role="alert">
+              <i class="bi bi-exclamation-triangle"></i> <strong>Warning:</strong> Changing sequence may cause duplicate tags.
+            </div>
+            
+            <div class="d-grid">
+              <button type="submit" class="btn btn-secondary">Update TEST Sequence</button>
+            </div>
+          </form>
+          
+          <div class="mt-3" id="update-test-result" style="display: none;"></div>
         </div>
       </div>
     </div>
@@ -124,17 +186,46 @@
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    // Update preview of new sequence as user types
-    const newSequenceInput = document.getElementById('new-sequence');
-    const previewSequence = document.getElementById('preview-sequence');
     const zeroPad = (num, places) => String(num).padStart(places, '0');
     
-    newSequenceInput.addEventListener('input', function() {
+    // W12 Sequence Preview
+    const newW12SequenceInput = document.getElementById('new-w12-sequence');
+    const previewW12Sequence = document.getElementById('preview-w12-sequence');
+    
+    newW12SequenceInput.addEventListener('input', function() {
       const value = parseInt(this.value) || 0;
-      previewSequence.textContent = zeroPad(value, 4);
+      previewW12Sequence.textContent = zeroPad(value, 4);
     });
     
-    // Handle refresh button click
+    // TEST Sequence Preview
+    const newTestSequenceInput = document.getElementById('new-test-sequence');
+    const previewTestSequence = document.getElementById('preview-test-sequence');
+    
+    newTestSequenceInput.addEventListener('input', function() {
+      const value = parseInt(this.value) || 0;
+      previewTestSequence.textContent = zeroPad(value, 4);
+    });
+    
+    // Load TEST sequence on page load
+    function loadTestSequence() {
+      fetch('/next-asset-tag?prefix=TEST')
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('current-test-tag').textContent = data.next_asset_tag;
+          const sequence = data.next_asset_tag.replace(/^TEST-/, '');
+          document.getElementById('test-tag-sequence').textContent = sequence;
+          document.getElementById('test-last-updated').textContent = new Date().toLocaleString();
+        })
+        .catch(error => {
+          console.error('Error loading TEST sequence:', error);
+          document.getElementById('current-test-tag').textContent = 'Error loading';
+        });
+    }
+    
+    // Load TEST sequence on page load
+    loadTestSequence();
+    
+    // Handle W12 refresh button click
     document.getElementById('refresh-btn').addEventListener('click', function() {
       fetch('/next-asset-tag')
         .then(response => response.json())
@@ -149,12 +240,17 @@
         });
     });
     
-    // Handle form submission
-    document.getElementById('update-sequence-form').addEventListener('submit', function(e) {
+    // Handle TEST refresh button click
+    document.getElementById('refresh-test-btn').addEventListener('click', function() {
+      loadTestSequence();
+    });
+    
+    // Handle W12 form submission
+    document.getElementById('update-w12-sequence-form').addEventListener('submit', function(e) {
       e.preventDefault();
       
-      const newSequence = parseInt(newSequenceInput.value);
-      const updateResult = document.getElementById('update-result');
+      const newSequence = parseInt(newW12SequenceInput.value);
+      const updateResult = document.getElementById('update-w12-result');
       
       fetch('/reset-asset-tag', {
         method: 'POST',
@@ -162,7 +258,8 @@
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          start_number: newSequence
+          start_number: newSequence,
+          prefix: 'W12'
         })
       })
       .then(response => response.json())
@@ -170,22 +267,60 @@
         if (data.error) {
           updateResult.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> ${data.error}</div>`;
         } else {
-          updateResult.innerHTML = `<div class="alert alert-success"><i class="bi bi-check-circle"></i> ${data.message}</div>`;
-          document.getElementById('current-tag').textContent = data.new_start_tag;
-          document.getElementById('tag-sequence').textContent = newSequence;
-          document.getElementById('last-updated').textContent = new Date().toLocaleString();
-          newSequenceInput.value = '';
-          previewSequence.textContent = '####';
+          updateResult.innerHTML = `<div class="alert alert-success"><i class="bi bi-check-circle"></i> W12 sequence updated to ${newSequence}</div>`;
+          newW12SequenceInput.value = '';
+          previewW12Sequence.textContent = '####';
         }
         updateResult.style.display = 'block';
         
-        // Hide the result after 5 seconds
         setTimeout(() => {
           updateResult.style.display = 'none';
         }, 5000);
       })
       .catch(error => {
-        console.error('Error updating sequence:', error);
+        console.error('Error updating W12 sequence:', error);
+        updateResult.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> Failed to update sequence. Please try again.</div>`;
+        updateResult.style.display = 'block';
+      });
+    });
+    
+    // Handle TEST form submission
+    document.getElementById('update-test-sequence-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const newSequence = parseInt(newTestSequenceInput.value);
+      const updateResult = document.getElementById('update-test-result');
+      
+      fetch('/reset-asset-tag', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          start_number: newSequence,
+          prefix: 'TEST'
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          updateResult.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> ${data.error}</div>`;
+        } else {
+          updateResult.innerHTML = `<div class="alert alert-success"><i class="bi bi-check-circle"></i> TEST sequence updated to ${newSequence}</div>`;
+          newTestSequenceInput.value = '';
+          previewTestSequence.textContent = '####';
+          
+          // Refresh the TEST sequence display
+          loadTestSequence();
+        }
+        updateResult.style.display = 'block';
+        
+        setTimeout(() => {
+          updateResult.style.display = 'none';
+        }, 5000);
+      })
+      .catch(error => {
+        console.error('Error updating TEST sequence:', error);
         updateResult.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> Failed to update sequence. Please try again.</div>`;
         updateResult.style.display = 'block';
       });
