@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+
+{% block title %}Batch Asset Creation{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <h1>Batch Asset Creation</h1>
+  <p class="lead">Quickly create multiple assets with automatic tag assignment and label printing</p>
+
+  <div class="row">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">Asset Information</h5>
+        </div>
+        <div class="card-body">
+          <form id="assetForm">
+            <!-- Common fields (persisted) -->
+            <div class="mb-3">
+              <label for="catalog" class="form-label">Catalog *</label>
+              <select class="form-select" id="catalog" name="catalog" required>
+                <option value="">Loading...</option>
+              </select>
+              <small class="form-text text-muted">Select the RT catalog for these assets</small>
+            </div>
+
+            <div class="mb-3">
+              <label for="manufacturer" class="form-label">Manufacturer *</label>
+              <select class="form-select" id="manufacturer" name="manufacturer" required>
+                <option value="">Loading...</option>
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label for="model" class="form-label">Model *</label>
+              <input type="text" class="form-control" id="model" name="model" required />
+            </div>
+
+            <div class="mb-3">
+              <label for="category" class="form-label">Category</label>
+              <input type="text" class="form-control" id="category" name="category" />
+            </div>
+
+            <div class="mb-3">
+              <label for="funding_source" class="form-label">Funding Source</label>
+              <input type="text" class="form-control" id="funding_source" name="funding_source" />
+            </div>
+
+            <hr />
+
+            <!-- Unique fields (cleared after each) -->
+            <div class="mb-3">
+              <label for="serial_number" class="form-label">Serial Number * <small class="text-muted">(unique per device)</small></label>
+              <input type="text" class="form-control" id="serial_number" name="serial_number" required />
+              <div class="invalid-feedback">Serial number already exists</div>
+            </div>
+
+            <div class="mb-3">
+              <label for="internal_name" class="form-label">Internal Name <small class="text-muted">(auto-generated)</small></label>
+              <input type="text" class="form-control" id="internal_name" name="internal_name" readonly value="Loading..." />
+              <small class="form-text text-muted">This unique name will be assigned to the asset</small>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Create Asset
+              </button>
+              <button type="button" class="btn btn-outline-secondary" id="clearAllBtn">
+                <i class="bi bi-x-circle"></i> Clear All
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div id="successAlert" class="alert alert-success mt-3" style="display:none;">
+        <i class="bi bi-check-circle"></i> <span id="successMessage"></span>
+        <button type="button" id="retryPrintBtn" class="btn btn-sm btn-outline-success ms-2" style="display:none;">
+          <i class="bi bi-printer"></i> Retry Print
+        </button>
+      </div>
+
+      <div id="errorAlert" class="alert alert-danger mt-3" style="display:none;">
+        <i class="bi bi-exclamation-triangle"></i> <span id="errorMessage"></span>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header bg-secondary text-white">
+          <h5 class="mb-0">Next Asset Tag</h5>
+        </div>
+        <div class="card-body">
+          <div class="display-6" id="nextTag">W12-####</div>
+          <small class="text-muted">Auto-assigned on creation</small>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header">
+          <h6 class="mb-0">Tips</h6>
+        </div>
+        <div class="card-body">
+          <ul class="small mb-0">
+            <li>Common fields persist across entries</li>
+            <li>Serial number cleared after each asset</li>
+            <li>Labels print automatically</li>
+            <li>Use Tab key for quick navigation</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/asset_batch.js') }}"></script>
+{% endblock %}
