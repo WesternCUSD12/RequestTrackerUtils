@@ -1,5 +1,14 @@
 """
-Asset creation routes for batch asset entry feature.
+Asset creation routes for batch    try:
+        # Query RT for assets with this serial number
+        query = f'CF.{{Serial Number}} = "{serial_number}"'
+        encoded_query = urllib.parse.quote(query)
+        response = rt_api_request('GET', f'/assets?query={encoded_query}', config=config)  # type: ignore
+        
+        items: List[Dict[str, Any]] = response.get('items', [])  # type: ignore
+        if len(items) > 0:
+            existing_id: int = items[0].get('id')  # type: ignore
+            return (False, f'Serial number {serial_number} already exists (Asset #{existing_id})', existing_id)ry feature.
 
 This module provides endpoints for creating assets with automatic asset tag assignment,
 serial number validation, and asset catalog option retrieval from RT.
@@ -8,6 +17,7 @@ serial number validation, and asset catalog option retrieval from RT.
 from flask import Blueprint, render_template, request, jsonify, current_app
 import urllib.parse
 import time
+from typing import Dict, List, Tuple, Optional, Any
 from ..utils.rt_api import rt_api_request, sanitize_json
 from ..utils.name_generator import InternalNameGenerator
 from .tag_routes import AssetTagManager
@@ -16,12 +26,12 @@ bp = Blueprint('asset_routes', __name__, url_prefix='/assets')
 
 # Cache for catalog and manufacturer options
 # Format: {'data': [...], 'timestamp': time.time()}
-_catalog_cache = None
-_manufacturer_cache = None
+_catalog_cache: Optional[Dict[str, Any]] = None
+_manufacturer_cache: Optional[Dict[str, Any]] = None
 CACHE_TTL = 3600  # Cache for 1 hour (3600 seconds)
 
 
-def validate_serial_uniqueness(serial_number, config):
+def validate_serial_uniqueness(serial_number: str, config: Dict[str, Any]) -> Tuple[bool, Optional[str], Optional[int]]:
     """
     Validate that a serial number is unique across all assets in RT.
     

@@ -9,14 +9,14 @@ import csv
 import random
 import urllib.parse
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 from .rt_api import rt_api_request
 
 
 class InternalNameGenerator:
     """Generate unique adjective-animal combinations for asset internal names."""
     
-    def __init__(self, config, csv_path: Optional[str] = None):
+    def __init__(self, config, csv_path: Optional[Union[str, Path]] = None):
         """
         Initialize the name generator.
         
@@ -30,7 +30,7 @@ class InternalNameGenerator:
         if csv_path is None:
             csv_path = Path(__file__).parent.parent.parent / 'Adjective-Animal-List.csv'
         
-        self.csv_path = Path(csv_path)
+        self.csv_path = Path(csv_path) if isinstance(csv_path, str) else csv_path
         self.animals = []
         self.adjectives = []
         self._load_combinations()
