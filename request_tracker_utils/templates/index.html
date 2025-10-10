@@ -9,6 +9,10 @@
 <div class="mb-4">
     <h2>Web Interfaces</h2>
     <div class="list-group">
+        <a href="{{ url_for('asset_routes.asset_form') }}" class="list-group-item list-group-item-action">
+            <i class="bi bi-plus-circle"></i> Batch Asset Creation
+            <p class="text-muted small mb-0 mt-1">Create multiple assets quickly with auto-generated tags and names</p>
+        </a>
         <a href="{{ url_for('label_routes.label_home') }}" class="list-group-item list-group-item-action">
             <i class="bi bi-printer"></i> Label Printing
             <p class="text-muted small mb-0 mt-1">Generate and print asset labels one at a time</p>
