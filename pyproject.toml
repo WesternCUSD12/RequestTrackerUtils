@@ -29,3 +29,10 @@ request-tracker-utils = "request_tracker_utils:main"
 
 [tool.setuptools.packages.find]
 include = ["request_tracker_utils"]
+
+[tool.pyright]
+reportUnknownParameterType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportMissingTypeStubs = "none"
