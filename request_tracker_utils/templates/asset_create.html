@@ -3,7 +3,18 @@
 {% block title %}Batch Asset Creation{% endblock %}
 
 {% block content %}
-<div class="container py-4">
+<div class="container py-4" data-rt-url="{{ rt_url }}">
+  <div class="row mb-3">
+    <div class="col-12">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{{ url_for('home') }}">Home</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Batch Asset Creation</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+
   <h1>Batch Asset Creation</h1>
   <p class="lead">Quickly create multiple assets with automatic tag assignment and label printing</p>
 
@@ -62,8 +73,11 @@
             </div>
 
             <div class="d-flex gap-2">
-              <button type="submit" class="btn btn-primary">
-                <i class="bi bi-plus-circle"></i> Create Asset
+              <button type="submit" class="btn btn-primary" id="submitBtn">
+                <span id="submitBtnText"><i class="bi bi-plus-circle"></i> Create Asset</span>
+                <span id="submitBtnSpinner" class="spinner-border spinner-border-sm" style="display:none;" role="status">
+                  <span class="visually-hidden">Creating...</span>
+                </span>
               </button>
               <button type="button" class="btn btn-outline-secondary" id="clearAllBtn">
                 <i class="bi bi-x-circle"></i> Clear All
@@ -91,6 +105,12 @@
           <h5 class="mb-0">Next Asset Tag</h5>
         </div>
         <div class="card-body">
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="testModeToggle">
+            <label class="form-check-label" for="testModeToggle">
+              <strong>TEST Mode</strong>
+            </label>
+          </div>
           <div class="display-6" id="nextTag">W12-####</div>
           <small class="text-muted">Auto-assigned on creation</small>
         </div>

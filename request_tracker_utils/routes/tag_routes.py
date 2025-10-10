@@ -10,21 +10,30 @@ class AssetTagManager:
     """
     Manages asset tag sequence and logging operations.
     """
-    def __init__(self, config):
+    def __init__(self, config, prefix=None):
         """
         Initialize the AssetTagManager with configuration.
         
         Args:
             config: Application configuration dictionary
+            prefix: Optional prefix override (e.g., 'TEST', 'W12'). If not provided, uses config default.
         """
         self.config = config
         # Use absolute paths with the working directory
         working_dir = config.get("WORKING_DIR", "/var/lib/request-tracker-utils")
         # Ensure working directory exists
         os.makedirs(working_dir, exist_ok=True)
-        self.sequence_file = os.path.join(working_dir, "asset_tag_sequence.txt")
+        
+        # Support multiple prefixes with separate sequence files
+        if prefix:
+            self.prefix = f"{prefix}-"
+            # Use prefix-specific sequence file
+            self.sequence_file = os.path.join(working_dir, f"asset_tag_sequence_{prefix.lower()}.txt")
+        else:
+            self.prefix = config.get("PREFIX", "W12-")
+            self.sequence_file = os.path.join(working_dir, "asset_tag_sequence.txt")
+        
         self.log_file = os.path.join(working_dir, "asset_tag_confirmations.log")
-        self.prefix = config.get("PREFIX", "W12-")
     
     def get_current_sequence(self):
         """
@@ -162,8 +171,10 @@ class AssetTagManager:
 def next_asset_tag_route():
     """
     Returns the next asset tag based on the current sequence.
+    Accepts optional 'prefix' query parameter (e.g., ?prefix=TEST).
     """
-    manager = AssetTagManager(current_app.config)
+    prefix = request.args.get('prefix')
+    manager = AssetTagManager(current_app.config, prefix=prefix)
     next_tag = manager.get_next_tag()
     return jsonify({"next_asset_tag": next_tag})
 
@@ -274,18 +285,21 @@ def update_asset_name_route():
 def reset_asset_tag_route():
     """
     Resets the asset tag sequence to a specified starting number.
+    Accepts optional 'prefix' parameter to target specific sequence (W12, TEST, etc).
 
     Example usage with curl:
         curl -X POST -H "Content-Type: application/json" -d '{"start_number": 100}' http://localhost:8080/reset-asset-tag
+        curl -X POST -H "Content-Type: application/json" -d '{"start_number": 100, "prefix": "TEST"}' http://localhost:8080/reset-asset-tag
     """
     data = request.get_json()
     new_start_number = data.get("start_number", 0)
+    prefix = data.get("prefix")  # Optional prefix (W12, TEST, etc)
 
     # Validate that the new_start_number is an integer
     if not isinstance(new_start_number, int) or new_start_number < 0:
         return jsonify({"error": "Invalid start_number. It must be a non-negative integer."}), 400
 
-    manager = AssetTagManager(current_app.config)
+    manager = AssetTagManager(current_app.config, prefix=prefix)
     
     try:
         # Set the new sequence number
