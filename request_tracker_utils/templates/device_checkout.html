@@ -1,0 +1,636 @@
+{% extends 'base.html' %}
+
+{% block title %}Device Checkout - Assign Devices to Students{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <!-- Breadcrumb Navigation -->
+  <nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">Home</a></li>
+      <li class="breadcrumb-item"><a href="/devices">Devices</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Device Checkout</li>
+    </ol>
+  </nav>
+
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1 class="mb-3">Device Checkout</h1>
+      <p class="lead">Assign Chromebooks and chargers to students for the {{ current_year }} school year.</p>
+    </div>
+  </div>
+
+  <!-- Dashboard Cards -->
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="card bg-primary text-white h-100">
+        <div class="card-body">
+          <h5 class="card-title">Total Students</h5>
+          <h2 class="display-4" id="stat-total-students">{{ stats.total_students }}</h2>
+          <p class="card-text small" id="stat-total-label">All students</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <div class="card bg-info text-white h-100">
+        <div class="card-body">
+          <h5 class="card-title">Devices Assigned</h5>
+          <h2 class="display-4" id="stat-devices-assigned">0</h2>
+          <p class="card-text small">Today's checkouts</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <div class="card bg-warning text-dark h-100">
+        <div class="card-body">
+          <h5 class="card-title">Pending Assignments</h5>
+          <h2 class="display-4" id="stat-pending">{{ stats.not_checked_in }}</h2>
+          <p class="card-text small">Students without devices</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <div class="card bg-success text-white h-100">
+        <div class="card-body">
+          <h5 class="card-title">Completion Rate</h5>
+          <h2 class="display-4" id="stat-completion">{{ "%.0f"|format(stats.completion_rate) }}%</h2>
+          <p class="card-text small" id="stat-completion-label">All students</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Batch Actions Panel -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card border-success">
+        <div class="card-header bg-success text-white">
+          <h5 class="mb-0">
+            <i class="bi bi-box-seam"></i> Batch Device Checkout
+            <span class="badge bg-light text-success ms-2" id="selectedCount">0 selected</span>
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-8">
+              <p class="mb-2">Select students from the list below to assign devices. You can assign both Chromebooks and chargers in one operation.</p>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="enableBulkAssetTags">
+                <label class="form-check-label" for="enableBulkAssetTags">
+                  Use bulk asset tag assignment (sequential tags)
+                </label>
+              </div>
+            </div>
+            <div class="col-md-4 text-end">
+              <button type="button" class="btn btn-success btn-lg" id="processCheckoutsBtn" disabled>
+                <i class="bi bi-box-arrow-down"></i> Process Checkouts
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="mb-0">Filters</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-3">
+              <label for="gradeFilter" class="form-label">Grade</label>
+              <select class="form-select" id="gradeFilter">
+                <option value="">All Grades</option>
+                {% for grade in grades %}
+                <option value="{{ grade }}">Grade {{ grade }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label for="statusFilter" class="form-label">Assignment Status</label>
+              <select class="form-select" id="statusFilter">
+                <option value="">All Students</option>
+                <option value="pending">Pending Assignment</option>
+                <option value="assigned">Already Assigned</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label for="searchFilter" class="form-label">Search</label>
+              <input type="text" class="form-control" id="searchFilter" placeholder="Search by name or student ID...">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+              <button type="button" class="btn btn-outline-primary w-100" id="clearFiltersBtn">
+                <i class="bi bi-x-circle"></i> Clear
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Student List -->
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Students Available for Device Checkout</h5>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary" id="selectAllBtn">
+              <i class="bi bi-check-all"></i> Select All Visible
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="clearSelectionBtn">
+              <i class="bi bi-x-circle"></i> Clear Selection
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-striped table-hover">
+              <thead>
+                <tr>
+                  <th>
+                    <input type="checkbox" id="selectAllCheckbox" class="form-check-input">
+                  </th>
+                  <th>Student ID</th>
+                  <th>Name</th>
+                  <th>Grade</th>
+                  <th>Status</th>
+                  <th>Chromebook Tag</th>
+                  <th>Charger Tag</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="studentTableBody">
+                <!-- Student rows will be inserted here by JavaScript -->
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- Loading indicator -->
+          <div id="loadingIndicator" class="text-center py-4" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading students...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading student data...</p>
+          </div>
+          
+          <!-- No results message -->
+          <div id="noResultsMessage" class="text-center py-4" style="display: none;">
+            <i class="bi bi-search text-muted" style="font-size: 3rem;"></i>
+            <h5 class="text-muted mt-3">No students found</h5>
+            <p class="text-muted">Try adjusting your filters or search criteria.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress Modal -->
+  <div class="modal fade" id="progressModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Processing Device Checkouts</h5>
+        </div>
+        <div class="modal-body">
+          <div class="progress mb-3" style="height: 25px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                 id="checkoutProgress" role="progressbar" style="width: 0%">0%</div>
+          </div>
+          <p id="progressStatus">Preparing checkout operations...</p>
+          <div id="progressDetails" class="small text-muted"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="progressCloseBtn" disabled>Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results Modal -->
+  <div class="modal fade" id="resultsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Checkout Results</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="resultsContent">
+            <!-- Results will be populated here -->
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" id="downloadResultsBtn">
+            <i class="bi bi-download"></i> Download Report
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notifications -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <!-- Success Toast -->
+  <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body" id="successToastMessage">
+        Success message here
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+  
+  <!-- Error Toast -->
+  <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body" id="errorToastMessage">
+        Error message here
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Global variables
+  let allStudents = [];
+  let filteredStudents = [];
+  let selectedStudents = new Set();
+  
+  // Initialize modals
+  const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
+  const resultsModal = new bootstrap.Modal(document.getElementById('resultsModal'));
+  
+  // Build API URL helper
+  function buildApiUrl(endpoint) {
+    const port = {{ api_port | default(8080) }};
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    return `${protocol}//${hostname}:${port}${endpoint}`;
+  }
+  
+  // Load students on page load
+  loadStudents();
+  
+  // Event listeners
+  document.getElementById('gradeFilter').addEventListener('change', applyFilters);
+  document.getElementById('statusFilter').addEventListener('change', applyFilters);
+  document.getElementById('searchFilter').addEventListener('input', applyFilters);
+  document.getElementById('clearFiltersBtn').addEventListener('click', clearFilters);
+  document.getElementById('selectAllBtn').addEventListener('click', selectAllVisible);
+  document.getElementById('clearSelectionBtn').addEventListener('click', clearSelection);
+  document.getElementById('selectAllCheckbox').addEventListener('change', toggleSelectAll);
+  document.getElementById('processCheckoutsBtn').addEventListener('click', processCheckouts);
+  
+  async function loadStudents() {
+    try {
+      showLoadingIndicator(true);
+      
+      const response = await fetch(buildApiUrl('/api/students'));
+      const students = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(students.error || 'Failed to load students');
+      }
+      
+      allStudents = students;
+      applyFilters();
+      
+    } catch (error) {
+      console.error('Error loading students:', error);
+      showToast('errorToast', 'Failed to load students: ' + error.message);
+    } finally {
+      showLoadingIndicator(false);
+    }
+  }
+  
+  function applyFilters() {
+    const gradeFilter = document.getElementById('gradeFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+    
+    filteredStudents = allStudents.filter(student => {
+      // Grade filter
+      if (gradeFilter && student.grade != gradeFilter) return false;
+      
+      // Status filter
+      if (statusFilter === 'pending' && student.device_checked_in) return false;
+      if (statusFilter === 'assigned' && !student.device_checked_in) return false;
+      
+      // Search filter
+      if (searchFilter) {
+        const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
+        const studentId = (student.id || '').toLowerCase();
+        if (!fullName.includes(searchFilter) && !studentId.includes(searchFilter)) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+    
+    renderStudentList();
+    updateStats();
+  }
+  
+  function renderStudentList() {
+    const tbody = document.getElementById('studentTableBody');
+    const noResults = document.getElementById('noResultsMessage');
+    
+    if (filteredStudents.length === 0) {
+      tbody.innerHTML = '';
+      noResults.style.display = 'block';
+      return;
+    }
+    
+    noResults.style.display = 'none';
+    
+    tbody.innerHTML = filteredStudents.map(student => {
+      const isSelected = selectedStudents.has(student.id);
+      const statusBadge = student.device_checked_in 
+        ? '<span class="badge bg-success">Assigned</span>'
+        : '<span class="badge bg-warning text-dark">Pending</span>';
+      
+      return `
+        <tr data-student-id="${student.id}" ${isSelected ? 'class="table-active"' : ''}>
+          <td>
+            <input type="checkbox" class="form-check-input student-checkbox" 
+                   value="${student.id}" ${isSelected ? 'checked' : ''}>
+          </td>
+          <td>${student.id}</td>
+          <td>${student.first_name} ${student.last_name}</td>
+          <td>${student.grade || 'N/A'}</td>
+          <td>${statusBadge}</td>
+          <td>
+            <input type="text" class="form-control form-control-sm chromebook-tag" 
+                   placeholder="CB-0000" ${student.device_checked_in ? 'disabled' : ''}>
+          </td>
+          <td>
+            <input type="text" class="form-control form-control-sm charger-tag" 
+                   placeholder="CH-0000" ${student.device_checked_in ? 'disabled' : ''}>
+          </td>
+          <td>
+            <input type="text" class="form-control form-control-sm notes" 
+                   placeholder="Optional notes..." ${student.device_checked_in ? 'disabled' : ''}>
+          </td>
+        </tr>
+      `;
+    }).join('');
+    
+    // Add event listeners to checkboxes
+    document.querySelectorAll('.student-checkbox').forEach(checkbox => {
+      checkbox.addEventListener('change', function() {
+        const studentId = this.value;
+        const row = this.closest('tr');
+        
+        if (this.checked) {
+          selectedStudents.add(studentId);
+          row.classList.add('table-active');
+        } else {
+          selectedStudents.delete(studentId);
+          row.classList.remove('table-active');
+        }
+        
+        updateSelectionUI();
+      });
+    });
+  }
+  
+  function updateSelectionUI() {
+    const count = selectedStudents.size;
+    document.getElementById('selectedCount').textContent = `${count} selected`;
+    document.getElementById('processCheckoutsBtn').disabled = count === 0;
+    
+    // Update select all checkbox
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const visibleCheckboxes = document.querySelectorAll('.student-checkbox');
+    const checkedCount = document.querySelectorAll('.student-checkbox:checked').length;
+    
+    selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < visibleCheckboxes.length;
+    selectAllCheckbox.checked = checkedCount > 0 && checkedCount === visibleCheckboxes.length;
+  }
+  
+  function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAllCheckbox').checked;
+    const checkboxes = document.querySelectorAll('.student-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+      const studentId = checkbox.value;
+      const row = checkbox.closest('tr');
+      
+      if (selectAll) {
+        checkbox.checked = true;
+        selectedStudents.add(studentId);
+        row.classList.add('table-active');
+      } else {
+        checkbox.checked = false;
+        selectedStudents.delete(studentId);
+        row.classList.remove('table-active');
+      }
+    });
+    
+    updateSelectionUI();
+  }
+  
+  function selectAllVisible() {
+    document.querySelectorAll('.student-checkbox').forEach(checkbox => {
+      checkbox.checked = true;
+      selectedStudents.add(checkbox.value);
+      checkbox.closest('tr').classList.add('table-active');
+    });
+    updateSelectionUI();
+  }
+  
+  function clearSelection() {
+    selectedStudents.clear();
+    document.querySelectorAll('.student-checkbox').forEach(checkbox => {
+      checkbox.checked = false;
+      checkbox.closest('tr').classList.remove('table-active');
+    });
+    updateSelectionUI();
+  }
+  
+  function clearFilters() {
+    document.getElementById('gradeFilter').value = '';
+    document.getElementById('statusFilter').value = '';
+    document.getElementById('searchFilter').value = '';
+    applyFilters();
+  }
+  
+  async function processCheckouts() {
+    if (selectedStudents.size === 0) {
+      showToast('errorToast', 'Please select at least one student');
+      return;
+    }
+    
+    // Collect checkout data
+    const checkouts = [];
+    const enableBulkTags = document.getElementById('enableBulkAssetTags').checked;
+    
+    selectedStudents.forEach(studentId => {
+      const row = document.querySelector(`tr[data-student-id="${studentId}"]`);
+      const chromebookTag = row.querySelector('.chromebook-tag').value.trim();
+      const chargerTag = row.querySelector('.charger-tag').value.trim();
+      const notes = row.querySelector('.notes').value.trim();
+      
+      if (chromebookTag || chargerTag) {
+        checkouts.push({
+          student_id: studentId,
+          chromebook_tag: chromebookTag,
+          charger_tag: chargerTag,
+          notes: notes
+        });
+      }
+    });
+    
+    if (checkouts.length === 0) {
+      showToast('errorToast', 'Please enter at least one asset tag for the selected students');
+      return;
+    }
+    
+    // Show progress modal
+    progressModal.show();
+    updateProgress(0, 'Starting batch checkout...');
+    
+    try {
+      const response = await fetch(buildApiUrl('/api/device-checkout/batch'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checkouts: checkouts })
+      });
+      
+      const result = await response.json();
+      
+      updateProgress(100, 'Checkout complete!');
+      
+      // Enable close button
+      document.getElementById('progressCloseBtn').disabled = false;
+      
+      // Show results
+      setTimeout(() => {
+        progressModal.hide();
+        showResults(result);
+      }, 1000);
+      
+      // Reload student data
+      await loadStudents();
+      clearSelection();
+      
+    } catch (error) {
+      updateProgress(100, 'Error occurred during checkout');
+      document.getElementById('progressCloseBtn').disabled = false;
+      showToast('errorToast', 'Checkout failed: ' + error.message);
+    }
+  }
+  
+  function updateProgress(percent, status, details = '') {
+    const progressBar = document.getElementById('checkoutProgress');
+    progressBar.style.width = `${percent}%`;
+    progressBar.textContent = `${percent}%`;
+    document.getElementById('progressStatus').textContent = status;
+    document.getElementById('progressDetails').textContent = details;
+  }
+  
+  function showResults(result) {
+    const content = document.getElementById('resultsContent');
+    
+    let html = `
+      <div class="row mb-3">
+        <div class="col-md-4">
+          <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+              <h3>${result.total_processed}</h3>
+              <small>Total Processed</small>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-success text-white">
+            <div class="card-body text-center">
+              <h3>${result.successful}</h3>
+              <small>Successful</small>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+              <h3>${result.failed}</h3>
+              <small>Failed</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    if (result.results && result.results.length > 0) {
+      html += '<h6>Detailed Results:</h6>';
+      html += '<div class="table-responsive"><table class="table table-sm table-striped">';
+      html += '<thead><tr><th>Student ID</th><th>Status</th><th>Chromebook</th><th>Charger</th><th>Details</th></tr></thead><tbody>';
+      
+      result.results.forEach(item => {
+        const statusBadge = item.success 
+          ? '<span class="badge bg-success">Success</span>'
+          : '<span class="badge bg-danger">Failed</span>';
+        
+        const chromebook = item.chromebook || '-';
+        const charger = item.charger || '-';
+        const details = item.errors ? item.errors.join('; ') : '-';
+        
+        html += `<tr>
+          <td>${item.student_id}</td>
+          <td>${statusBadge}</td>
+          <td>${chromebook}</td>
+          <td>${charger}</td>
+          <td>${details}</td>
+        </tr>`;
+      });
+      
+      html += '</tbody></table></div>';
+    }
+    
+    content.innerHTML = html;
+    resultsModal.show();
+  }
+  
+  function updateStats() {
+    // Update statistics based on filtered data
+    const totalStudents = filteredStudents.length;
+    const assignedCount = filteredStudents.filter(s => s.device_checked_in).length;
+    const pendingCount = totalStudents - assignedCount;
+    const completionRate = totalStudents > 0 ? (assignedCount / totalStudents) * 100 : 0;
+    
+    document.getElementById('stat-total-students').textContent = totalStudents;
+    document.getElementById('stat-pending').textContent = pendingCount;
+    document.getElementById('stat-completion').textContent = Math.round(completionRate) + '%';
+  }
+  
+  function showLoadingIndicator(show) {
+    document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
+  }
+  
+  function showToast(toastId, message) {
+    const toast = document.getElementById(toastId);
+    const messageElement = document.getElementById(toastId + 'Message');
+    messageElement.textContent = message;
+    
+    const bsToast = bootstrap.Toast.getInstance(toast) || new bootstrap.Toast(toast);
+    bsToast.show();
+  }
+});
+</script>
+{% endblock %}
