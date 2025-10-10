@@ -538,6 +538,84 @@ class StudentDeviceTracker:
             if 'conn' in locals():
                 conn.close()
     
+    def checkout_device_to_student(self, student_id, asset_tag, device_type='Unknown', notes='', asset_data=None):
+        """
+        Checkout a device to a student (assigns a device to them)
+        
+        Args:
+            student_id (str): Student ID or username
+            asset_tag (str): Asset tag of the device to checkout
+            device_type (str): Type of device (Chromebook, Charger, etc.)
+            notes (str): Optional notes about the checkout
+            asset_data (dict): Optional asset data from RT
+            
+        Returns:
+            bool: Success status
+        """
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Check if student exists
+            cursor.execute("SELECT id FROM students WHERE id = ?", (student_id,))
+            if not cursor.fetchone():
+                logger.error(f"Student {student_id} not found")
+                return False
+            
+            # Check if device is already assigned to another student
+            cursor.execute("SELECT student_id FROM device_info WHERE asset_tag = ?", (asset_tag,))
+            existing = cursor.fetchone()
+            if existing and existing[0] != student_id:
+                logger.error(f"Device {asset_tag} is already assigned to student {existing[0]}")
+                return False
+            
+            # Get device info from asset_data if available
+            asset_id = ""
+            serial_number = ""
+            if asset_data:
+                asset_id = str(asset_data.get('id', ''))
+                # Extract serial number from CustomFields
+                custom_fields = asset_data.get('CustomFields', [])
+                for field in custom_fields:
+                    if field.get('name') == 'Serial Number' and field.get('values'):
+                        serial_number = field.get('values')[0]
+                        break
+            
+            checkout_timestamp = datetime.datetime.now().isoformat()
+            
+            # Insert or update device_info
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO device_info (
+                    student_id, asset_id, asset_tag, device_type, serial_number, check_in_timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (student_id, asset_id, asset_tag, device_type, serial_number, checkout_timestamp)
+            )
+            
+            # Add checkout log entry
+            cursor.execute(
+                """
+                INSERT INTO device_logs (
+                    student_id, asset_tag, action, timestamp, notes
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (student_id, asset_tag, 'checkout', checkout_timestamp, notes)
+            )
+            
+            conn.commit()
+            logger.info(f"Successfully checked out device {asset_tag} ({device_type}) to student {student_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error checking out device {asset_tag} to student {student_id}: {e}")
+            if 'conn' in locals():
+                conn.rollback()
+            return False
+        finally:
+            if 'conn' in locals():
+                conn.close()
+    
     def import_students_from_csv(self, csv_file):
         """
         Import students from a CSV file

@@ -64,6 +64,44 @@ def student_checkin_list():
     """Redirect to the student device list for backward compatibility"""
     return redirect(url_for('students.student_device_list'))
 
+@bp.route('/device-checkout', strict_slashes=False)
+def device_checkout():
+    """Display the device checkout page for assigning Chromebooks and chargers to students"""
+    try:
+        # Initialize student tracker
+        tracker = StudentDeviceTracker()
+        
+        # Get initial statistics
+        stats = tracker.get_statistics()
+        
+        # Get available grades for filtering
+        students_sample = tracker.get_all_students(limit=50)
+        grades = sorted(set(student.get('grade') for student in students_sample if student.get('grade')))
+        
+        # Get port from config for client-side API calls
+        port = current_app.config.get('PORT', 8080)
+        
+        return render_template(
+            'device_checkout.html',
+            stats=stats,
+            grades=grades,
+            current_year=tracker.current_school_year,
+            api_port=port
+        )
+    except Exception as e:
+        logger.error(f"Error loading device checkout page: {e}")
+        logger.error(traceback.format_exc())
+        
+        # Check if error.html template exists
+        template_exists = os.path.exists(os.path.join(
+            current_app.root_path, 'templates', 'error.html'
+        ))
+        
+        if template_exists:
+            return render_template('error.html', error=f"Failed to load device checkout page: {str(e)}")
+        else:
+            return f"<h1>Error</h1><p>Failed to load device checkout page: {str(e)}</p>", 500
+
 @bp.route('/api/students', methods=['GET'])
 def get_students():
     """API endpoint to get all students"""
@@ -349,6 +387,159 @@ def check_out_student_device(student_id):
         logger.error(f"Error marking device not checked in for student {student_id}: {e}")
         return jsonify({
             "error": "Failed to mark device as not checked in",
+            "details": str(e)
+        }), 500
+
+@bp.route('/api/students/<student_id>/device-checkout', methods=['POST'])
+def checkout_device_to_student(student_id):
+    """API endpoint to checkout a device to a student"""
+    try:
+        data = request.json or {}
+        asset_tag = data.get('asset_tag')
+        device_type = data.get('device_type', 'Unknown')
+        notes = data.get('notes', '')
+        
+        if not asset_tag:
+            return jsonify({
+                "error": "asset_tag is required"
+            }), 400
+        
+        tracker = StudentDeviceTracker()
+        
+        # First, check if the asset exists in RT
+        try:
+            from ..utils.rt_api import find_asset_by_name
+            asset_data = find_asset_by_name(asset_tag)
+            if not asset_data:
+                return jsonify({
+                    "error": f"Asset {asset_tag} not found in RequestTracker"
+                }), 404
+        except Exception as rt_error:
+            logger.warning(f"Could not verify asset {asset_tag} in RT: {rt_error}")
+            # Continue without RT verification
+            asset_data = None
+        
+        # Record the device checkout in local tracking
+        success = tracker.checkout_device_to_student(
+            student_id=student_id,
+            asset_tag=asset_tag,
+            device_type=device_type,
+            notes=notes,
+            asset_data=asset_data
+        )
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": f"Device {asset_tag} checked out to student {student_id}"
+            })
+        else:
+            return jsonify({
+                "error": f"Failed to checkout device {asset_tag} to student {student_id}"
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error checking out device to student {student_id}: {e}")
+        return jsonify({
+            "error": "Failed to checkout device",
+            "details": str(e)
+        }), 500
+
+@bp.route('/api/device-checkout/batch', methods=['POST'])
+def batch_device_checkout():
+    """API endpoint to checkout devices to multiple students in batch"""
+    try:
+        data = request.json or {}
+        checkouts = data.get('checkouts', [])
+        
+        if not checkouts:
+            return jsonify({
+                "error": "No checkout data provided"
+            }), 400
+        
+        tracker = StudentDeviceTracker()
+        results = []
+        success_count = 0
+        error_count = 0
+        
+        for checkout in checkouts:
+            student_id = checkout.get('student_id')
+            chromebook_tag = checkout.get('chromebook_tag', '').strip()
+            charger_tag = checkout.get('charger_tag', '').strip()
+            notes = checkout.get('notes', '')
+            
+            if not student_id:
+                results.append({
+                    "student_id": student_id,
+                    "success": False,
+                    "error": "Student ID is required"
+                })
+                error_count += 1
+                continue
+            
+            student_success = True
+            student_errors = []
+            
+            # Checkout Chromebook if provided
+            if chromebook_tag:
+                try:
+                    success = tracker.checkout_device_to_student(
+                        student_id=student_id,
+                        asset_tag=chromebook_tag,
+                        device_type='Chromebook',
+                        notes=f"Chromebook checkout. {notes}".strip()
+                    )
+                    if not success:
+                        student_success = False
+                        student_errors.append(f"Failed to checkout Chromebook {chromebook_tag}")
+                except Exception as e:
+                    student_success = False
+                    student_errors.append(f"Chromebook checkout error: {str(e)}")
+            
+            # Checkout Charger if provided
+            if charger_tag:
+                try:
+                    success = tracker.checkout_device_to_student(
+                        student_id=student_id,
+                        asset_tag=charger_tag,
+                        device_type='Charger',
+                        notes=f"Charger checkout. {notes}".strip()
+                    )
+                    if not success:
+                        student_success = False
+                        student_errors.append(f"Failed to checkout Charger {charger_tag}")
+                except Exception as e:
+                    student_success = False
+                    student_errors.append(f"Charger checkout error: {str(e)}")
+            
+            if student_success:
+                success_count += 1
+                results.append({
+                    "student_id": student_id,
+                    "success": True,
+                    "chromebook": chromebook_tag if chromebook_tag else None,
+                    "charger": charger_tag if charger_tag else None
+                })
+            else:
+                error_count += 1
+                results.append({
+                    "student_id": student_id,
+                    "success": False,
+                    "errors": student_errors
+                })
+        
+        return jsonify({
+            "success": error_count == 0,
+            "total_processed": len(checkouts),
+            "successful": success_count,
+            "failed": error_count,
+            "results": results
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in batch device checkout: {e}")
+        return jsonify({
+            "error": "Failed to process batch checkout",
             "details": str(e)
         }), 500
 

@@ -57,12 +57,15 @@ class AssetTagManager:
     def get_next_tag(self):
         """
         Get the next asset tag without incrementing the sequence.
+        Supports dynamic digit expansion (W12-9999 → W12-10000).
         
         Returns:
             str: The next asset tag in the sequence
         """
         current_number = self.get_current_sequence()
-        return f"{self.prefix}{current_number:04d}"
+        # Calculate required digits (minimum 4, expands as needed)
+        digit_count = max(4, len(str(current_number)))
+        return f"{self.prefix}{current_number:0{digit_count}d}"
     
     def increment_sequence(self):
         """
