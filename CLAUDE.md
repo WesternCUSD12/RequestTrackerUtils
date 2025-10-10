@@ -2,7 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Constitution**: All development MUST comply with principles in `.specify/memory/constitution.md`. Integration-first architecture, comprehensive error handling, API compatibility, data integrity, and observability are NON-NEGOTIABLE requirements.
+
 ## Build/Run Commands
+
 ```bash
 
 # Run the application
@@ -15,9 +18,11 @@ nix develop
 ```
 
 ## Lint/Test Commands
+
 No formal linting or testing configuration has been established.
 
 ## Code Style Guidelines
+
 - **Naming**: Use snake_case for all variables, functions, and modules
 - **Imports**: Order by stdlib → third-party → local imports, grouped by source
 - **Flask Patterns**: Use Blueprint pattern for routes organization
@@ -27,4 +32,5 @@ No formal linting or testing configuration has been established.
 - **Configuration**: Use environment variables with sensible defaults via python-dotenv
 
 ## Project Structure
+
 RequestTrackerUtils is a Flask application for managing RT (Request Tracker) asset tags and labels with PDF generation capabilities. The codebase follows modular organization with routes, utils, and templates directories.
