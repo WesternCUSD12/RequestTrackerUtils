@@ -63,7 +63,8 @@ def validate_serial_uniqueness(serial_number: str, config: Dict[str, Any]) -> Tu
 @bp.route('/form', methods=['GET'])
 def asset_form():
     """Render the batch asset creation form."""
-    return render_template('asset_create.html')
+    rt_url = current_app.config.get('RT_URL', 'https://tickets.example.com')
+    return render_template('asset_create.html', rt_url=rt_url)
 
 
 @bp.route('/preview-internal-name', methods=['GET'])
@@ -164,9 +165,13 @@ def clear_cache():
 
 @bp.route('/preview-next-tag', methods=['GET'])
 def preview_next_tag():
-    """Preview the next asset tag without incrementing the sequence."""
+    """
+    Preview the next asset tag without incrementing the sequence.
+    Accepts optional 'prefix' query parameter (e.g., ?prefix=TEST).
+    """
     try:
-        tag_manager = AssetTagManager(current_app.config)
+        prefix = request.args.get('prefix')
+        tag_manager = AssetTagManager(current_app.config, prefix=prefix)
         next_tag = tag_manager.get_next_tag()
         sequence = tag_manager.get_current_sequence()
         
@@ -262,8 +267,9 @@ def create_asset():
             'retry': True
         }), 500
     
-    # Get next asset tag
-    tag_manager = AssetTagManager(current_app.config)
+    # Get next asset tag (with optional prefix)
+    prefix = data.get('prefix')
+    tag_manager = AssetTagManager(current_app.config, prefix=prefix)
     try:
         asset_tag = tag_manager.get_next_tag()
     except Exception as e:

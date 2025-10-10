@@ -123,7 +123,11 @@ function clearUniqueFields() {
 // T017: Load and display next asset tag
 async function loadNextTag() {
   try {
-    const response = await fetch('/assets/preview-next-tag');
+    const testModeToggle = document.getElementById('testModeToggle');
+    const isTestMode = testModeToggle && testModeToggle.checked;
+    const prefix = isTestMode ? 'TEST' : 'W12';
+    
+    const response = await fetch(`/assets/preview-next-tag?prefix=${prefix}`);
     if (response.ok) {
       const data = await response.json();
       const tagElement = document.getElementById('nextTag');
@@ -174,10 +178,23 @@ function showSuccess(result) {
   const retryPrintBtn = document.getElementById('retryPrintBtn');
 
   if (successAlert && successMessage) {
-    const message = result.internal_name
-      ? `Asset created successfully! ${result.asset_tag} - "${result.internal_name}"`
-      : `Asset created successfully! Asset tag: ${result.asset_tag}`;
-    successMessage.textContent = message;
+    // Build success message with asset link
+    const assetName = result.internal_name
+      ? `${result.asset_tag} - "${result.internal_name}"`
+      : result.asset_tag;
+    
+    // Get RT URL from container data attribute (set in template)
+    const container = document.querySelector('.container[data-rt-url]');
+    const rtUrl = container ? container.dataset.rtUrl : 'https://tickets.wc-12.com';
+    const assetLink = `${rtUrl}/Asset/Display.html?id=${result.asset_id}`;
+    
+    // Create message with link
+    successMessage.innerHTML = `
+      Asset created successfully! 
+      <a href="${assetLink}" target="_blank" class="alert-link">
+        ${assetName} <i class="bi bi-box-arrow-up-right"></i>
+      </a>
+    `;
     successAlert.style.display = 'block';
 
     // Store label URL for retry button
@@ -232,14 +249,105 @@ function hideAlerts() {
   if (errorAlert) errorAlert.style.display = 'none';
 }
 
+// T027: Clear All functionality
+function clearAll() {
+  // Clear sessionStorage
+  sessionStorage.removeItem(STORAGE_KEY);
+  
+  // Reset all form fields
+  const form = document.getElementById('assetForm');
+  if (form) {
+    form.reset();
+  }
+  
+  // Hide alerts
+  hideAlerts();
+  
+  // Reload previews
+  loadNextTag();
+  loadInternalName();
+  
+  // Show brief confirmation
+  const successAlert = document.getElementById('successAlert');
+  const successMessage = document.getElementById('successMessage');
+  if (successAlert && successMessage) {
+    successMessage.textContent = 'Form cleared successfully';
+    successAlert.style.display = 'block';
+    
+    // Auto-hide after 2 seconds
+    setTimeout(() => {
+      successAlert.style.display = 'none';
+    }, 2000);
+  }
+}
+
+// T033: Show/hide loading indicator
+function setLoading(isLoading) {
+  const submitBtn = document.getElementById('submitBtn');
+  const submitBtnText = document.getElementById('submitBtnText');
+  const submitBtnSpinner = document.getElementById('submitBtnSpinner');
+  
+  if (submitBtn) {
+    submitBtn.disabled = isLoading;
+  }
+  if (submitBtnText) {
+    submitBtnText.style.display = isLoading ? 'none' : 'inline';
+  }
+  if (submitBtnSpinner) {
+    submitBtnSpinner.style.display = isLoading ? 'inline-block' : 'none';
+  }
+}
+
+// T037: Client-side validation
+function validateForm(data) {
+  // Required fields
+  if (!data.serial_number || !data.serial_number.trim()) {
+    return 'Serial number is required';
+  }
+  if (!data.manufacturer || !data.manufacturer.trim()) {
+    return 'Manufacturer is required';
+  }
+  if (!data.model || !data.model.trim()) {
+    return 'Model is required';
+  }
+  if (!data.catalog || !data.catalog.trim()) {
+    return 'Catalog is required';
+  }
+  
+  // Serial number format (alphanumeric and hyphens only)
+  const serialPattern = /^[A-Za-z0-9-]+$/;
+  if (!serialPattern.test(data.serial_number)) {
+    return 'Serial number can only contain letters, numbers, and hyphens';
+  }
+  
+  return null; // Valid
+}
+
 // T014: Form submission handler
 async function handleSubmit(event) {
   event.preventDefault();
   hideAlerts();
-
+  
   const form = event.target;
   const formData = new FormData(form);
   const data = Object.fromEntries(formData.entries());
+  
+  // T037: Validate before submission
+  const validationError = validateForm(data);
+  if (validationError) {
+    showError(validationError);
+    return;
+  }
+  
+  // Include test mode prefix if enabled
+  const testModeToggle = document.getElementById('testModeToggle');
+  if (testModeToggle && testModeToggle.checked) {
+    data.prefix = 'TEST';
+  } else {
+    data.prefix = 'W12';
+  }
+  
+  setLoading(true);
 
   try {
     const response = await fetch('/assets/create', {
@@ -266,6 +374,8 @@ async function handleSubmit(event) {
   } catch (error) {
     console.error('Submit error:', error);
     showError('Network error. Please try again.');
+  } finally {
+    setLoading(false);
   }
 }
 
@@ -284,5 +394,17 @@ document.addEventListener('DOMContentLoaded', function () {
   const form = document.getElementById('assetForm');
   if (form) {
     form.addEventListener('submit', handleSubmit);
+  }
+  
+  // T028: Wire up Clear All button
+  const clearAllBtn = document.getElementById('clearAllBtn');
+  if (clearAllBtn) {
+    clearAllBtn.addEventListener('click', clearAll);
+  }
+  
+  // Wire up Test Mode toggle
+  const testModeToggle = document.getElementById('testModeToggle');
+  if (testModeToggle) {
+    testModeToggle.addEventListener('change', loadNextTag);
   }
 });
