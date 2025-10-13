@@ -407,8 +407,8 @@ def validate_tag_sequence(asset_tag_manager):
 
 Create test assets with various characteristics:
 
-- Standard 4-digit tags (W12-0001 to W12-9999)
-- Boundary case at 9999→10000 transition (5-digit expansion)
+- Standard 5-digit tags (W12-00001 to W12-99999)
+- Boundary case at 99999→100000 transition (6-digit expansion)
 - Duplicate serial numbers (validation testing)
 - Missing required fields (validation testing)
 

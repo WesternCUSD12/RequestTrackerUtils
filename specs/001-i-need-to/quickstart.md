@@ -295,7 +295,7 @@ block content %}
           <h5 class="mb-0">Next Asset Tag</h5>
         </div>
         <div class="card-body">
-          <div class="display-6" id="nextTag">W12-####</div>
+          <div class="display-6" id="nextTag">W12-#####</div>
           <small class="text-muted">Auto-assigned on creation</small>
         </div>
       </div>
