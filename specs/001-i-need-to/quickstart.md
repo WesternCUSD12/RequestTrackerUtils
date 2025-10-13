@@ -627,6 +627,7 @@ The following deviations from the original design were made during implementatio
 **Actual Implementation**: Use `window.open()` to open label in new tab/window
 
 **Rationale**:
+
 - Better UX: Users can preview label before printing
 - More reliable: Avoids iframe sandboxing issues in modern browsers
 - Easier troubleshooting: Label URL visible in browser tab
@@ -640,6 +641,7 @@ The following deviations from the original design were made during implementatio
 **Actual Implementation**: Client-side only clearing via `sessionStorage.removeItem()`
 
 **Rationale**:
+
 - Simpler architecture: No server round-trip needed
 - Better performance: Instant clearing
 - Sufficient for use case: sessionStorage is browser-local
@@ -651,12 +653,14 @@ The following deviations from the original design were made during implementatio
 **Additional Feature**: Added TEST mode toggle to switch between W12 and TEST prefixes
 
 **Implementation**:
+
 - Separate sequence files for each prefix (`asset_tag_sequence_test.txt`, `asset_tag_sequence_w12.txt`)
 - Toggle switch in asset creation form
 - Independent sequence counters
 - Admin page enhancements for managing both sequences
 
 **Code Locations**:
+
 - `request_tracker_utils/routes/tag_routes.py` - `AssetTagManager` accepts `prefix` parameter
 - `request_tracker_utils/templates/asset_create.html` - TEST mode toggle switch
 - `request_tracker_utils/static/js/asset_batch.js` - Prefix parameter in API calls
@@ -667,6 +671,7 @@ The following deviations from the original design were made during implementatio
 **Additional Feature**: Added clickable links to created assets in success messages
 
 **Implementation**:
+
 - Success message includes link to RT asset display page
 - Opens in new tab with external link icon
 - Provides quick access to verify created asset
@@ -678,6 +683,7 @@ The following deviations from the original design were made during implementatio
 **Additional Feature**: Added breadcrumb navigation to asset creation form
 
 **Implementation**:
+
 - Standard Bootstrap breadcrumb component
 - Links back to home page
 - Consistent with other pages in application
@@ -689,6 +695,7 @@ The following deviations from the original design were made during implementatio
 **Additional Feature**: Added batch asset creation link to home page
 
 **Implementation**:
+
 - Prominent link at top of Web Interfaces section
 - Descriptive subtitle
 - Plus-circle icon for visual consistency

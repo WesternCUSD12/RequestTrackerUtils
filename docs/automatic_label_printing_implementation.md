@@ -1,6 +1,7 @@
 # Asset Creation with Automatic Label Printing - Implementation Summary
 
 ## Overview
+
 Successfully implemented automatic label printing when creating assets in the Student Devices catalog through the batch asset creation interface.
 
 ## Changes Made
@@ -10,6 +11,7 @@ Successfully implemented automatic label printing when creating assets in the St
 **File**: `/Users/jmartin/rtutils/request_tracker_utils/routes/asset_routes.py`
 
 #### Fixed Custom Fields Format
+
 - **Problem**: Custom fields were not being saved when creating assets
 - **Root Cause**: Using incorrect `CF.{Field Name}` format instead of RT REST2 API's `CustomFields` object format
 - **Solution**: Implemented two-step process:
@@ -40,6 +42,7 @@ rt_api_request('PUT', f'/asset/{asset_id}', data=custom_fields_data, config=curr
 ```
 
 #### Added Label URL to Response
+
 ```python
 # Generate label URL for the newly created asset
 label_url = f'/labels/print?assetId={asset_id}'
@@ -61,56 +64,60 @@ return jsonify({
 **File**: `/Users/jmartin/rtutils/request_tracker_utils/static/js/asset_batch.js`
 
 #### Enhanced Success Handler
+
 ```javascript
 function showSuccess(result) {
-  hideAlerts();
-  const successAlert = document.getElementById('successAlert');
-  const successMessage = document.getElementById('successMessage');
-  const retryPrintBtn = document.getElementById('retryPrintBtn');
-  
+  hideAlerts()
+  const successAlert = document.getElementById('successAlert')
+  const successMessage = document.getElementById('successMessage')
+  const retryPrintBtn = document.getElementById('retryPrintBtn')
+
   if (successAlert && successMessage) {
     const message = result.internal_name
       ? `Asset created successfully! ${result.asset_tag} - "${result.internal_name}"`
-      : `Asset created successfully! Asset tag: ${result.asset_tag}`;
-    successMessage.textContent = message;
-    successAlert.style.display = 'block';
+      : `Asset created successfully! Asset tag: ${result.asset_tag}`
+    successMessage.textContent = message
+    successAlert.style.display = 'block'
 
     // Store label URL for retry button
     if (result.label_url && retryPrintBtn) {
-      retryPrintBtn.style.display = 'inline-block';
-      retryPrintBtn.onclick = () => printLabel(result.label_url);
+      retryPrintBtn.style.display = 'inline-block'
+      retryPrintBtn.onclick = () => printLabel(result.label_url)
     }
 
     // ← NEW: Automatically open label in new window/tab
     if (result.label_url) {
-      printLabel(result.label_url);
+      printLabel(result.label_url)
     }
 
     // Auto-hide after 8 seconds (increased to read the name)
     setTimeout(() => {
-      successAlert.style.display = 'none';
-    }, 8000);
+      successAlert.style.display = 'none'
+    }, 8000)
   }
 }
 ```
 
 #### New Label Printing Function
+
 ```javascript
 // Print/open label in new window
 function printLabel(labelUrl) {
   try {
     // Open label in new window/tab
-    const labelWindow = window.open(labelUrl, '_blank');
-    
+    const labelWindow = window.open(labelUrl, '_blank')
+
     if (!labelWindow) {
       // Popup was blocked - show message
-      showError('Pop-up blocked. Please allow pop-ups to print labels automatically.');
+      showError(
+        'Pop-up blocked. Please allow pop-ups to print labels automatically.'
+      )
     } else {
-      console.log('Label opened:', labelUrl);
+      console.log('Label opened:', labelUrl)
     }
   } catch (error) {
-    console.error('Error opening label:', error);
-    showError('Failed to open label. Please try printing manually.');
+    console.error('Error opening label:', error)
+    showError('Failed to open label. Please try printing manually.')
   }
 }
 ```
@@ -118,14 +125,15 @@ function printLabel(labelUrl) {
 ## Field Mappings
 
 ### Student Devices Catalog Custom Fields
-| Form Field | RT Custom Field Name | Field ID | Type |
-|------------|---------------------|----------|------|
-| `serial_number` | Serial Number | 8 | Text |
-| `manufacturer` | Manufacturer | 9 | Select/Combobox |
-| `model` | Model | 4 | Text |
-| `internal_name` | Internal Name | 14 | Text (auto-generated) |
-| `category` | **Type** | 6 | Select/Combobox |
-| `funding_source` | Funding Source | 3 | Combobox |
+
+| Form Field       | RT Custom Field Name | Field ID | Type                  |
+| ---------------- | -------------------- | -------- | --------------------- |
+| `serial_number`  | Serial Number        | 8        | Text                  |
+| `manufacturer`   | Manufacturer         | 9        | Select/Combobox       |
+| `model`          | Model                | 4        | Text                  |
+| `internal_name`  | Internal Name        | 14       | Text (auto-generated) |
+| `category`       | **Type**             | 6        | Select/Combobox       |
+| `funding_source` | Funding Source       | 3        | Combobox              |
 
 **Note**: The form field `category` maps to the RT custom field `Type` (not `Category`)
 
@@ -143,6 +151,7 @@ function printLabel(labelUrl) {
 ## Test Results
 
 Successfully created TEST-0004 (Asset ID: 2244) with:
+
 - ✅ Serial Number: `TEST-SERIAL-TEST-0004`
 - ✅ Manufacturer: `Apple`
 - ✅ Model: `Test MacBook Air`
@@ -161,6 +170,7 @@ Successfully created TEST-0004 (Asset ID: 2244) with:
 ## Future Enhancements
 
 Potential improvements:
+
 1. Option to disable automatic label printing in user preferences
 2. Queue multiple labels for batch printing
 3. Direct PDF download instead of opening in new window
@@ -173,4 +183,5 @@ Potential improvements:
 - ✅ This document - Complete implementation summary
 
 ## Date
+
 October 10, 2025
