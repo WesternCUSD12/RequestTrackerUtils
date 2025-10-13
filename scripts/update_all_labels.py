@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from dotenv import load_dotenv
 from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN
-from request_tracker_utils.utils.rt_api import rt_api_request, update_asset_custom_field, logger as rt_logger
+from request_tracker_utils.utils.rt_api import rt_api_request, logger as rt_logger
 
 # Load environment variables
 load_dotenv()
@@ -155,7 +155,7 @@ def update_all_labels():
                     
                     # Skip if we've already processed this asset
                     if asset_id in processed_ids:
-                        logger.debug(f"Skipping already processed asset")
+                        logger.debug("Skipping already processed asset")
                         continue
                         
                     asset_name = item.get("Name", "Unknown")

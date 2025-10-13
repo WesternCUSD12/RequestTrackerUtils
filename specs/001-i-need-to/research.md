@@ -135,24 +135,12 @@ if not validate_serial_uniqueness(serial_number):
 
 **Rationale**:
 
-<<<<<<< HEAD
-
-- Existing AssetTagManager uses 4-digit zero-padding (0001-9999)
-- # When reaching 10000, automatically use 5 digits (no leading zeros dropped)
-- Existing AssetTagManager now uses 5-digit zero-padding (00001-99999)
-- When reaching 100000, automatically use 6 digits (no leading zeros dropped)
-  > > > > > > > main
 - Maintains sortability and consistency
 - No manual intervention required
 - Prefix (W12-) remains unchanged
 
 **Alternatives Considered**:
 
-<<<<<<< HEAD
-
-- # Fixed 5+ digit padding from start: Rejected - wastes label space, existing tags are 4-digit
-- Fixed 6+ digit padding from start: Rejected - wastes label space, existing tags are 5-digit
-  > > > > > > > main
 - Manual sequence reset: Rejected - requires admin intervention, error-prone
 - New prefix after overflow: Rejected - breaks organizational naming convention
 
@@ -160,22 +148,10 @@ if not validate_serial_uniqueness(serial_number):
 
 ```python
 def get_next_tag(self):
-    current_number = self.get_current_sequence()
-<<<<<<< HEAD
-    # Calculate required digits (minimum 4)
-    digit_count = max(4, len(str(current_number)))
-    return f"{self.prefix}{current_number:0{digit_count}d}"
-
-# Examples:
-# 0001 → W12-0001 (4 digits)
-# 9999 → W12-9999 (4 digits)
-# 10000 → W12-10000 (5 digits, automatic expansion)
-# 99999 → W12-99999 (5 digits)
-# 100000 → W12-100000 (6 digits, automatic expansion)
-=======
+  current_number = self.get_current_sequence()
   # Calculate required digits (minimum 5)
   digit_count = max(5, len(str(current_number)))
-    return f"{self.prefix}{current_number:0{digit_count}d}"
+  return f"{self.prefix}{current_number:0{digit_count}d}"
 
 # Examples:
 # 00001 → W12-00001 (5 digits)
@@ -183,7 +159,6 @@ def get_next_tag(self):
 # 100000 → W12-100000 (6 digits, automatic expansion)
 # 999999 → W12-999999 (6 digits)
 # 1000000 → W12-1000000 (7 digits, automatic expansion)
->>>>>>> main
 ```
 
 **Testing**: Verify no gaps or duplicates across digit boundary transitions

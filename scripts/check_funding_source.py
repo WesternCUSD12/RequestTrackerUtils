@@ -50,7 +50,7 @@ def check_funding_source():
         
         # Get valid values if it's a Select or Combobox field
         if cf_detail.get('Type') in ['Select', 'Combobox']:
-            print(f"\nValid values for this field:")
+            print("\nValid values for this field:")
             if cf_detail.get('Type') == 'Select':
                 values = cf_detail.get('Values', [])
                 for v in values:
@@ -60,7 +60,7 @@ def check_funding_source():
                     values_response = rt_api_request('GET', '/customfield/3/values', config=config)
                     for v in values_response.get('items', []):
                         print(f"  - {v.get('name', v)}")
-                except:
+                except Exception:
                     print("  (Could not fetch values)")
     except Exception as e:
         print(f"❌ Error fetching field definition: {e}")

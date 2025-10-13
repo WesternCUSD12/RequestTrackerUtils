@@ -12,7 +12,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from request_tracker_utils.utils.student_check_tracker import StudentDeviceTracker
 from flask import Flask
 import tempfile
-import json
 
 def test_integration():
     """Test the integration between device check-in and student tracking"""

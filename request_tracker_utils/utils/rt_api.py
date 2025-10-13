@@ -2,16 +2,13 @@ import requests
 import time
 import threading
 import json
-import os
 import random
 import traceback
 from flask import current_app
-from functools import lru_cache
 import logging
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from pathlib import Path
-from request_tracker_utils.config import WORKING_DIR  # Import the working directory from config
 
 # Define explicitly which functions can be imported from this module
 __all__ = [
@@ -306,7 +303,7 @@ def rt_api_request(method, endpoint, data=None, config=None):
             logger.error(f"Response headers: {dict(response.headers)}")
             try:
                 logger.error(f"Response content: {response.text}")
-            except:
+            except Exception:
                 logger.error("Could not decode response content")
         
         response.raise_for_status()
@@ -322,11 +319,24 @@ def rt_api_request(method, endpoint, data=None, config=None):
             )
         
     except requests.exceptions.RequestException as e:
-        logger.error(f"RT API request failed: {e}")
-        if hasattr(e, 'response') and hasattr(e.response, 'text'):
-            logger.error(f"Error response content: {e.response.text}")
-            logger.error(f"Error response headers: {dict(e.response.headers) if e.response else 'No headers'}")
-        raise
+            logger.error(f"RT API request failed: {e}")
+            # Some RequestException instances may have a 'response' attribute that is None
+            # or may not expose the expected attributes. Assign to a local variable and
+            # use getattr / explicit None checks so type-checkers (PyLance/Pyright) stop
+            # reporting optional-member access errors.
+            resp = getattr(e, 'response', None)
+            if resp is not None:
+                # Safely get text and headers using getattr to avoid attribute errors
+                text = getattr(resp, 'text', None)
+                if text:
+                    logger.error(f"Error response content: {text}")
+                headers = getattr(resp, 'headers', None)
+                if headers:
+                    try:
+                        logger.error(f"Error response headers: {dict(headers)}")
+                    except Exception:
+                        logger.error("Error response headers present but could not convert to dict")
+            raise
 
 def fetch_asset_data(asset_id, config=None, use_cache=False):
     """
@@ -707,7 +717,7 @@ def get_assets_by_owner(owner, exclude_id=None, config=None):
         
     try:
         # Log input parameters
-        logger.info(f"\n=== get_assets_by_owner ===")
+        logger.info("\n=== get_assets_by_owner ===")
         logger.info(f"Looking up assets for owner: {owner}")
         logger.info(f"Excluding asset ID: {exclude_id}")
         
@@ -787,11 +797,14 @@ def fetch_user_data(user_id, config=None):
     if not user_id:
         raise ValueError("User ID is missing or invalid")
     
+    # Prepare local application reference if using current_app
+    app = None
     try:
         if config is None:
             from flask import current_app
-            config = current_app.config
-            current_app.logger.info(f"Fetching user data for ID: {user_id}")
+            app = current_app
+            config = app.config
+            app.logger.info(f"Fetching user data for ID: {user_id}")
             
         response = rt_api_request("GET", f"/user/{user_id}", config=config)
         
@@ -802,12 +815,12 @@ def fetch_user_data(user_id, config=None):
         return response
         
     except requests.exceptions.RequestException as e:
-        if config is None:  # Only log if using current_app
-            current_app.logger.error(f"Error fetching user data: {e}")
+        if app is not None:  # Only log if using current_app
+            app.logger.error(f"Error fetching user data: {e}")
         raise Exception(f"Failed to fetch user data from RT: {e}")
     except Exception as e:
-        if config is None:
-            current_app.logger.error(f"Error processing user data for ID {user_id}: {str(e)}")
+        if app is not None:
+            app.logger.error(f"Error processing user data for ID {user_id}: {str(e)}")
         raise Exception(f"Error processing user data: {str(e)}")
 
 def update_asset_owner(asset_id, owner_id, config=None):
@@ -921,7 +934,7 @@ def create_ticket(subject, body, queue=None, requestor=None, status=None, owner=
         response = rt_api_request("POST", "/ticket", data=ticket_data, config=config)
         
         if not response or 'id' not in response:
-            error_msg = f"Failed to create ticket: Invalid response from RT API"
+            error_msg = "Failed to create ticket: Invalid response from RT API"
             logger.error(error_msg)
             logger.error(f"Response: {response}")
             raise Exception(error_msg)

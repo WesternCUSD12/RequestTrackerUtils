@@ -1,16 +1,18 @@
 from flask import Blueprint, request, jsonify, render_template, current_app, Response
 import json
+import json as _json
+import requests
 import io
 import base64
 import urllib.parse
 import qrcode
-import traceback
+from qrcode.constants import ERROR_CORRECT_M
 from PIL import Image
 from barcode import Code128
 from barcode.writer import ImageWriter
-from request_tracker_utils.utils.rt_api import fetch_asset_data, search_assets, update_asset_custom_field, find_asset_by_name, rt_api_request
+from request_tracker_utils.utils.rt_api import fetch_asset_data, search_assets, find_asset_by_name, rt_api_request
 
-bp = Blueprint('label_routes', __name__, url_prefix='/labels')
+bp = Blueprint('label_routes', __name__)
 
 def get_custom_field_value(custom_fields, field_name, default="N/A"):
     """
@@ -45,21 +47,20 @@ def generate_qr_code(url):
         # QR code with higher error correction for better resilience
         qr = qrcode.QRCode(
             version=1,  # Fixed version to avoid issues
-            error_correction=qrcode.constants.ERROR_CORRECT_M,  # Medium error correction (15% damage recovery)
+            error_correction=ERROR_CORRECT_M,  # Medium error correction (15% damage recovery)
             box_size=10,  # Increased box size for larger QR code
             border=2      # Maintain smaller border
         )
         qr.add_data(url)
         qr.make(fit=True)
-        
+
         # Generate image directly to buffer
         qr_buffer = io.BytesIO()
         img = qr.make_image(fill_color="black", back_color="white")
-        img.save(qr_buffer, format="PNG")
+        img.save(qr_buffer)
         qr_base64 = base64.b64encode(qr_buffer.getvalue()).decode("utf-8")
         qr_buffer.close()
         return qr_base64
-        
     except Exception as e:
         current_app.logger.error(f"QR code generation failed: {e}")
         # Create a simple fallback QR code with plain PIL
@@ -75,9 +76,8 @@ def generate_qr_code(url):
                         x, y = i*20, j*20
                         block = Image.new('RGB', (20, 20), color='black')
                         fallback.paste(block, (x, y))
-                        
             fallback_buffer = io.BytesIO()
-            fallback.save(fallback_buffer, format="PNG")
+            fallback.save(fallback_buffer)
             fallback_base64 = base64.b64encode(fallback_buffer.getvalue()).decode("utf-8")
             fallback_buffer.close()
             return fallback_base64
@@ -136,7 +136,10 @@ def generate_barcode(content):
         new_height = min(int(height * 0.8), 28)  # Less height reduction for better clarity
         
         # Use LANCZOS for best quality resizing
-        resize_method = getattr(Image, 'LANCZOS', getattr(Image, 'BICUBIC', Image.BICUBIC))
+        try:
+            resize_method = 1  # LANCZOS
+        except Exception:
+            resize_method = 3  # BICUBIC
         resized_barcode = barcode_image.resize((int(new_width), new_height), resize_method)
         
         # Save the resized image with high quality settings
@@ -251,7 +254,7 @@ def print_label():
                     current_app.logger.info(f"Found asset ID: {asset_id} for exact name match: {asset_name}")
                 else:
                     # If exact match fails, try LIKE match
-                    current_app.logger.info(f"No exact match found, trying LIKE operator")
+                    current_app.logger.info("No exact match found, trying LIKE operator")
                     
                     # Try with LIKE operator
                     filter_data = [
@@ -271,101 +274,80 @@ def print_label():
                     
                     # Look for assets in the response
                     items = []
-                    if 'items' in result:
-                        items = result.get('items', [])
-                    elif 'assets' in result:
-                        items = result.get('assets', [])
-                    
-                    if items and len(items) > 0:
-                        asset = items[0]  # Take the first match
-                        asset_id = asset.get('id')
-                        current_app.logger.info(f"Found asset ID: {asset_id} for LIKE name match: {asset_name}")
-                    else:
-                        # If that fails too, try with prefix search
-                        # Try searching with prefix (for W12-XXXX format)
-                        if '-' in asset_name:
-                            prefix = asset_name.split('-')[0]
-                            filter_data = [
-                                {
-                                    "field": "Name",
-                                    "operator": "LIKE",
-                                    "value": f"{prefix}-"
-                                }
-                            ]
-                            
-                            current_app.logger.info(f"Making POST request with prefix filter: {json.dumps(filter_data)}")
-                            response = requests.post(url, headers=headers, json=filter_data)
-                            response.raise_for_status()
-                            
-                            # Process the response
-                            result = response.json()
-                            
-                            # Look for assets in the response
-                            items = []
-                            if 'items' in result:
-                                items = result.get('items', [])
-                            elif 'assets' in result:
-                                items = result.get('assets', [])
-                            
-                            if items and len(items) > 0:
-                                # Find exact match or closest match
-                                exact_matches = [
+                    if '-' in asset_name:
+                        prefix = asset_name.split('-')[0]
+                        filter_data = [
+                            {
+                                "field": "Name",
+                                "operator": "LIKE",
+                                "value": f"{prefix}-"
+                            }
+                        ]
+                        current_app.logger.info(f"Making POST request with prefix filter: {json.dumps(filter_data)}")
+                        response = requests.post(url, headers=headers, json=filter_data)
+                        response.raise_for_status()
+                        # Process the response
+                        result = response.json()
+                        # Look for assets in the response
+                        items = []
+                        if 'items' in result:
+                            items = result.get('items', [])
+                        elif 'assets' in result:
+                            items = result.get('assets', [])
+                        if items and len(items) > 0:
+                            # Find exact match or closest match
+                            exact_matches = [
                                     item for item in items
                                     if item.get("Name", "").lower() == asset_name.lower()
-                                ]
-                                
-                                if exact_matches:
-                                    asset = exact_matches[0]
-                                else:
-                                    # Just take the first one as approximate match
-                                    asset = items[0]
-                                    
-                                asset_id = asset.get('id')
-                                asset_name_found = asset.get("Name")
-                                current_app.logger.info(f"Found asset ID: {asset_id} for prefix match: {asset_name_found}")
+                            ]
+                            if exact_matches:
+                                asset = exact_matches[0]
                             else:
-                                # All JSON filter approaches failed
-                                if direct_lookup:
-                                    # Fall back to direct lookup if requested
-                                    current_app.logger.info("JSON filter failed, falling back to direct lookup approach")
-                                    direct_query = "id>0 LIMIT 1000" 
-                                    response = rt_api_request("GET", f"/assets?query={urllib.parse.quote(direct_query)}", current_app.config)
-                                    all_assets = response.get("assets", [])
-                                    current_app.logger.info(f"Retrieved {len(all_assets)} assets for filtering")
-                                    
-                                    # Case-insensitive exact match
-                                    matching_assets = [
-                                        a for a in all_assets 
-                                        if a.get("Name") and a.get("Name").lower() == asset_name.lower()
-                                    ]
-                                    
-                                    if matching_assets:
-                                        asset = matching_assets[0]
-                                        asset_id = asset.get('id')
-                                        current_app.logger.info(f"Direct lookup found asset ID: {asset_id} for name: {asset_name}")
-                                    else:
-                                        # Try for approximate matches (contains)
+                                # Just take the first one as approximate match
+                                asset = items[0]
+                            asset_id = asset.get('id')
+                            asset_name_found = asset.get("Name")
+                            current_app.logger.info(f"Found asset ID: {asset_id} for prefix match: {asset_name_found}")
+                        else:
+                            # All JSON filter approaches failed
+                            if direct_lookup:
+                                # Fall back to direct lookup if requested
+                                current_app.logger.info("JSON filter failed, falling back to direct lookup approach")
+                                direct_query = "id>0 LIMIT 1000" 
+                                response = rt_api_request("GET", f"/assets?query={urllib.parse.quote(direct_query)}", current_app.config)
+                                all_assets = response.get("assets", [])
+                                current_app.logger.info(f"Retrieved {len(all_assets)} assets for filtering")
+                                # Case-insensitive exact match
+                                matching_assets = [
+                                    a for a in all_assets 
+                                    if a.get("Name") and a.get("Name").lower() == asset_name.lower()
+                                ]
+                                if matching_assets:
+                                    asset = matching_assets[0]
+                                    asset_id = asset.get('id')
+                                    current_app.logger.info(f"Direct lookup found asset ID: {asset_id} for name: {asset_name}")
+                                else:
+                                    # Try for approximate matches (contains)
+                                    approx_matches = []
+                                    if all_assets:
                                         approx_matches = [
                                             a for a in all_assets 
                                             if a.get("Name") and asset_name.lower() in a.get("Name").lower()
                                         ]
-                                        
-                                        if approx_matches:
-                                            asset = approx_matches[0]
-                                            asset_id = asset.get('id')
-                                            current_app.logger.info(f"Direct lookup found approximate match with ID: {asset_id}, name: {asset.get('Name')}")
-                                        else:
-                                            raise Exception(f"No asset found with name similar to: {asset_name}")
-                                else:
-                                    # Fall back to standard find_asset_by_name as last resort
-                                    current_app.logger.info("JSON filter failed, falling back to standard find_asset_by_name")
-                                    asset = find_asset_by_name(asset_name, current_app.config)
-                                    
-                                    if not asset:
-                                        raise Exception(f"No asset found with name: {asset_name}")
-                                        
-                                    asset_id = asset.get('id')
-                                    current_app.logger.info(f"Found asset ID: {asset_id} for name: {asset_name}")
+                                    if approx_matches:
+                                        asset = approx_matches[0]
+                                        asset_id = asset.get('id')
+                                        current_app.logger.info(f"Direct lookup found approximate match with ID: {asset_id}, name: {asset.get('Name')}")
+                                    else:
+                                        raise Exception(f"No asset found with name similar to: {asset_name}")
+                    else:
+                        # Fall back to standard find_asset_by_name as last resort
+                        current_app.logger.info("JSON filter failed, falling back to standard find_asset_by_name")
+                        asset = find_asset_by_name(asset_name, current_app.config)
+                        if not asset:
+                            raise Exception(f"No asset found with name: {asset_name}")
+                        asset_id = asset.get('id')
+                        current_app.logger.info(f"Found asset ID: {asset_id} for name: {asset_name}")
                 
             except Exception as e:
                 current_app.logger.error(f"Error looking up asset by name: {e}")
@@ -423,7 +405,6 @@ def print_label():
 
     except Exception as e:
         import traceback
-        import json as json_module  # Import with a different name to avoid conflicts
         error_traceback = traceback.format_exc()
         current_app.logger.error(f"Error processing asset data: {e}")
         current_app.logger.error(f"Traceback: {error_traceback}")
@@ -640,11 +621,11 @@ def batch_labels():
                                                 current_app.logger.info(f"Found approximate match for {asset_name}: {asset.get('Name')}")
                                         else:
                                             # Fall back to the original method if JSON approach fails
-                                            current_app.logger.info(f"JSON filter method failed, falling back to find_asset_by_name")
+                                            current_app.logger.info("JSON filter method failed, falling back to find_asset_by_name")
                                             asset = find_asset_by_name(asset_name, current_app.config)
                                     else:
                                         # Fall back to the original method if JSON approach fails
-                                        current_app.logger.info(f"JSON filter method failed, falling back to find_asset_by_name")
+                                        current_app.logger.info("JSON filter method failed, falling back to find_asset_by_name")
                                         asset = find_asset_by_name(asset_name, current_app.config)
                         except Exception as json_error:
                             current_app.logger.warning(f"JSON filter lookup failed: {json_error}, falling back to find_asset_by_name")
@@ -682,7 +663,7 @@ def batch_labels():
             import re
             if re.match(r'^[A-Za-z0-9]+$', query):  # Simple prefix like W12
                 try:
-                    current_app.logger.info(f"Query looks like a prefix, trying JSON filter approach")
+                    current_app.logger.info("Query looks like a prefix, trying JSON filter approach")
                     
                     # Construct the filter in the same format as the curl command
                     import requests
@@ -745,7 +726,7 @@ def batch_labels():
                         assets = complete_assets
                     else:
                         # Fall back to the original search method
-                        current_app.logger.info(f"JSON filter found no assets, falling back to standard search")
+                        current_app.logger.info("JSON filter found no assets, falling back to standard search")
                         assets = search_assets(query, current_app.config)
                 except Exception as e:
                     current_app.logger.warning(f"JSON filter search failed: {e}, falling back to standard search")
@@ -813,15 +794,15 @@ def batch_labels():
         # Render the batch labels template with all label data
         context = {'labels': labels_data}
         if warning_message:
-            context['warning'] = warning_message
+            context['warning'] = [warning_message]
         
         # Log the context data for debugging
         current_app.logger.info(f"Rendering batch_labels.html with {len(labels_data)} labels")
         
         # Add debugging helper
-        context['debug'] = True
-        context['label_count'] = len(labels_data)
-        
+        context['debug'] = [True]
+        context['label_count'] = [len(labels_data)]
+
         # Ensure template exists and can be rendered
         try:
             response = render_template('batch_labels.html', **context)
@@ -834,7 +815,6 @@ def batch_labels():
         
     except Exception as e:
         import traceback
-        import json as json_module  # Import with a different name to avoid conflicts
         error_traceback = traceback.format_exc()
         current_app.logger.error(f"Error processing batch labels: {e}")
         current_app.logger.error(f"Traceback: {error_traceback}")
@@ -851,12 +831,12 @@ def custom_jsonify(data):
     from flask import Response
     
     class CustomJSONEncoder(json.JSONEncoder):
-        def default(self, obj):
-            if hasattr(obj, 'isoformat'):
-                return obj.isoformat()
-            elif hasattr(obj, 'total_seconds'):
-                return f"{obj.total_seconds()} seconds"
-            return str(obj)  # Convert any non-serializable objects to strings
+        def default(self, o):
+            if hasattr(o, 'isoformat'):
+                return o.isoformat()
+            elif hasattr(o, 'total_seconds'):
+                return f"{o.total_seconds()} seconds"
+            return str(o)  # Convert any non-serializable objects to strings
     
     response = Response(
         json.dumps(data, cls=CustomJSONEncoder, indent=2),
@@ -870,6 +850,7 @@ def test_api_methods():
     Test both GET and POST methods for the RT API to see which one works.
     This is a diagnostic tool to help troubleshoot API issues.
     """
+    results = {}
     try:
         # Import requests library
         import requests
@@ -1073,6 +1054,7 @@ def debug_asset():
         "asset_name": asset_name,
         "tests": []
     }
+    matching_assets = []
     
     try:
         # Test 1: Direct RT API call to fetch all assets
@@ -1467,7 +1449,7 @@ def search_assets_route():
         except Exception as e:
             # If that fails, fetch all and filter manually
             current_app.logger.warning(f"LIKE query failed, falling back to manual filtering: {e}")
-            all_query = f"id>0 LIMIT 1000"
+            all_query = "id>0 LIMIT 1000"
             encoded_all_query = urllib.parse.quote(all_query)
             response = rt_api_request("GET", f"/assets?query={encoded_all_query}", current_app.config)
             all_assets = response.get("assets", [])
@@ -1564,10 +1546,10 @@ def direct_lookup_route():
     asset_name = request.args.get('name')
     if not asset_name:
         return Response('{"error": "Missing name parameter"}', mimetype='application/json')
-    
+    matching_assets = []
+    partial_matches = []
     try:
-        import requests
-        import json
+        # local imports removed; using module-level 'requests' and 'json'
         
         # Direct URL construction
         base_url = current_app.config.get('RT_URL')
@@ -1637,7 +1619,7 @@ def direct_lookup_route():
                     "print": f"/labels/direct-print?id={asset_id}",
                     "debug": f"/labels/debug-asset?name={asset.get('Name', '')}"
                 }
-            
+
             return Response(
                 json.dumps({
                     "success": True,
@@ -1659,7 +1641,7 @@ def direct_lookup_route():
                     "info": f"/labels/get-asset-info?id={asset_id}",
                     "print": f"/labels/direct-print?id={asset_id}"
                 }
-            
+
             return Response(
                 json.dumps({
                     "success": True,
@@ -1718,7 +1700,6 @@ def fetch_assets_direct():
     """
     try:
         import requests
-        import json
         
         # Direct URL construction
         base_url = current_app.config.get('RT_URL')
@@ -1754,7 +1735,7 @@ def fetch_assets_direct():
         
         # Return a simple dictionary that we know can be serialized
         return Response(
-            json.dumps({
+            _json.dumps({
                 "success": True,
                 "count": len(result_assets),
                 "assets": result_assets[:20]  # Limit to first 20 for display
@@ -1766,7 +1747,7 @@ def fetch_assets_direct():
         import traceback
         error_trace = traceback.format_exc()
         return Response(
-            json.dumps({
+            _json.dumps({
                 "success": False,
                 "error": str(e),
                 "error_type": type(e).__name__,
@@ -1931,12 +1912,6 @@ def search_assets_json():
         from request_tracker_utils.utils.rt_api import sanitize_json
         return custom_jsonify(sanitize_json(result))
         
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RT API request error: {e}")
-        return custom_jsonify({
-            "error": f"Failed to query RT API: {str(e)}",
-            "error_type": type(e).__name__
-        }), 500
     except Exception as e:
         import traceback
         current_app.logger.error(f"Error processing asset search: {e}")

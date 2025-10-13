@@ -1,12 +1,17 @@
 import csv
-import os
 import io
 import time
 import fcntl
 import datetime
 import logging
 from pathlib import Path
-from flask import current_app
+try:
+    # Do not import current_app at module import time to avoid app-context issues
+    # Import inside functions/constructors as needed.
+    from flask import current_app  # noqa: F401
+except Exception:
+    # If Flask isn't available at import time, we'll access it lazily
+    current_app = None  # type: ignore
 from .db import get_db_connection
 
 logger = logging.getLogger(__name__)
@@ -22,7 +27,15 @@ class DeviceCheckInLogger:
             log_dir (str, optional): Directory to store log files. If None, uses WORKING_DIR from config.
         """
         if log_dir is None:
-            self.log_dir = Path(current_app.config.get('WORKING_DIR', '/var/lib/request-tracker-utils'))
+            working_dir = '/var/lib/request-tracker-utils'
+            try:
+                # Import current_app lazily and guard against missing app context
+                from flask import current_app as _current_app
+                working_dir = _current_app.config.get('WORKING_DIR', working_dir)
+            except Exception:
+                # No app context; keep fallback working_dir
+                pass
+            self.log_dir = Path(working_dir)
         else:
             self.log_dir = Path(log_dir)
             
@@ -103,32 +116,33 @@ class DeviceCheckInLogger:
         """
         # Make sure we're using the correct log file for current day
         self._set_current_log_file()
-        
+
+        conn = None
         try:
             # Prepare row data
             now = datetime.datetime.now()
             unix_timestamp = int(time.time())
             date_str = now.strftime('%Y-%m-%d')
             time_str = now.strftime('%H:%M:%S')
-            
+
             # Get asset details
             asset_id = asset_data.get('id', '')
             asset_tag = asset_data.get('Name', '')
-            
+
             # Extract device type and serial from CustomFields
             device_type = 'Unknown'
             serial_number = ''
-            
+
             if 'CustomFields' in asset_data:
                 for field in asset_data['CustomFields']:
                     if field.get('name') == 'Type' and field.get('values'):
                         device_type = field['values'][0]
                     elif field.get('name') == 'Serial Number' and field.get('values'):
                         serial_number = field['values'][0]
-            
+
             # Previous owner name
             previous_owner = owner_info.get('display_name', 'None')
-            
+
             # Prepare row data for both CSV and database
             row_data = [
                 unix_timestamp,                       # Unix timestamp
@@ -145,28 +159,29 @@ class DeviceCheckInLogger:
                 'Yes' if broken_screen else 'No',     # Broken screen (string for CSV)
                 user or 'Unknown'                     # Checked by
             ]
-            
+
             # 1. Write to CSV with file locking to handle concurrent access
             with open(self.current_log_file, 'a', newline='') as csvfile:
                 # Use file locking to prevent concurrent write issues
                 fcntl.flock(csvfile, fcntl.LOCK_EX)
-                
+
                 try:
                     writer = csv.writer(csvfile)
                     writer.writerow(row_data)
                 finally:
                     # Always release the lock
                     fcntl.flock(csvfile, fcntl.LOCK_UN)
-            
+
             # 2. Write to database
-            conn = get_db_connection()
+            conn = None
             try:
+                conn = get_db_connection()
                 cursor = conn.cursor()
-                
+
                 # Convert the boolean values to integers for database storage
                 has_ticket_int = 1 if ticket_id else 0
                 broken_screen_int = 1 if broken_screen else 0
-                
+
                 cursor.execute('''
                 INSERT INTO device_logs (
                     timestamp, date, time, asset_id, asset_tag, device_type,
@@ -178,16 +193,18 @@ class DeviceCheckInLogger:
                     device_type, serial_number, previous_owner, ticket_id or None,
                     has_ticket_int, description or '', broken_screen_int, user or 'Unknown'
                 ))
-                
+
                 conn.commit()
-                
+
             except Exception as db_error:
                 logger.error(f"Error logging check-in to database: {db_error}")
-                conn.rollback()
+                if conn is not None:
+                    conn.rollback()
                 # Continue even if database logging fails
             finally:
-                conn.close()
-                    
+                if conn is not None:
+                    conn.close()
+
             logger.info(f"Logged check-in for asset {asset_tag} by {user}")
             return True
         except Exception as e:
@@ -212,14 +229,16 @@ class DeviceCheckInLogger:
                 # Extract date from filename (format: checkins_YYYY-MM-DD.csv)
                 filename = log_file.name
                 # Parse the date from the filename
+                date_str = None
                 try:
                     date_str = filename[9:-4]  # Remove "checkins_" prefix and ".csv" suffix
                     # Convert to datetime for formatting
                     log_date = datetime.datetime.strptime(date_str, '%Y-%m-%d')
                     # Format as a readable date
                     display_date = log_date.strftime('%A, %B %d, %Y')  # e.g., "Thursday, May 8, 2025"
-                except ValueError:
-                    display_date = date_str
+                except Exception:
+                    # Ensure display_date is set even if parsing fails
+                    display_date = date_str or filename
                 
                 # Count rows
                 try:
@@ -227,7 +246,7 @@ class DeviceCheckInLogger:
                         row_count = sum(1 for _ in f) - 1  # Subtract header row
                         if row_count < 0:
                             row_count = 0
-                except:
+                except Exception:
                     row_count = "Error"
                 
                 results.append({
@@ -254,6 +273,7 @@ class DeviceCheckInLogger:
         Returns:
             list: List of log entries as dictionaries
         """
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -278,7 +298,7 @@ class DeviceCheckInLogger:
             logger.error(f"Error fetching logs from database for date {date_str}: {e}")
             return []
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
                 
     def export_logs_to_csv(self, date_str=None, start_date=None, end_date=None):
@@ -293,6 +313,7 @@ class DeviceCheckInLogger:
         Returns:
             str: CSV data as string
         """
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -347,5 +368,5 @@ class DeviceCheckInLogger:
             logger.error(f"Error exporting logs to CSV: {e}")
             return ""
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()

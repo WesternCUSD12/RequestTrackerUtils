@@ -4,7 +4,6 @@ Check the custom field values for the TEST-0001 asset we just created.
 """
 
 import sys
-import json
 from pathlib import Path
 
 # Add parent directory to path
@@ -46,9 +45,9 @@ def check_asset_fields():
         print(f"  Values: {cf_values}")
         
         if cf_values:
-            print(f"  ✓ Has data")
+            print("  ✓ Has data")
         else:
-            print(f"  ✗ Empty")
+            print("  ✗ Empty")
 
 if __name__ == '__main__':
     check_asset_fields()

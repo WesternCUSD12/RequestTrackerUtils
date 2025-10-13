@@ -2,6 +2,24 @@
 
 RequestTracker Utils is a comprehensive Flask-based application designed to manage student device tracking, asset tags, and seamless integration with the Request Tracker (RT) system. The application provides a complete solution for educational institutions to track device check-ins/check-outs, manage asset lifecycles, and maintain detailed audit logs.
 
+## Architecture
+
+This project follows a documentation-first workflow. Every feature area has an accompanying subsystem guide under [`docs/architecture/`](docs/architecture/) that captures purpose, routes, dependent utilities, configuration, and testing hooks. Start here when onboarding or researching changes:
+
+- [Assets](docs/architecture/assets.md) – batch asset creation, name generation, and catalog caching.
+- [Labels](docs/architecture/labels.md) – HTML/print label generation, barcode/QR utilities, and bulk updates.
+- [Devices](docs/architecture/devices.md) – Chromebook intake workflows, CSV logging, and RT lookups.
+- [Students](docs/architecture/students.md) – roster management, StudentDeviceTracker orchestration, and reconciliation flows.
+- [Tags](docs/architecture/tags.md) – asset-tag sequencing, webhook ingestion, and collision safeguards.
+- [Integrations](docs/architecture/integrations.md) – RT API adapters, Google Admin connectors, and scheduled sync jobs.
+- [Infrastructure](docs/architecture/infrastructure.md) – runtime/deployment footprint, Nix packaging, and storage layout.
+
+**Quick onboarding checklist:**
+
+1. Read the subsystem guide linked above for the area you plan to touch.
+2. Cross-reference the evidence snapshots (`docs/architecture/_inputs/`) to verify the current code state.
+3. Follow the migration/change-set steps in [`specs/002-ensure-my-flask/quickstart.md`](specs/002-ensure-my-flask/quickstart.md) before refactoring.
+
 ## Core Features Overview
 
 ### 1. Student Device Tracking System

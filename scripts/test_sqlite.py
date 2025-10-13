@@ -7,7 +7,6 @@ import sys
 import json
 import sqlite3
 import datetime
-from pathlib import Path
 
 # Add project root to path so we can import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -139,7 +138,7 @@ def test_crud_operations():
         print(f"Retrieved student: {dict(student)}")
         
         # Update the student
-        print(f"Updating student to grade 11")
+        print("Updating student to grade 11")
         cursor.execute(
             "UPDATE students SET grade = ? WHERE id = ?",
             ("11", test_student_id)
@@ -205,7 +204,7 @@ def test_crud_operations():
         print(f"Student after check-out: {dict(student)}")
         
         # Delete the test student
-        print(f"Deleting test student")
+        print("Deleting test student")
         cursor.execute("DELETE FROM students WHERE id = ?", (test_student_id,))
         conn.commit()
         

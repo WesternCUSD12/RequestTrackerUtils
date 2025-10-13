@@ -23,9 +23,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Load environment variables
 load_dotenv()
 
-# Import RT API utilities
-from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN
-from request_tracker_utils.utils.rt_api import rt_api_request
+# Import RT API utilities (imports are intentionally after sys.path and dotenv)
+from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN  # noqa: E402
+from request_tracker_utils.utils.rt_api import rt_api_request  # noqa: E402
 
 # Configure logging
 logging.basicConfig(

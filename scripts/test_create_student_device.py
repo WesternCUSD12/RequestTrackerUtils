@@ -90,7 +90,7 @@ def test_create_asset():
     try:
         response = rt_api_request('POST', '/asset', data=asset_data, config=config)
         asset_id = response.get('id')
-        print(f"✓ Asset created successfully!")
+        print("✓ Asset created successfully!")
         print(f"  Asset ID: {asset_id}")
         print(f"  Asset Tag: {asset_tag}")
         print(f"  Internal Name: {internal_name}")
@@ -112,7 +112,7 @@ def test_create_asset():
             }
         }
         
-        update_response = rt_api_request('PUT', f'/asset/{asset_id}', data=custom_fields_data, config=config)
+        _ = rt_api_request('PUT', f'/asset/{asset_id}', data=custom_fields_data, config=config)
         print("✓ Custom fields updated successfully")
         print()
         
@@ -128,7 +128,7 @@ def test_create_asset():
     print("Step 5: Verifying asset creation...")
     try:
         verify_response = rt_api_request('GET', f'/asset/{asset_id}', config=config)
-        print(f"✓ Asset verified in RT")
+        print("✓ Asset verified in RT")
         print()
         print("Asset details:")
         print(json.dumps(verify_response, indent=2, default=str))

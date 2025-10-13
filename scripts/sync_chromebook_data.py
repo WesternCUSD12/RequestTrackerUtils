@@ -13,11 +13,9 @@ import sys
 import logging
 import argparse
 import os
-import time
 from pathlib import Path
 import traceback
 from dotenv import load_dotenv
-import json
 
 # Add parent directory to Python path to import request_tracker_utils
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -25,20 +23,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Load environment variables from .env file if it exists
 load_dotenv()
 
-# Import RT API utilities
-from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN
-from request_tracker_utils.utils.rt_api import rt_api_request, fetch_asset_data, search_assets
+# Import RT API utilities (after sys.path changes)
+from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN  # noqa: E402
+from request_tracker_utils.utils.rt_api import fetch_asset_data, search_assets  # noqa: E402
 
 # Import Google Admin API utilities
-from request_tracker_utils.utils.google_admin import (
-    list_chromebook_devices, 
-    update_device_name,
-    update_annotated_user,
-    batch_update_chromebooks
+from request_tracker_utils.utils.google_admin import (  # noqa: E402
+    list_chromebook_devices,
+    batch_update_chromebooks,
 )
 
 # Create a Flask app context for testing
-from flask import Flask
+from flask import Flask  # noqa: E402
 app = Flask(__name__)
 app.config.update({
     'RT_URL': RT_URL,

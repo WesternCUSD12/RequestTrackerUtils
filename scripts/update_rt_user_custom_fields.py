@@ -7,7 +7,6 @@ import sys
 import logging
 import argparse
 import os
-import sqlite3
 import time
 from pathlib import Path
 import traceback
@@ -20,12 +19,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Load environment variables from .env file if it exists
 load_dotenv()
 
-# Import RT API utilities
-from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN
-from request_tracker_utils.utils.rt_api import rt_api_request, fetch_user_data, update_user_custom_field
+# Import RT API utilities (after sys.path changes)
+from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN  # noqa: E402
+from request_tracker_utils.utils.rt_api import fetch_user_data, update_user_custom_field  # noqa: E402
 
 # Create a Flask app context for testing
-from flask import Flask
+from flask import Flask  # noqa: E402
 app = Flask(__name__)
 app.config.update({
     'RT_URL': RT_URL,
@@ -39,8 +38,7 @@ ctx = app.app_context()
 ctx.push()
 
 # Now import components that need Flask context
-from request_tracker_utils.utils.student_check_tracker import StudentDeviceTracker
-from request_tracker_utils.utils.db import get_db_connection
+from request_tracker_utils.utils.student_check_tracker import StudentDeviceTracker  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -173,7 +171,7 @@ def get_exact_field_names(rt_user_id, config=None):
         for cf in user_data.get('CustomFields', []):
             if isinstance(cf, dict) and 'name' in cf:
                 name = cf['name'].lower()
-                if 'graduation' in name or 'grad' in name or ('year' in name and not 'id' in name):
+                if 'graduation' in name or 'grad' in name or ('year' in name and 'id' not in name):
                     grade_field = cf['name']
                 elif 'student' in name and 'id' in name:
                     student_id_field = cf['name']
@@ -282,7 +280,7 @@ def sync_student_data_to_rt(config=None, dry_run=False):
             # Get exact field names (case-sensitive)
             grade_field, student_id_field = get_exact_field_names(sample_student['rt_user_id'], config)
             if not grade_field or not student_id_field:
-                logger.warning(f"Could not determine exact field names. Using defaults: Graduation Year='Graduation Year', Student ID='Student ID'")
+                logger.warning("Could not determine exact field names. Using defaults: Graduation Year='Graduation Year', Student ID='Student ID'")
                 grade_field = grade_field or "Graduation Year"
                 student_id_field = student_id_field or "Student ID"
             
@@ -427,12 +425,12 @@ def main():
             
             # Process in batches
             total_students = len(all_students)
-            total_updated = 0
-            total_skipped = 0
-            total_errors = 0
+            _total_updated = 0
+            _total_skipped = 0
+            _total_errors = 0
             
             for i in range(0, total_students, args.batch_size):
-                batch = all_students[i:i+args.batch_size]
+                _batch = all_students[i:i+args.batch_size]
                 logger.info(f"Processing batch {i//args.batch_size + 1} of {(total_students + args.batch_size - 1)//args.batch_size}: students {i+1}-{min(i+args.batch_size, total_students)}")
                 
                 # TODO: Implement batch processing logic

@@ -1,367 +1,146 @@
 # Quickstart: Flask Application Organization & Maintainability
 
-## Overview
+## Purpose
 
-This quickstart guide provides step-by-step instructions for implementing Flask application organization improvements following a documentation-first approach. Each phase builds on the previous, ensuring comprehensive documentation before code changes.
-
-**Key Principle**: Document current state → Define standards → Apply standards gradually
+Follow this runbook to carry the documentation-first reorganization from research into implementation. Each phase delivers auditable artifacts (docs, contracts, tests) before touching production code, keeping RequestTrackerUtils maintainable and compliant with the constitution.
 
 ## Prerequisites
 
-- Python 3.11+ installed
-- Flask application running locally
-- Git repository initialized
-- Access to edit code and documentation
+- Python 3.11 runtime available (via Nix shell, uv, or system interpreter)
+- `direnv allow` or `devenv shell` executed in the repo root
+- Access to RT and Google Admin sandbox credentials for validation
+- Ability to push to feature branch `002-ensure-my-flask`
+- Tooling installed: `ruff`, `isort`, `black`, `pytest`
 
-## Phase 0: Document Current Architecture
+## Phase 0 – Documentation Groundwork
 
-**Goal**: Create comprehensive documentation of existing Flask application structure.
+1. **Create subsystem docs**
+   - Copy the architecture template (`docs/_template_architecture.md`) into `docs/architecture/` for each subsystem: `assets`, `devices`, `labels`, `students`, `tags`, `integrations`, `infrastructure`.
+   - Fill in sections: Purpose, Entry Points, Dependencies, Configuration, Logging & Error Handling, Testing Hooks, Future Work.
+2. **Link from README**
+   - Add an `Architecture` section summarizing the system and linking to each new document.
+   - Highlight the documentation-first rule so contributors know to update docs before code.
+3. **Capture current state evidence**
+   - Run `tree -L 3 request_tracker_utils` and embed the snapshot in the architecture docs.
+   - Export current blueprint registrations from `request_tracker_utils/__init__.py` and include them in the routes documentation.
 
-### Step 0.1: Create Architecture Documentation
+**Exit Criteria**: All subsystem docs exist, README links are live, and evidence of current structure is captured in docs.
 
-1. **Add Architecture Section to README**
+## Phase 1 – Design & Contract Outputs
 
-Create a new section in `README.md`:
+1. **Utility package blueprint**
+   - Map existing utilities into new subpackages:
+     - `utils/integrations/`: RT, Google Admin, other external services.
+     - `utils/services/`: orchestration helpers (student tracker, tag manager, label workflows).
+     - `utils/infrastructure/`: db connections, csv logging, filesystem helpers.
+   - Note any temporary shim modules required during migration.
+2. **Document domain contracts**
+   - Update `data-model.md` with entity tables (Blueprint, Utility Module, Architecture Document, Test Suite) and their relationships/state transitions.
+3. **Publish API surface**
+   - Author `/specs/002-ensure-my-flask/contracts/rt-utils-openapi.yaml` describing existing REST endpoints, payloads, and error envelopes to ensure backward compatibility.
+4. **Refine this quickstart**
+   - Keep instructions synchronized with architecture docs and research decisions.
+5. **Plan pytest scaffolding**
+   - Design directory layout for `tests/unit/`, define fixtures in `conftest.py`, and list priority test cases (RT API cache, name generator, csv logger, blueprint route smoke).
 
-```markdown
-## Architecture
+**Exit Criteria**: Design artifacts (plan, data model, contracts, quickstart) are updated and reviewed with maintainers.
 
-RequestTrackerUtils is a Flask web application using Blueprint-based organization for asset management and label generation.
+## Phase 2 – Implementation Preparation
 
-### Application Structure
+1. **Batch the migration**
+
+   - Define logical change sets: (a) documentation updates, (b) blueprint prefix normalization, (c) utility package moves, (d) pytest scaffolding, (e) logging/error standardization.
+   - For each batch capture expected file list, validation commands, and rollback steps.
+
+   **Change Set A – Documentation Updates**
+
+   - Files: `docs/architecture/*.md`, `README.md`, `docs/architecture/_inputs/*`, `docs/configuration/current_env_matrix.md`.
+   - Validation: `mdformat` (if available), `markdown-link-check README.md`, manual proofread.
+   - Rollback: Restore docs from `git checkout -- docs/architecture README.md docs/configuration/current_env_matrix.md`.
+
+   **Change Set B – Blueprint Prefix Normalization**
+
+   - Files: `request_tracker_utils/__init__.py`, `request_tracker_utils/routes/*.py`, new regression tests under `tests/integration/`.
+   - Validation: `pytest tests/integration/test_blueprint_prefixes.py`, manual curl against key routes (`/labels`, `/devices`, `/students`).
+   - Rollback: `git checkout` route modules and rerun smoke tests; keep legacy prefixes noted in `blueprint_registry.md` until fix applied.
+
+   **Change Set C – Utility Package Moves**
+
+   - Files: `request_tracker_utils/utils/*` reorganized into `integrations/`, `services/`, `infrastructure/`; update `__all__` exports and imports across routes/scripts.
+   - Validation: `ruff check --select=I`, `import-linter`, `pytest tests/unit/utils`, targeted script run (`python scripts/inspect_asset.py --help`).
+   - Rollback: Revert directory moves or reapply shim modules maintained under `utils/legacy/` (temporary) before reattempting.
+
+   **Change Set D – Pytest Scaffolding**
+
+   - Files: `tests/unit/conftest.py`, `tests/unit/utils/test_rt_api.py`, `tests/unit/utils/test_name_generator.py`, `docs/architecture/testing.md`.
+   - Validation: `pytest tests/unit`, ensure zero live HTTP calls (inspect fixture usage).
+   - Rollback: Remove new tests/fixtures, reinstall baseline smoke scripts, note gaps in backlog.
+
+   **Change Set E – Logging & Error Standardization**
+
+   - Files: `request_tracker_utils/utils/error_responses.py`, `request_tracker_utils/logging.py`, route modules for standardized responses, contracts under `specs/002-ensure-my-flask/contracts/`.
+   - Validation: `pytest tests/integration/test_blueprint_prefixes.py::test_error_envelopes`, capture sample logs (`tail -n 50 instance/logs/app.log`) to confirm format.
+   - Rollback: Revert shared helper modules, re-register previous logging handlers in `create_app()`.
+
+2. **Risk register & mitigations**
+   - Document risks (broken imports, missing env vars, stale docs) in `plan.md`, along with mitigations (shim modules, automated search, doc review checklist).
+3. **Validation matrix**
+
+   - Enumerate checks per batch:
+
+     | Batch | Automated Checks                                                                                                | Manual Checks                                                     |
+     | ----- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+     | A     | `ruff check docs/`, `markdown-link-check README.md`                                                             | Confirm README links resolve, preview subsystem docs in browser   |
+     | B     | `pytest tests/integration/test_blueprint_prefixes.py`                                                           | Hit `/labels`, `/devices`, `/students` with curl or browser       |
+     | C     | `ruff check --select=I`, `import-linter`, `pytest tests/unit`                                                   | Execute representative script (`python scripts/inspect_asset.py`) |
+     | D     | `pytest tests/unit`, `pytest tests/integration -k "not external"`                                               | Review fixture docs for completeness                              |
+     | E     | `pytest tests/integration/test_blueprint_prefixes.py::test_error_envelopes`, `pydocstyle request_tracker_utils` | Tail logs to confirm structured format                            |
+
+   - Always close out with `nixos-rebuild test --flake .#request-tracker-utils` (or `switch` in staging) once code reorganization touches deployment modules.
+
+4. **NixOS deployment alignment**
+   - Review `flake.nix`, `flake.lock`, and `devenv.nix` for references to moved modules. Update package inputs/outputs and the `request-tracker-utils.nixosModule` service definition if file paths change.
+   - Document rebuild steps for operators: run `sudo nixos-rebuild switch --flake /etc/nixos#request-tracker-utils` on the host after merging changes, and note any new environment variables in the Nix module options.
+5. **Communication prep**
+   - Draft release notes for IT/ops highlighting new docs/tests.
+   - Schedule walkthrough with maintainers covering documentation locations and pytest flow.
+
+**Exit Criteria**: Implementation path is sequenced, risks logged, and stakeholders briefed.
+
+## Validation Checklist
+
+- [ ] Subsystem docs committed and linked from README
+- [ ] Plan, data model, contracts, and quickstart reflect latest decisions
+- [ ] Pytest scaffolding plan approved
+- [ ] Risk register populated with mitigations
+- [ ] Validation matrix ready for implementation phase
+- [ ] NixOS deployment steps documented and smoke-tested via `sudo nixos-rebuild switch --flake /etc/nixos#request-tracker-utils`
+
+## Reference Commands (fish shell)
+
+```fish
+cd /Users/jmartin/rtutils
+if test -f devenv.lock
+     devenv shell
+else
+     direnv allow
+end
+
+ruff check request_tracker_utils
+isort request_tracker_utils
+pytest tests/unit  # once scaffolded
+./test_rt_api.fish  # smoke check
 ```
 
-request_tracker_utils/
-├── **init**.py # Flask app factory (create_app)
-├── config.py # Environment-based configuration
-├── routes/ # Flask blueprints by feature area
-├── utils/ # Reusable business logic modules
-├── templates/ # Jinja2 HTML templates
-└── static/ # Frontend assets (JS, CSS, images)
-
-```
-
-### Blueprints
-
-| Blueprint | URL Prefix | Purpose |
-|-----------|------------|---------|
-| `label_routes` | `/labels` | Label printing and batch generation |
-| `tag_routes` | `/tags` | Asset tag sequence management |
-| `device_routes` | `/devices` | Device check-in/check-out workflows |
-| `student_routes` | `/students` | Student device tracking |
-| `asset_routes` | `/assets` | Batch asset creation |
-
-### Utility Modules
-
-| Module | Purpose | External Dependencies |
-|--------|---------|----------------------|
-| `rt_api.py` | RT (Request Tracker) API client | RT REST API |
-| `google_admin.py` | Google Admin API integration | Google Directory API |
-| `db.py` | SQLite database operations | None |
-| `pdf_generator.py` | PDF label generation | None |
-| `csv_logger.py` | CSV audit logging | None |
-| `student_check_tracker.py` | Student check-in tracking | SQLite database |
-| `name_generator.py` | Adjective-animal name generation | None |
-
-### External Integrations
-
-- **RT (Request Tracker)**: Asset management, ticket creation, custom fields
-- **Google Admin SDK**: Chromebook data sync, student device information
-- **SQLite**: Local storage for check-in logs, asset tag sequences
-```
-
-2. **Document Module Dependencies**
-
-Create `docs/module_dependencies.md`:
-
-```markdown
-# Module Dependencies
-
-## Dependency Graph
-```
-
-config.py (no dependencies)
-↑
-utils/db.py
-utils/rt_api.py → config.py
-utils/google_admin.py → config.py
-utils/pdf_generator.py
-utils/csv_logger.py
-utils/student_check_tracker.py → utils/db.py
-utils/name_generator.py
-↑
-routes/label_routes.py → utils/rt_api.py, utils/pdf_generator.py
-routes/tag_routes.py → utils/rt_api.py
-routes/device_routes.py → utils/rt_api.py, utils/csv_logger.py
-routes/student_routes.py → utils/google_admin.py, utils/student_check_tracker.py
-routes/asset_routes.py → utils/rt_api.py, utils/name_generator.py
-↑
-**init**.py (app factory) → all routes, config.py
-
-```
-
-## Current State Analysis
-
-- ✅ Blueprint pattern established
-- ✅ Utilities separated from routes
-- ⚠️ Inconsistent URL prefix usage
-- ⚠️ Mixed docstring coverage
-- ⚠️ No explicit module exports (`__all__`)
-```
-
-**Validation**: Verify dependency graph by checking import statements in each module.
-
-### Step 0.2: Create Configuration Documentation
-
-Add Configuration section to README:
-
-````markdown
-## Configuration
-
-All configuration uses environment variables loaded from `.env` file (for development) or system environment (for production).
-
-### Required Variables
-
-| Variable   | Type   | Purpose                     | Example             |
-| ---------- | ------ | --------------------------- | ------------------- |
-| `RT_TOKEN` | string | RT API authentication token | `your-rt-api-token` |
-
-### Optional Variables
-
-| Variable          | Type    | Default                                                          | Purpose                     |
-| ----------------- | ------- | ---------------------------------------------------------------- | --------------------------- |
-| `RT_URL`          | string  | `https://tickets.wc-12.com`                                      | RT instance URL             |
-| `WORKING_DIR`     | path    | `~/.rtutils` (macOS) or `/var/lib/request-tracker-utils` (Linux) | Runtime data directory      |
-| `PORT`            | integer | `8080`                                                           | HTTP server port            |
-| `PREFIX`          | string  | `W12-`                                                           | Asset tag prefix            |
-| `LABEL_WIDTH_MM`  | integer | `100`                                                            | Label width in millimeters  |
-| `LABEL_HEIGHT_MM` | integer | `62`                                                             | Label height in millimeters |
-
-### Setup
-
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-````
-
-2. Edit `.env` with your values:
-
-   ```bash
-   # RT Configuration
-   RT_TOKEN=your-actual-rt-token-here
-   RT_URL=https://your-rt-instance.com
-
-   # Application Settings
-   PORT=8080
-   PREFIX=YOUR-PREFIX-
-   ```
-
-3. Never commit `.env` file (already in `.gitignore`)
-
-### Security Notes
-
-- `RT_TOKEN` is sensitive - never log or expose in error messages
-- `.env` file is for local development only
-- Production uses systemd EnvironmentFile or Nix secrets
-
-````
-
-### Step 0.3: Create .env.example
-
-Create `.env.example` in repository root:
-
-```bash
-# RT (Request Tracker) Configuration
-# Required: Authentication token for RT REST API
-RT_TOKEN=your-rt-api-token-here
-
-# Optional: RT instance URL (default: https://tickets.wc-12.com)
-# RT_URL=https://your-rt-instance.com
-
-# Optional: API endpoint path (default: /REST/2.0)
-# API_ENDPOINT=/REST/2.0
-
-# Google Admin Configuration
-# Required for Chromebook sync features
-GOOGLE_CREDENTIALS_FILE=path/to/google-credentials.json
-GOOGLE_ADMIN_EMAIL=admin@yourdomain.com
-
-# Application Settings
-# Optional: Working directory for database, logs, cache (default: platform-specific)
-# WORKING_DIR=/var/lib/request-tracker-utils
-
-# Optional: HTTP server port (default: 8080)
-# PORT=8080
-
-# Optional: Asset tag prefix (default: W12-)
-# PREFIX=W12-
-
-# Label Configuration
-# Optional: Label dimensions in millimeters (defaults: 100x62)
-# LABEL_WIDTH_MM=100
-# LABEL_HEIGHT_MM=62
-
-# Optional: Label padding in millimeters (default: 4)
-# PADDING=4
-
-# Optional: RT catalog for new assets (default: General assets)
-# RT_CATALOG=General assets
-
-# Logging Configuration
-# Optional: Log level (default: INFO)
-# LOG_LEVEL=INFO
-````
-
-**Validation**: Verify all configuration variables in `config.py` are documented.
-
----
-
-## Phase 1: Standardize Module Structure
-
-**Goal**: Apply consistent module organization patterns without changing functionality.
-
-### Step 1.1: Assign Blueprint URL Prefixes
-
-Update `request_tracker_utils/__init__.py` in `create_app()`:
-
-**Before**:
-
-```python
-app.register_blueprint(label_routes.bp)
-app.register_blueprint(tag_routes.bp)
-app.register_blueprint(device_routes.bp, url_prefix='/devices')
-app.register_blueprint(student_routes.bp)
-app.register_blueprint(asset_routes.bp)
-```
-
-**After**:
-
-```python
-# Register blueprints with explicit URL prefixes
-app.register_blueprint(label_routes.bp, url_prefix='/labels')
-app.register_blueprint(tag_routes.bp, url_prefix='/tags')
-app.register_blueprint(device_routes.bp, url_prefix='/devices')
-app.register_blueprint(student_routes.bp, url_prefix='/students')
-app.register_blueprint(asset_routes.bp, url_prefix='/assets')
-```
-
-**Testing**: Update any tests or documentation that reference old URLs without prefixes.
-
-### Step 1.2: Add **all** Exports to Utility Modules
-
-For each module in `request_tracker_utils/utils/`:
-
-1. **Identify public functions** (used by routes or other utils)
-2. **Add `__all__` list** at top of module after imports
-
-**Example** (`db.py`):
-
-```python
-"""Database connection and initialization utilities."""
-
-import sqlite3
-import logging
-from flask import current_app
-
-# Public API - these functions are intended for import
-__all__ = [
-    'get_db_connection',
-    'init_db',
-    'close_db_connection'
-]
-
-logger = logging.getLogger(__name__)
-
-def get_db_connection():
-    """Get SQLite database connection."""
-    # Implementation
-    pass
-
-def init_db():
-    """Initialize database schema."""
-    # Implementation
-    pass
-
-def close_db_connection(conn):
-    """Close database connection safely."""
-    # Implementation
-    pass
-
-def _create_tables(conn):
-    """Internal: Create database tables."""
-    # This is private (not in __all__)
-    pass
-```
-
-**Validation**: Run `python -c "from request_tracker_utils.utils.db import *; print(dir())"` to verify exports.
-
-### Step 1.3: Organize Imports (PEP 8)
-
-For each Python file:
-
-1. **Order imports**: stdlib → third-party → local
-2. **Group with blank lines** between categories
-3. **Sort alphabetically** within each group
-
-**Example**:
-
-**Before**:
-
-```python
-from request_tracker_utils.config import WORKING_DIR
-from flask import Blueprint, request, jsonify
-import os
-import logging
-from request_tracker_utils.utils.rt_api import fetch_asset_data
-import json
-```
-
-**After**:
-
-```python
-# Standard library
-import json
-import logging
-import os
-
-# Third-party
-from flask import Blueprint, jsonify, request
-
-# Local
-from request_tracker_utils.config import WORKING_DIR
-from request_tracker_utils.utils.rt_api import fetch_asset_data
-```
-
-**Tool**: Use `isort` for automatic sorting:
-
-```bash
-isort request_tracker_utils/
-```
-
----
-
-## Phase 2: Add Comprehensive Documentation
-
-**Goal**: Add Google-style docstrings to all public functions.
-
-### Step 2.1: Add Module Docstrings
-
-For each module without a module-level docstring:
-
-```python
-"""
-One-line summary of module purpose.
-
-Extended description of what this module provides and its main use cases.
-
-Typical usage example:
-    from module_name import primary_function
-
-    result = primary_function(param="value")
-```
-
-**Example** (`rt_api.py`):
+## Helpful Resources
+
+- Constitution: `.specify/memory/constitution.md`
+- Feature spec: `specs/002-ensure-my-flask/spec.md`
+- Research log: `specs/002-ensure-my-flask/research.md`
+- API contracts: `specs/002-ensure-my-flask/contracts/`
+- Architecture docs: `docs/architecture/`
+
+Keep this quickstart current whenever standards evolve; it is the onboarding path for contributors executing this maintainability initiative.
 
 ```python
 """

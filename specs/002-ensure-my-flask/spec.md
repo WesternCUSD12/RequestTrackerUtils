@@ -17,6 +17,11 @@
 - Q: Should every blueprint be registered with an explicit URL prefix? → A: Yes, every blueprint must have its own prefix
 - Q: When eliminating module circular dependencies, what approach should be preferred? → A: Default to extracting shared logic into a new utility module
 
+### Session 2025-10-13
+
+- Q: Which documentation artifacts must be produced before refactoring? → A: Create docs under docs/architecture/ (one per subsystem) linked from README
+- Q: How should operators deploy to NixOS hosts during this reorg? → A: Use `sudo nixos-rebuild switch --flake /etc/nixos#request-tracker-utils`
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Developer Onboarding (Priority: P1)
@@ -108,6 +113,7 @@ A developer needs to understand the purpose, inputs, outputs, and side effects o
 - What happens when Flask app context is needed outside of request handlers (e.g., in scripts or background jobs)?
 - What happens when documentation becomes outdated or inconsistent with actual code implementation?
 - How to ensure documentation-first approach is maintained as new features are added after initial reorganization?
+- How do reviewers or automation catch missing Google-style docstrings or blueprint prefix regressions introduced after the reorganization?
 
 ## Requirements _(mandatory)_
 
@@ -117,7 +123,7 @@ A developer needs to understand the purpose, inputs, outputs, and side effects o
 - **FR-002**: All utility functions MUST be in dedicated modules (`utils/`) with clear interfaces and no route-handling logic
 - **FR-003**: Configuration MUST use environment variables with documented defaults in a single `config.py` module; sensitive values (tokens, secrets) MUST be managed via environment-specific .env files that are never committed to version control; application MUST fail fast at startup with a clear error if any required environment variable (e.g., `RT_TOKEN`) is missing
 - **FR-004**: All database operations MUST use the established connection pattern through `utils/db.py`
-- **FR-005**: Application MUST have a clear project structure documented in README with purpose of each directory; documentation MUST include .env.example with non-sensitive placeholder values and instructions for secrets management
+- **FR-005**: Application MUST have a clear project structure documented in README with purpose of each directory; README MUST link to subsystem-specific architecture docs under `docs/architecture/`; documentation MUST include .env.example with non-sensitive placeholder values and instructions for secrets management
 - **FR-006**: All public functions MUST include docstrings with parameters, return values, and raised exceptions using Google-style format (Args/Returns/Raises sections)
 - **FR-007**: Error handling MUST follow consistent patterns across all blueprints with proper logging (traditional text format: timestamp, level, module, message) and user-friendly messages
 - **FR-008**: API endpoints MUST return proper HTTP status codes (400 for validation errors, 500 for server errors) with JSON error details
@@ -128,7 +134,9 @@ A developer needs to understand the purpose, inputs, outputs, and side effects o
 - **FR-013**: Templates MUST extend a base template for consistent layout and use template inheritance appropriately
 - **FR-014**: Code MUST follow consistent naming conventions (snake_case for functions/variables, PascalCase for classes)
 - **FR-015**: Import statements MUST be ordered (stdlib → third-party → local) and grouped by source
-- **FR-016**: Implementation MUST follow documentation-first approach: comprehensive architecture documentation MUST be created before any code refactoring begins
+- **FR-016**: Implementation MUST follow documentation-first approach: comprehensive architecture documentation MUST be created before any code refactoring begins, consisting of one markdown file per major subsystem stored under `docs/architecture/` and linked from the README
+- **FR-017**: Deployment documentation MUST cover the supported NixOS service module, including update steps for `flake.nix`/`nixosModule` outputs and verification procedures to ensure reorganized code keeps the systemd service operational
+- **FR-018**: Operational runbooks MUST standardize on executing `sudo nixos-rebuild switch --flake /etc/nixos#request-tracker-utils` after merging reorganization changes, and any deviations MUST be documented with equivalent automation guarantees
 
 ### Key Entities
 
@@ -143,28 +151,9 @@ A developer needs to understand the purpose, inputs, outputs, and side effects o
 
 ### Measurable Outcomes
 
-- **SC-001**: New developers can locate and understand the purpose of any module within 10 minutes using documentation and file structure
-- **SC-002**: Code changes isolated to a single feature area (e.g., RT API) require modifications in no more than 3 files on average
-- **SC-003**: 90% of functions include docstrings with complete parameter and return value documentation
-- **SC-004**: Zero circular dependencies exist between modules (verified by static analysis)
-- **SC-005**: All configuration values can be set via environment variables without code modification
-- **SC-006**: Application can be deployed to a new environment in under 15 minutes following documented steps
-- **SC-007**: Unit tests can run without Flask server or external API connections (100% mockable dependencies)
-- **SC-008**: Code review feedback about organization, naming, or structure decreases by 50% after reorganization
-- **SC-009**: All log messages follow consistent format (timestamp, level, module, message) across all modules
-
 ## Assumptions
 
-1. **Development environment**: Developers use Nix with devenv or have Python 3.11+ with Flask 2.2+ installed locally
-2. **Deployment target**: Application runs on NixOS or similar Unix-like system with systemd service management
-3. **Team size**: Small team (2-5 developers) with varying Flask experience levels requiring clear documentation
-4. **Current state**: Application already has multiple blueprints (labels, tags, devices, students, assets) but organization and documentation may be inconsistent
-5. **Testing framework**: Existing test patterns use pytest or similar (based on `test_integration.py` and `test_rt_api.fish` presence)
-6. **External dependencies**: RT (Request Tracker) API, Google Admin API, and local SQLite database
-7. **Configuration method**: Environment variables loaded via python-dotenv with `.env` file for local development
-8. **Code style**: Python follows PEP 8 with snake_case naming for functions/variables
-9. **Version control**: Git with feature branch workflow (evident from spec branch pattern)
-10. **Documentation format**: Markdown for README, docstrings for inline documentation
+How do reviewers or automation catch missing Google-style docstrings or blueprint prefix regressions introduced after the reorganization? 8. **Code style**: Python follows PEP 8 with snake_case naming for functions/variables 9. **Version control**: Git with feature branch workflow (evident from spec branch pattern) 10. **Documentation format**: Markdown for README, docstrings for inline documentation
 
 ## Dependencies
 

@@ -6,7 +6,6 @@ import csv
 import subprocess
 import sys
 import logging
-from pathlib import Path
 
 def collect_battery_data(gam_path='gam'):
     """Run GAM telemetry command and return CSV data."""
@@ -50,8 +49,8 @@ def analyze_battery_data(data):
                 try:
                     health_pct = round((float(full_charge) / float(design_capacity)) * 100, 1)
                     print(f"  Calculated Health: {health_pct}%")
-                except:
-                    print(f"  Calculated Health: Error calculating")
+                except Exception:
+                    print("  Calculated Health: Error calculating")
 
 def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

@@ -9,6 +9,8 @@ let
   buildInputs = with pkgs; [
     # stdenv.cc.cc
     libuv
+    # ruff is a fast Python linter/formatter used in this project
+    ruff
     # zlib
   ];
 in
@@ -19,6 +21,8 @@ in
 
   # git.enable = true;
 
+  packages = with pkgs;[ruff pyright mypy];
+
   languages.python = {
     enable = true;
     uv = {
@@ -28,7 +32,7 @@ in
   };
 
   enterShell = ''
-    .devenv/state/venv/bin/activate
+    source .devenv/state/venv/bin/activate.fish
   '';
 
   dotenv.enable = true;

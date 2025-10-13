@@ -2,8 +2,6 @@
 """
 Test script to update just one device's battery health in RT.
 """
-import csv
-import subprocess
 import sys
 import logging
 import os
@@ -54,7 +52,7 @@ def test_single_device():
     full_charge_capacity = 3451
     design_capacity = 3735
     health_status = "BATTERY_HEALTH_NORMAL"
-    cycle_count = 70
+    _ = 70  # cycle_count intentionally unused in this test
     
     # Calculate health percentage
     health_percentage = round((full_charge_capacity / design_capacity) * 100, 1)

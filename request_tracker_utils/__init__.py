@@ -1,5 +1,11 @@
-from flask import Flask, render_template, url_for, jsonify, request
-from request_tracker_utils.routes import label_routes, tag_routes, device_routes, student_routes, asset_routes
+from flask import Flask, render_template, jsonify, request
+from request_tracker_utils.routes import (
+    label_routes as label_routes,
+    tag_routes as tag_routes,
+    device_routes as device_routes,
+    student_routes as student_routes,
+    asset_routes as asset_routes,
+)
 from .utils.db import init_db  # Import the database initialization function
 
 def request_wants_json():
@@ -31,12 +37,15 @@ def create_app():
     with app.app_context():
         init_db()
 
-    # Register blueprints
-    app.register_blueprint(label_routes.bp)
+    # Register blueprints with explicit, non-overlapping prefixes
+    app.register_blueprint(label_routes.bp, url_prefix='/labels')
+    # Mount tag routes at the application root so endpoints like
+    # /next-asset-tag, /reset-asset-tag, /confirm-asset-tag match
+    # the documented and client-used paths.
     app.register_blueprint(tag_routes.bp)
     app.register_blueprint(device_routes.bp, url_prefix='/devices')
-    app.register_blueprint(student_routes.bp)  # No prefix so routes will be at the root level
-    app.register_blueprint(asset_routes.bp)  # Asset batch creation routes
+    app.register_blueprint(student_routes.bp, url_prefix='/students')
+    app.register_blueprint(asset_routes.bp, url_prefix='/assets')
 
     # Add homepage route
     @app.route('/')

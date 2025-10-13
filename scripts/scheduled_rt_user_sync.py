@@ -17,11 +17,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Load environment variables from .env file if it exists
 load_dotenv()
 
-# Import RT API utilities
-from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN
+# Import RT API utilities (imports after sys.path and dotenv by design)
+from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN  # noqa: E402
 
 # Create a Flask app context for testing
-from flask import Flask
+from flask import Flask  # noqa: E402
 app = Flask(__name__)
 app.config.update({
     'RT_URL': RT_URL,
@@ -35,11 +35,11 @@ ctx = app.app_context()
 ctx.push()
 
 # Now import the sync function that needs Flask context
-from scripts.update_rt_user_custom_fields import sync_student_data_to_rt
+from scripts.update_rt_user_custom_fields import sync_student_data_to_rt  # noqa: E402
 
 # Configure logging to file
-log_dir = os.environ.get('LOG_DIR', Path.home() / '.rtutils' / 'logs')
-os.makedirs(log_dir, exist_ok=True)
+log_dir = Path(os.environ.get('LOG_DIR') or (Path.home() / '.rtutils' / 'logs'))
+log_dir.mkdir(parents=True, exist_ok=True)
 
 log_file = log_dir / f"rt_user_sync_{datetime.now().strftime('%Y-%m-%d')}.log"
 

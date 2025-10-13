@@ -4,17 +4,51 @@
 
 This document analyzes the current Flask application structure, identifies organizational patterns and gaps, and researches best practices for Flask code organization, documentation, error handling, and testing.
 
+## Clarified Decisions (2025-10-13)
+
+### Documentation Topology
+
+- **Decision**: Author subsystem-focused markdown files under `docs/architecture/` and link them from the README.
+- **Rationale**: Maintains a concise onboarding flow in README while granting space for each blueprint/util subsystem to cover responsibilities, dependencies, and configuration in depth.
+- **Alternatives considered**: A single monolithic `ARCHITECTURE.md` (harder to navigate and review) or scattering notes across existing specs (risks divergence and duplicated effort).
+
+### Utility Layer Refactor Strategy
+
+- **Decision**: Categorize utilities into nested subpackages (`integrations/`, `services/`, `infrastructure/`) and document contracts before relocating functions.
+- **Rationale**: Provides clear ownership boundaries, protects import stability during incremental migrations, and prepares modules for unit testing with mocks.
+- **Alternatives considered**: Leaving utilities flat (ambiguous responsibilities) or renaming the package (disruptive for downstream scripts).
+
+### Testing Enablement
+
+- **Decision**: Introduce a `tests/unit/` pytest suite with fixtures and mocks, and document how existing `.fish` smoke scripts complement automated coverage.
+- **Rationale**: Aligns with success criterion SC-007 and offers fast feedback without Flask server startup or live API calls.
+- **Alternatives considered**: Relying solely on ad-hoc scripts (inconsistent) or switching frameworks (pytest already assumed in spec).
+
+### Configuration Documentation
+
+- **Decision**: Expand `config.py` docstrings and README tables to enumerate required/optional environment variables, referencing secrets-management guidance.
+- **Rationale**: Centralizes authoritative configuration guidance for developers and operators, satisfying FR-003 documentation expectations.
+- **Alternatives considered**: Maintaining separate wiki pages (susceptible to drift) or relying on inline comments only (harder to discover).
+
+### Deployment Target Alignment
+
+- **Decision**: Treat the NixOS host as the primary deployment target by keeping `flake.nix`, the packaged application, and the `request-tracker-utils.nixosModule` service definition in lockstep with code reorganizations.
+- **Rationale**: Production relies on NixOS for reproducible builds and systemd service management; documenting required updates prevents deployment regressions.
+- **Alternatives considered**: Deferring to ad-hoc deployment notes (risks configuration drift) or abstracting deployment docs away from the codebase (harder for developers to discover).
+
 ## Current Application State Analysis
 
 ### Application Architecture
 
 The application follows Flask Blueprint pattern with 5 feature-area blueprints:
 
-1. **label_routes** (`/labels`) - Label printing and batch generation for asset tags
-2. **tag_routes** (root) - Asset tag sequence management and generation
-3. **device_routes** (`/devices`) - Device check-in/check-out workflows
-4. **student_routes** (root) - Student device tracking and Google Admin integration
-5. **asset_routes** (root) - Batch asset creation with RT API
+| Blueprint      | File                     | Current Prefix | Required Prefix |
+| -------------- | ------------------------ | -------------- | --------------- |
+| label_routes   | routes/label_routes.py   | `/labels`      | `/labels`       |
+| tag_routes     | routes/tag_routes.py     | (none/root)    | `/tags`         |
+| device_routes  | routes/device_routes.py  | `/devices`     | `/devices`      |
+| student_routes | routes/student_routes.py | (none/root)    | `/students`     |
+| asset_routes   | routes/asset_routes.py   | (none/root)    | `/assets`       |
 
 **Observations**:
 

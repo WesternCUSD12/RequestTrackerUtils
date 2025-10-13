@@ -1,6 +1,5 @@
 import csv
 import os
-import time
 import fcntl
 import datetime
 import logging
@@ -106,7 +105,7 @@ class StudentDeviceTracker:
                     # Always release the lock
                     fcntl.flock(f, fcntl.LOCK_UN)
                     
-            logger.info(f"Saved student device tracker data")
+            logger.info("Saved student device tracker data")
             return True
         except Exception as e:
             logger.error(f"Error saving tracker data: {e}")

@@ -1,0 +1,70 @@
+request_tracker_utils
+├── __init__.py
+├── __pycache__
+│   ├── __init__.cpython-312.pyc
+│   ├── __init__.cpython-313.pyc
+│   ├── celery_app.cpython-312.pyc
+│   └── config.cpython-312.pyc
+├── config.py
+├── data
+│   └── Adjective-Animal-List.csv
+├── routes
+│   ├── __init__.py
+│   ├── __pycache__
+│   │   ├── __init__.cpython-312.pyc
+│   │   ├── asset_routes.cpython-312.pyc
+│   │   ├── chromebook_routes.cpython-312.pyc
+│   │   ├── device_management_routes.cpython-312.pyc
+│   │   ├── device_routes.cpython-312.pyc
+│   │   ├── devices_routes.cpython-312.pyc
+│   │   ├── info_routes.cpython-312.pyc
+│   │   ├── label_routes.cpython-312.pyc
+│   │   ├── student_routes.cpython-312.pyc
+│   │   └── tag_routes.cpython-312.pyc
+│   ├── asset_routes.py
+│   ├── device_routes.py
+│   ├── label_routes.py
+│   ├── student_routes.py
+│   └── tag_routes.py
+├── static
+│   └── js
+│       └── asset_batch.js
+├── templates
+│   ├── asset_create.html
+│   ├── asset_tag_admin.html
+│   ├── base.html
+│   ├── batch_labels.html
+│   ├── batch_labels_form.html
+│   ├── checkin_logs.html
+│   ├── csv_preview.html
+│   ├── custom_fields_debug.html
+│   ├── debug.html
+│   ├── device_checkin.html
+│   ├── device_checkout.html
+│   ├── index.html
+│   ├── label.html
+│   ├── label_form.html
+│   ├── student_checkin.html
+│   ├── student_devices.html
+│   └── student_import.html
+└── utils
+    ├── __init__.py
+    ├── __pycache__
+    │   ├── __init__.cpython-312.pyc
+    │   ├── csv_logger.cpython-312.pyc
+    │   ├── db.cpython-312.pyc
+    │   ├── google_admin.cpython-312.pyc
+    │   ├── name_generator.cpython-312.pyc
+    │   ├── rt_api.cpython-312.pyc
+    │   └── student_check_tracker.cpython-312.pyc
+    ├── cache
+    │   └── __pycache__
+    ├── csv_logger.py
+    ├── db.py
+    ├── google_admin.py
+    ├── name_generator.py
+    ├── pdf_generator.py
+    ├── rt_api.py
+    └── student_check_tracker.py
+
+12 directories, 56 files

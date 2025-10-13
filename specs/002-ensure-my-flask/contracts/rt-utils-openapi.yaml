@@ -1,0 +1,309 @@
+openapi: 3.1.0
+info:
+  title: RequestTrackerUtils Service
+  version: 1.0.0
+  description: >-
+    Canonical snapshot of REST endpoints prior to the Flask organization refactor.
+    Implementations MUST remain backward compatible throughout the initiative.
+servers:
+  - url: https://{host}
+    variables:
+      host:
+        default: localhost:8080
+        description: RTUtils deployment host
+paths:
+  /tags/current:
+    get:
+      summary: Retrieve current asset tag sequence details
+      operationId: getCurrentTag
+      responses:
+        "200":
+          description: Current sequence information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagSequence'
+        "500":
+          description: Internal error while reading sequence
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /tags/next:
+    post:
+      summary: Allocate the next asset tag value
+      operationId: allocateNextTag
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                previewOnly:
+                  type: boolean
+                  default: false
+                  description: >-
+                    When true, returns the next tag without advancing the sequence.
+      responses:
+        "201":
+          description: Next tag allocated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tag:
+                    type: string
+                    example: W12-01234
+                  sequenceNumber:
+                    type: integer
+                    example: 1234
+        "409":
+          description: Sequence conflict detected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        "500":
+          description: Internal error while updating sequence
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /labels/batch:
+    post:
+      summary: Generate printable batch of asset labels
+      operationId: generateLabelBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assets
+              properties:
+                assets:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required:
+                      - tag
+                      - description
+                    properties:
+                      tag:
+                        type: string
+                        example: W12-01234
+                      description:
+                        type: string
+                        example: HP Chromebook 11 G9 EE
+                template:
+                  type: string
+                  enum: [default, narrow, wide]
+                  default: default
+                includeQRCodes:
+                  type: boolean
+                  default: true
+      responses:
+        "200":
+          description: PDF payload containing rendered labels
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Validation failure (e.g., missing fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        "500":
+          description: Rendering error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /devices/check-in:
+    post:
+      summary: Record device check-in event
+      operationId: checkInDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assetTag
+                - studentId
+              properties:
+                assetTag:
+                  type: string
+                  example: W12-01234
+                studentId:
+                  type: string
+                  example: 123456
+                condition:
+                  type: string
+                  description: Optional device condition notes
+      responses:
+        "200":
+          description: Check-in recorded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "400":
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        "502":
+          description: Downstream RT or Google Admin failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /devices/check-out:
+    post:
+      summary: Record device check-out event
+      operationId: checkOutDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assetTag
+                - studentId
+              properties:
+                assetTag:
+                  type: string
+                studentId:
+                  type: string
+                dueDate:
+                  type: string
+                  format: date
+                  nullable: true
+      responses:
+        "200":
+          description: Check-out recorded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "400":
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        "502":
+          description: Downstream RT or Google Admin failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /students/{studentId}/devices:
+    get:
+      summary: Retrieve devices assigned to a student
+      operationId: listStudentDevices
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Student devices listing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  studentId:
+                    type: string
+                  devices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        assetTag:
+                          type: string
+                        status:
+                          type: string
+                          enum: [checked-in, checked-out]
+                        lastUpdated:
+                          type: string
+                          format: date-time
+        "404":
+          description: Student not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        "502":
+          description: Google Admin lookup failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        "500":
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+components:
+  schemas:
+    TagSequence:
+      type: object
+      properties:
+        prefix:
+          type: string
+          example: W12-
+        nextSequenceNumber:
+          type: integer
+          example: 1234
+        previewTag:
+          type: string
+          example: W12-01234
+    ErrorEnvelope:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+          nullable: true
+        correlationId:
+          type: string
+          nullable: true

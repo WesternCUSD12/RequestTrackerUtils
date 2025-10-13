@@ -21,8 +21,4 @@ Python 3.11+: Follow standard conventions
 - 001-i-need-to: Added Python 3.11+ + Flask 2.2+, requests 2.28+, reportlab 3.6+, qrcode 7.3+, python-barcode 0.13+
 
 <!-- MANUAL ADDITIONS START -->
-<<<<<<< HEAD
 <!-- MANUAL ADDITIONS END -->
-=======
-<!-- MANUAL ADDITIONS END -->
->>>>>>> main

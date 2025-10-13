@@ -1,7 +1,6 @@
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app, send_file
-from ..utils.rt_api import find_asset_by_name, get_assets_by_owner, fetch_asset_data, fetch_user_data, rt_api_request, update_asset_custom_field
+from flask import Blueprint, render_template, request, jsonify, current_app, send_file
+from ..utils.rt_api import get_assets_by_owner, fetch_asset_data, fetch_user_data, rt_api_request
 import logging
-import urllib.parse
 import requests
 import json
 import time
@@ -114,7 +113,7 @@ def get_asset_info(asset_name):
 
         # Extract owner information and log it
         owner_data = asset_data.get('Owner', {})
-        logger.info(f"\n=== Owner Information ===")
+        logger.info("\n=== Owner Information ===")
         logger.info(f"Raw owner data: {json.dumps(owner_data, indent=2)}")
         
         owner_info = {
@@ -185,7 +184,7 @@ def get_asset_info(asset_name):
         other_assets = []
         if owner_info['id'] == "Nobody" or owner_info['name'] == "Nobody":
             # If owner is Nobody, don't look up other assets
-            logger.info(f"Owner is 'Nobody' - skipping lookup of other devices")
+            logger.info("Owner is 'Nobody' - skipping lookup of other devices")
         elif owner_info['numeric_id']:  # Use numeric_id instead of id
             logger.info(f"\n=== Looking up other assets for owner {owner_info['numeric_id']} ===")
             try:
@@ -194,7 +193,7 @@ def get_asset_info(asset_name):
                 
                 # Log details about each asset found
                 for asset in other_assets:
-                    logger.info(f"Other asset found:")
+                    logger.info("Other asset found:")
                     logger.info(f"  ID: {asset.get('id')}")
                     logger.info(f"  Name: {asset.get('Name')}")
                     logger.info(f"  Status: {asset.get('Status')}")
@@ -237,7 +236,8 @@ def get_asset_info(asset_name):
 def update_asset():
     """API endpoint to update asset owner and create linked tickets"""
     try:
-        data = request.json
+        # Use get_json(silent=True) to avoid returning None when no JSON body is provided
+        data = request.get_json(silent=True) or {}
         asset_id = data.get('assetId')
         set_owner_to_nobody = data.get('setOwnerToNobody', False)
         create_ticket = data.get('createTicket', False)
@@ -527,15 +527,10 @@ def checkin_logs():
         logger.error(f"Error displaying check-in logs: {e}")
         logger.error(traceback.format_exc())
         
-        # Check if the error.html template exists before trying to render it
-        template_exists = os.path.exists(os.path.join(
-            current_app.root_path, 'templates', 'error.html'
-        ))
-        
-        if template_exists:
+        # Try to render the error template; if it fails, return a simple fallback string
+        try:
             return render_template('error.html', error=f"Failed to load check-in logs: {str(e)}")
-        else:
-            # Fallback to a simple error message if the template doesn't exist
+        except Exception:
             return f"<h1>Error</h1><p>Failed to load check-in logs: {str(e)}</p>", 500
 
 @bp.route('/download-checkin-log/<filename>')

@@ -190,26 +190,26 @@ def main():
     try:
         # Read battery data from CSV
         data = read_battery_data_from_csv(csv_path)
-        
+
         if args.dry_run:
             logging.info("DRY RUN - Would process the following devices:")
-            whs_c_count = 0
+            _whs_c_count = 0
             for row in data[:10]:  # Show first 10 as example
                 serial = row.get('serialNumber', '').strip()
                 if serial:
                     health_percentage, health_status, cycle_count = calculate_battery_health(row)
-                    
+
                     # Mock RT asset search for dry run
                     logging.info(f"  {serial}: {health_percentage}% ({health_status})")
                     # In a real dry run, we'd need to actually search RT to check the prefix
                     # For now, just show what data we have
-                    
+
             logging.info(f"Total devices in CSV: {len(data)}")
             logging.info("Note: Dry run does not check RT asset names for WHS-C prefix")
         else:
             # Update battery data in RT
             update_battery_fields(data, config)
-            
+
     except Exception as e:
         logging.error(f"Error: {e}")
         sys.exit(1)

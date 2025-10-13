@@ -4,16 +4,14 @@ Google Admin API utility functions for interacting with Google Workspace Admin C
 Provides functionality for managing Chromebook devices.
 """
 import os
-import json
 import logging
 import time
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Union, Tuple
+from typing import Dict, List, Any, Optional, Tuple
 
 import googleapiclient.discovery
 from google.oauth2 import service_account
 from googleapiclient.errors import HttpError
-from flask import current_app
 
 # Configure logging
 logger = logging.getLogger(__name__)

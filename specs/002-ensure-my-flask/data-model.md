@@ -62,6 +62,8 @@ A reusable Python module providing business logic, data access, or integration w
 - **Exported Functions** (List[str]): Public API defined in `__all__`
 - **External Dependencies** (List[str]): Third-party APIs or services integrated
 - **State** (str): Stateless or Stateful (if maintains cache, connection pool, etc.)
+- **Target Subpackage** (str): Intended grouping for reorganization (`integrations/`, `services/`, `infrastructure/`)
+- **Dependency Rules** (str): May depend only on lower-level subpackages (no cyclic imports; e.g., `services` may use `integrations` and `infrastructure`, but not vice versa)
 
 **Responsibilities**:
 
@@ -87,6 +89,7 @@ A reusable Python module providing business logic, data access, or integration w
 - External API calls must have try/catch, retry logic, timeout
 - Must use Python `logging` module (not print statements)
 - Stateful modules must handle thread safety if applicable
+- During reorganization, utilities will be grouped under subpackages: `integrations/` (external APIs), `services/` (domain orchestration), and `infrastructure/` (persistence helpers)
 
 **Current Instances**:
 
@@ -266,6 +269,88 @@ Frontend files (JavaScript, CSS, images) served directly to the browser.
 - `static/js/asset_batch.js` - Asset batch creation form state management
 
 ---
+
+### 7. Architecture Document
+
+A markdown artifact describing responsibilities, dependencies, configuration, and troubleshooting guidance for a subsystem.
+
+**Attributes**:
+
+- **Subsystem Name** (str): Matching blueprint or utility area (e.g., `tags`, `devices`, `integrations`)
+- **Purpose** (str): Summary of what the subsystem delivers
+- **Inputs/Outputs** (List[str]): Key data consumed and produced
+- **Dependencies** (List[str]): Utility modules, external services, configuration variables
+- **Operational Notes** (List[str]): Logging, monitoring, failure handling tips
+- **Ownership** (str): Team or role accountable for updates
+
+**Responsibilities**:
+
+- Provide canonical documentation for subsystem architecture and workflows
+- Identify boundary contracts (public APIs, templates, scripts)
+- Enumerate configuration requirements and secret handling expectations
+- Surface known risks and future improvements
+
+**Relationships**:
+
+- **Linked from** README architecture section
+- **Updated with** code refactors to maintain documentation-first approach
+- **References** related utility modules, blueprints, and tests
+
+**Standards**:
+
+- Stored under `docs/architecture/`
+- Must follow shared template (Purpose → Responsibilities → Dependencies → Configuration → Testing → Future Work)
+- Reviewed whenever subsystem code changes land
+- Must cross-reference relevant API contracts and test coverage
+- Must link deployment expectations, including how the NixOS service module consumes the subsystem (if applicable)
+
+**Current/Planned Instances**:
+
+- `docs/architecture/assets.md`
+- `docs/architecture/devices.md`
+- `docs/architecture/labels.md`
+- `docs/architecture/students.md`
+- `docs/architecture/tags.md`
+- `docs/architecture/integrations.md`
+
+---
+
+### 8. Test Suite Module
+
+A pytest package encapsulating automated tests for utilities, routes, and integrations.
+
+**Attributes**:
+
+- **Name** (str): Package path (e.g., `tests/unit/utils/test_rt_api.py`)
+- **Scope** (str): Unit, integration, or smoke
+- **Fixtures** (List[str]): Reusable setup helpers (e.g., fake RT client, temporary SQLite DB)
+- **Dependencies** (List[str]): Mock libraries, sample data files
+
+**Responsibilities**:
+
+- Validate public contracts of utilities and route handlers
+- Catch regressions introduced during reorganization
+- Document expected side effects and error handling
+
+**Relationships**:
+
+- **Targets** Utility Modules and Blueprints via app/test clients
+- **Uses** configuration fixtures to isolate environments
+- **Augments** shell-based smoke scripts for end-to-end validation
+
+**Standards**:
+
+- Organized under `tests/` with `unit/`, `integration/`, and `smoke/` layers
+- Uses pytest style with fixtures defined in `conftest.py`
+- Must run without external network calls (use mocks)
+- Must be referenced in quickstart documentation
+
+**Current/Planned Instances**:
+
+- `tests/unit/utils/test_rt_api.py` (planned)
+- `tests/unit/utils/test_name_generator.py` (planned)
+- `tests/integration/test_integration.py` (existing; to be relocated)
+- `tests/smoke/test_rt_api.fish` (existing shell script linked in docs)
 
 ## Relationships Diagram
 

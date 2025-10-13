@@ -57,7 +57,7 @@ def list_custom_fields():
                 
                 # Check if it's battery related
                 if 'battery' in field_name.lower() or 'health' in field_name.lower():
-                    print(f"  *** BATTERY FIELD FOUND ***")
+                    print("  *** BATTERY FIELD FOUND ***")
                     
                     # Get more details about this field
                     try:
@@ -65,7 +65,7 @@ def list_custom_fields():
                         if detail_response:
                             values = detail_response.get('Values', [])
                             if values:
-                                print(f"  Allowed Values:")
+                                print("  Allowed Values:")
                                 for value in values:
                                     print(f"    - {value}")
                     except Exception as e:

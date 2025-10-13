@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request, current_app, render_template
 from datetime import datetime
 import os
 import re
-from request_tracker_utils.utils.rt_api import update_asset_custom_field, fetch_asset_data, rt_api_request
+from request_tracker_utils.utils.rt_api import fetch_asset_data, rt_api_request
 
 bp = Blueprint('tag_routes', __name__)
 
@@ -160,7 +160,7 @@ class AssetTagManager:
                             # Skip entries with invalid timestamps
                             continue
                             
-        except Exception as e:
+        except Exception:
             # Return partial results if there's an error
             return entries
             
@@ -215,17 +215,17 @@ def confirm_asset_tag_route():
 
     # After confirming the asset tag, update the asset name in RT
     try:
-        # Fetch the asset data to ensure it exists
-        asset_data = fetch_asset_data(request_tracker_id, current_app.config)
-        
+        # Fetch the asset data to ensure it exists (we don't need the full payload here)
+        _ = fetch_asset_data(request_tracker_id, current_app.config)
+
         # Update the asset name to match the asset tag
         data = {
             "Name": asset_tag
         }
-        
+
         # Make the API request to update the asset
         rt_api_request("PUT", f"/asset/{request_tracker_id}", data=data, config=current_app.config)
-        
+
         current_app.logger.info(f"Updated asset {request_tracker_id} name to {asset_tag}")
     except Exception as e:
         # Log the error but don't fail the request
@@ -259,17 +259,17 @@ def update_asset_name_route():
     try:
         # Fetch the asset data to ensure it exists
         asset_data = fetch_asset_data(asset_id, current_app.config)
-        
+
         # Update the asset name
         update_data = {
             "Name": asset_name
         }
-        
-        # Make the API request to update the asset
-        response = rt_api_request("PUT", f"/asset/{asset_id}", data=update_data, config=current_app.config)
-        
+
+        # Make the API request to update the asset (response intentionally unused)
+        _ = rt_api_request("PUT", f"/asset/{asset_id}", data=update_data, config=current_app.config)
+
         current_app.logger.info(f"Updated asset {asset_id} name to {asset_name}")
-        
+
         return jsonify({
             "message": f"Asset name updated successfully to '{asset_name}'",
             "old_name": asset_data.get("Name", "Unknown"),

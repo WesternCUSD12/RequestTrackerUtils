@@ -59,7 +59,7 @@ def import_csv_file(file_path):
             # Open and parse CSV file
             with open(file_path, 'r', newline='') as csvfile:
                 reader = csv.reader(csvfile)
-                headers = next(reader)  # Skip header row
+                _ = next(reader)  # Skip header row
                 
                 # Process each row
                 for row in reader:

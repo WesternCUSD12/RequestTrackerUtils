@@ -1,8 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app, send_file
 from ..utils.student_check_tracker import StudentDeviceTracker
-from ..utils.rt_api import find_asset_by_name, get_assets_by_owner, fetch_asset_data, fetch_user_data, rt_api_request, update_asset_owner, create_ticket
+from ..utils.rt_api import get_assets_by_owner, fetch_user_data, rt_api_request, update_asset_owner, create_ticket
 import logging
-import json
 import traceback
 import os
 import datetime
@@ -246,7 +245,7 @@ def get_student(student_id):
     except Exception as e:
         logger.error(f"Error getting student {student_id}: {e}")
         return jsonify({
-            "error": f"Failed to get student information",
+            "error": "Failed to get student information",
             "details": str(e)
         }), 500
 
@@ -254,7 +253,7 @@ def get_student(student_id):
 def add_student():
     """API endpoint to add or update a student"""
     try:
-        data = request.json
+        data = request.json or {}
         student_id = data.get('id')
         
         if not student_id:
@@ -302,7 +301,7 @@ def delete_student(student_id):
     except Exception as e:
         logger.error(f"Error deleting student {student_id}: {e}")
         return jsonify({
-            "error": f"Failed to delete student",
+            "error": "Failed to delete student",
             "details": str(e)
         }), 500
 
@@ -560,7 +559,9 @@ def student_import():
             if file.filename == '':
                 return render_template('student_import.html', error="No file selected")
                 
-            if not file.filename.endswith('.csv'):
+            # Protect against file.filename being None (some clients may upload without filename)
+            filename = file.filename or ''
+            if not filename.endswith('.csv'):
                 return render_template('student_import.html', error="File must be a CSV")
             
             # Save the file to a temporary location
@@ -931,7 +932,7 @@ def create_ticket_route():
     """API endpoint to create a ticket for a device"""
     try:
         # Get ticket data from request
-        data = request.json
+        data = request.json or {}
         subject = data.get('subject')
         body = data.get('body')
         queue = data.get('queue', 'General')
@@ -1003,7 +1004,7 @@ def create_ticket_route():
 def get_student_rt_devices():
     """API endpoint to fetch RT device data for a batch of students"""
     try:
-        data = request.json
+        data = request.json or {}
         student_ids = data.get('student_ids', [])
         
         if not student_ids:

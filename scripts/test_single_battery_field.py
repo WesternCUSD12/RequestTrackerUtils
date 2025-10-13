@@ -34,7 +34,7 @@ def test_single_field():
         serial = "PF3WKRFC"
         percentage_value = "92.4"  # Just digits and a dot
         
-        logging.info(f"Testing Current Battery Level field update")
+        logging.info("Testing Current Battery Level field update")
         logging.info(f"Device: {serial}")
         logging.info(f"Value: '{percentage_value}'")
         

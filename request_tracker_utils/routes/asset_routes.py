@@ -17,12 +17,12 @@ serial number validation, and asset catalog option retrieval from RT.
 from flask import Blueprint, render_template, request, jsonify, current_app
 import urllib.parse
 import time
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, Tuple, Optional, Any
 from ..utils.rt_api import rt_api_request, sanitize_json
 from ..utils.name_generator import InternalNameGenerator
 from .tag_routes import AssetTagManager
 
-bp = Blueprint('asset_routes', __name__, url_prefix='/assets')
+bp = Blueprint('asset_routes', __name__)
 
 # Cache for catalog and manufacturer options
 # Format: {'data': [...], 'timestamp': time.time()}
@@ -202,8 +202,9 @@ def validate_serial():
             try:
                 response = rt_api_request('GET', f'/asset/{existing_id}', config=current_app.config)
                 existing_tag = response.get('Name')
-            except:
-                pass
+            except Exception:
+                # Ignore errors when fetching existing asset tag
+                existing_tag = None
             
             return jsonify({
                 'valid': False,
@@ -260,7 +261,7 @@ def create_asset():
                 'field': 'serial_number',
                 'existing_asset_id': existing_id
             }), 400
-    except Exception as e:
+    except Exception:
         return jsonify({
             'success': False,
             'error': 'Failed to validate serial number',
