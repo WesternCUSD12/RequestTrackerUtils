@@ -30,6 +30,9 @@ request-tracker-utils = "request_tracker_utils:main"
 [tool.setuptools.packages.find]
 include = ["request_tracker_utils"]
 
+[tool.setuptools.package-data]
+"request_tracker_utils" = ["data/*.csv"]
+
 [tool.pyright]
 reportUnknownParameterType = "none"
 reportUnknownArgumentType = "none"

@@ -8,9 +8,14 @@ Ensures uniqueness by checking against existing assets in Request Tracker.
 import csv
 import random
 import urllib.parse
+from importlib import resources
 from pathlib import Path
-from typing import List, Tuple, Optional, Union
+from typing import Optional, Union
+
 from .rt_api import rt_api_request
+
+_DATA_PACKAGE = "request_tracker_utils.data"
+_CSV_FILENAME = "Adjective-Animal-List.csv"
 
 
 class InternalNameGenerator:
@@ -26,31 +31,47 @@ class InternalNameGenerator:
         """
         self.config = config
         
-        # Default to repo root if not specified
-        if csv_path is None:
-            csv_path = Path(__file__).parent.parent.parent / 'Adjective-Animal-List.csv'
-        
+        # If a custom CSV path is provided, normalize to Path. Otherwise, use
+        # the packaged adjective-animal list bundled with the project.
         self.csv_path = Path(csv_path) if isinstance(csv_path, str) else csv_path
+        self._csv_resource = None if self.csv_path is not None else resources.files(_DATA_PACKAGE).joinpath(_CSV_FILENAME)
         self.animals = []
         self.adjectives = []
         self._load_combinations()
     
     def _load_combinations(self):
         """Load animals and adjectives from CSV file."""
-        if not self.csv_path.exists():
-            raise FileNotFoundError(f"Adjective-Animal CSV not found at {self.csv_path}")
-        
-        with open(self.csv_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            
+        def _load_from_file(file_obj):
+            reader = csv.DictReader(file_obj)
+
             for row in reader:
                 animal = row.get('animal', '').strip()
                 adjective = row.get('adjective', '').strip()
-                
+
                 if animal:  # Only add if animal exists (some rows have only adjective)
                     self.animals.append(animal)
                 if adjective:
                     self.adjectives.append(adjective)
+
+        if self.csv_path is not None:
+            if not self.csv_path.exists():
+                raise FileNotFoundError(f"Adjective-Animal CSV not found at {self.csv_path}")
+
+            with self.csv_path.open('r', encoding='utf-8') as file_obj:
+                _load_from_file(file_obj)
+        else:
+            if self._csv_resource is None:
+                raise FileNotFoundError(
+                    "Packaged Adjective-Animal CSV could not be located in the installation."
+                )
+            try:
+                with resources.as_file(self._csv_resource) as csv_path:
+                    with csv_path.open('r', encoding='utf-8') as file_obj:
+                        _load_from_file(file_obj)
+            except FileNotFoundError as exc:
+                raise FileNotFoundError(
+                    "Packaged Adjective-Animal CSV could not be located in the installation."
+                ) from exc
         
         # Remove duplicates while preserving order
         self.animals = list(dict.fromkeys(self.animals))
