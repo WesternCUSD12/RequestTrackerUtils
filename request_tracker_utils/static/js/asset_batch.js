@@ -126,7 +126,11 @@ async function loadNextTag() {
     const testModeToggle = document.getElementById('testModeToggle');
     const isTestMode = testModeToggle && testModeToggle.checked;
     const prefix = isTestMode ? 'TEST' : 'W12';
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> main
     const response = await fetch(`/assets/preview-next-tag?prefix=${prefix}`);
     if (response.ok) {
       const data = await response.json();
@@ -182,12 +186,20 @@ function showSuccess(result) {
     const assetName = result.internal_name
       ? `${result.asset_tag} - "${result.internal_name}"`
       : result.asset_tag;
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> main
     // Get RT URL from container data attribute (set in template)
     const container = document.querySelector('.container[data-rt-url]');
     const rtUrl = container ? container.dataset.rtUrl : 'https://tickets.wc-12.com';
     const assetLink = `${rtUrl}/Asset/Display.html?id=${result.asset_id}`;
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> main
     // Create message with link
     successMessage.innerHTML = `
       Asset created successfully! 
@@ -253,12 +265,17 @@ function hideAlerts() {
 function clearAll() {
   // Clear sessionStorage
   sessionStorage.removeItem(STORAGE_KEY);
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> main
   // Reset all form fields
   const form = document.getElementById('assetForm');
   if (form) {
     form.reset();
   }
+<<<<<<< HEAD
 
   // Hide alerts
   hideAlerts();
@@ -267,13 +284,27 @@ function clearAll() {
   loadNextTag();
   loadInternalName();
 
+=======
+  
+  // Hide alerts
+  hideAlerts();
+  
+  // Reload previews
+  loadNextTag();
+  loadInternalName();
+  
+>>>>>>> main
   // Show brief confirmation
   const successAlert = document.getElementById('successAlert');
   const successMessage = document.getElementById('successMessage');
   if (successAlert && successMessage) {
     successMessage.textContent = 'Form cleared successfully';
     successAlert.style.display = 'block';
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> main
     // Auto-hide after 2 seconds
     setTimeout(() => {
       successAlert.style.display = 'none';
@@ -286,7 +317,11 @@ function setLoading(isLoading) {
   const submitBtn = document.getElementById('submitBtn');
   const submitBtnText = document.getElementById('submitBtnText');
   const submitBtnSpinner = document.getElementById('submitBtnSpinner');
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> main
   if (submitBtn) {
     submitBtn.disabled = isLoading;
   }
@@ -313,13 +348,21 @@ function validateForm(data) {
   if (!data.catalog || !data.catalog.trim()) {
     return 'Catalog is required';
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> main
   // Serial number format (alphanumeric and hyphens only)
   const serialPattern = /^[A-Za-z0-9-]+$/;
   if (!serialPattern.test(data.serial_number)) {
     return 'Serial number can only contain letters, numbers, and hyphens';
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> main
   return null; // Valid
 }
 
@@ -327,18 +370,30 @@ function validateForm(data) {
 async function handleSubmit(event) {
   event.preventDefault();
   hideAlerts();
+<<<<<<< HEAD
 
   const form = event.target;
   const formData = new FormData(form);
   const data = Object.fromEntries(formData.entries());
 
+=======
+  
+  const form = event.target;
+  const formData = new FormData(form);
+  const data = Object.fromEntries(formData.entries());
+  
+>>>>>>> main
   // T037: Validate before submission
   const validationError = validateForm(data);
   if (validationError) {
     showError(validationError);
     return;
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> main
   // Include test mode prefix if enabled
   const testModeToggle = document.getElementById('testModeToggle');
   if (testModeToggle && testModeToggle.checked) {
@@ -346,7 +401,11 @@ async function handleSubmit(event) {
   } else {
     data.prefix = 'W12';
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> main
   setLoading(true);
 
   try {
@@ -395,13 +454,21 @@ document.addEventListener('DOMContentLoaded', function () {
   if (form) {
     form.addEventListener('submit', handleSubmit);
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> main
   // T028: Wire up Clear All button
   const clearAllBtn = document.getElementById('clearAllBtn');
   if (clearAllBtn) {
     clearAllBtn.addEventListener('click', clearAll);
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> main
   // Wire up Test Mode toggle
   const testModeToggle = document.getElementById('testModeToggle');
   if (testModeToggle) {

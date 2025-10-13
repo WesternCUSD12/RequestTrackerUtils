@@ -295,7 +295,11 @@ block content %}
           <h5 class="mb-0">Next Asset Tag</h5>
         </div>
         <div class="card-body">
+          <<<<<<< HEAD
           <div class="display-6" id="nextTag">W12-####</div>
+          =======
+          <div class="display-6" id="nextTag">W12-#####</div>
+          >>>>>>> main
           <small class="text-muted">Auto-assigned on creation</small>
         </div>
       </div>
@@ -627,6 +631,11 @@ The following deviations from the original design were made during implementatio
 **Actual Implementation**: Use `window.open()` to open label in new tab/window
 
 **Rationale**:
+<<<<<<< HEAD
+
+=======
+
+> > > > > > > main
 
 - Better UX: Users can preview label before printing
 - More reliable: Avoids iframe sandboxing issues in modern browsers
@@ -641,6 +650,11 @@ The following deviations from the original design were made during implementatio
 **Actual Implementation**: Client-side only clearing via `sessionStorage.removeItem()`
 
 **Rationale**:
+<<<<<<< HEAD
+
+=======
+
+> > > > > > > main
 
 - Simpler architecture: No server round-trip needed
 - Better performance: Instant clearing
@@ -653,6 +667,11 @@ The following deviations from the original design were made during implementatio
 **Additional Feature**: Added TEST mode toggle to switch between W12 and TEST prefixes
 
 **Implementation**:
+<<<<<<< HEAD
+
+=======
+
+> > > > > > > main
 
 - Separate sequence files for each prefix (`asset_tag_sequence_test.txt`, `asset_tag_sequence_w12.txt`)
 - Toggle switch in asset creation form
@@ -660,6 +679,11 @@ The following deviations from the original design were made during implementatio
 - Admin page enhancements for managing both sequences
 
 **Code Locations**:
+<<<<<<< HEAD
+
+=======
+
+> > > > > > > main
 
 - `request_tracker_utils/routes/tag_routes.py` - `AssetTagManager` accepts `prefix` parameter
 - `request_tracker_utils/templates/asset_create.html` - TEST mode toggle switch
@@ -671,6 +695,11 @@ The following deviations from the original design were made during implementatio
 **Additional Feature**: Added clickable links to created assets in success messages
 
 **Implementation**:
+<<<<<<< HEAD
+
+=======
+
+> > > > > > > main
 
 - Success message includes link to RT asset display page
 - Opens in new tab with external link icon
@@ -683,6 +712,11 @@ The following deviations from the original design were made during implementatio
 **Additional Feature**: Added breadcrumb navigation to asset creation form
 
 **Implementation**:
+<<<<<<< HEAD
+
+=======
+
+> > > > > > > main
 
 - Standard Bootstrap breadcrumb component
 - Links back to home page
@@ -695,6 +729,11 @@ The following deviations from the original design were made during implementatio
 **Additional Feature**: Added batch asset creation link to home page
 
 **Implementation**:
+<<<<<<< HEAD
+
+=======
+
+> > > > > > > main
 
 - Prominent link at top of Web Interfaces section
 - Descriptive subtitle

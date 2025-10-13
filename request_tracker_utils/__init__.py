@@ -84,7 +84,7 @@ def create_app():
             "endpoint": "/confirm-asset-tag",
             "methods": ["POST"],
             "description": "Confirms an asset tag and associates it with a Request Tracker ID",
-            "usage": "POST /confirm-asset-tag with JSON body: {'asset_tag': 'W12-0001', 'request_tracker_id': 'RT12345'}"
+            "usage": "POST /confirm-asset-tag with JSON body: {'asset_tag': 'W12-00001', 'request_tracker_id': 'RT12345'}"
         })
         
         routes.append({
@@ -98,7 +98,7 @@ def create_app():
             "endpoint": "/update-asset-name",
             "methods": ["POST"],
             "description": "Updates an asset's name in Request Tracker",
-            "usage": "POST /update-asset-name with JSON body: {'asset_id': '123', 'asset_name': 'W12-0001'}"
+            "usage": "POST /update-asset-name with JSON body: {'asset_id': '123', 'asset_name': 'W12-00001'}"
         })
         
         routes.append({

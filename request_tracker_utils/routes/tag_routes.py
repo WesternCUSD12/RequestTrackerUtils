@@ -66,14 +66,14 @@ class AssetTagManager:
     def get_next_tag(self):
         """
         Get the next asset tag without incrementing the sequence.
-        Supports dynamic digit expansion (W12-9999 → W12-10000).
+        Supports dynamic digit expansion (W12-99999 → W12-100000).
         
         Returns:
             str: The next asset tag in the sequence
         """
         current_number = self.get_current_sequence()
-        # Calculate required digits (minimum 4, expands as needed)
-        digit_count = max(4, len(str(current_number)))
+        # Calculate required digits (minimum 5, expands as needed)
+        digit_count = max(5, len(str(current_number)))
         return f"{self.prefix}{current_number:0{digit_count}d}"
     
     def increment_sequence(self):
@@ -186,7 +186,7 @@ def confirm_asset_tag_route():
     Increments the sequence number in the file.
     
     Example usage with curl:
-        curl -X POST -H "Content-Type: application/json" -d '{"asset_tag": "W12-0001", "request_tracker_id": "RT12345"}' http://localhost:8080/confirm-asset-tag
+    curl -X POST -H "Content-Type: application/json" -d '{"asset_tag": "W12-00001", "request_tracker_id": "RT12345"}' http://localhost:8080/confirm-asset-tag
     """
     data = request.get_json()
 
@@ -245,7 +245,7 @@ def update_asset_name_route():
     Updates an asset's name in Request Tracker.
     
     Example usage with curl:
-        curl -X POST -H "Content-Type: application/json" -d '{"asset_id": "123", "asset_name": "W12-0001"}' http://localhost:8080/update-asset-name
+    curl -X POST -H "Content-Type: application/json" -d '{"asset_id": "123", "asset_name": "W12-00001"}' http://localhost:8080/update-asset-name
     """
     data = request.get_json()
     

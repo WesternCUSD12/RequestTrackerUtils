@@ -17,6 +17,8 @@ in
     LD_LIBRARY_PATH = "${with pkgs; lib.makeLibraryPath buildInputs}";
   };
 
+  # git.enable = true;
+
   languages.python = {
     enable = true;
     uv = {
@@ -26,7 +28,7 @@ in
   };
 
   enterShell = ''
-    . .devenv/state/venv/bin/activate
+    .devenv/state/venv/bin/activate
   '';
 
   dotenv.enable = true;

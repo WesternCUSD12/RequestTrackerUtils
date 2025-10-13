@@ -64,7 +64,7 @@
             <div class="mb-3">
               <label for="new-w12-sequence" class="form-label">New Sequence Number</label>
               <input type="number" class="form-control" id="new-w12-sequence" min="0" required>
-              <div class="form-text">Next asset tag: W12-<span id="preview-w12-sequence">####</span></div>
+              <div class="form-text">Next asset tag: W12-<span id="preview-w12-sequence">#####</span></div>
             </div>
             
             <div class="alert alert-warning" role="alert">
@@ -122,7 +122,7 @@
             <div class="mb-3">
               <label for="new-test-sequence" class="form-label">New Sequence Number</label>
               <input type="number" class="form-control" id="new-test-sequence" min="0" required>
-              <div class="form-text">Next asset tag: TEST-<span id="preview-test-sequence">####</span></div>
+              <div class="form-text">Next asset tag: TEST-<span id="preview-test-sequence">#####</span></div>
             </div>
             
             <div class="alert alert-warning" role="alert">
@@ -186,15 +186,22 @@
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    const zeroPad = (num, places) => String(num).padStart(places, '0');
+    const MIN_DIGITS = 5;
+    const zeroPad = (num, places = MIN_DIGITS) => String(num).padStart(places, '0');
+    const PLACEHOLDER = '#'.repeat(MIN_DIGITS);
     
     // W12 Sequence Preview
     const newW12SequenceInput = document.getElementById('new-w12-sequence');
     const previewW12Sequence = document.getElementById('preview-w12-sequence');
     
     newW12SequenceInput.addEventListener('input', function() {
-      const value = parseInt(this.value) || 0;
-      previewW12Sequence.textContent = zeroPad(value, 4);
+      if (this.value === '') {
+        previewW12Sequence.textContent = PLACEHOLDER;
+        return;
+      }
+
+  const value = Math.max(0, parseInt(this.value, 10) || 0);
+      previewW12Sequence.textContent = zeroPad(value);
     });
     
     // TEST Sequence Preview
@@ -202,8 +209,13 @@
     const previewTestSequence = document.getElementById('preview-test-sequence');
     
     newTestSequenceInput.addEventListener('input', function() {
-      const value = parseInt(this.value) || 0;
-      previewTestSequence.textContent = zeroPad(value, 4);
+      if (this.value === '') {
+        previewTestSequence.textContent = PLACEHOLDER;
+        return;
+      }
+
+  const value = Math.max(0, parseInt(this.value, 10) || 0);
+      previewTestSequence.textContent = zeroPad(value);
     });
     
     // Load TEST sequence on page load
@@ -249,7 +261,7 @@
     document.getElementById('update-w12-sequence-form').addEventListener('submit', function(e) {
       e.preventDefault();
       
-      const newSequence = parseInt(newW12SequenceInput.value);
+  const newSequence = parseInt(newW12SequenceInput.value, 10);
       const updateResult = document.getElementById('update-w12-result');
       
       fetch('/reset-asset-tag', {
@@ -268,8 +280,14 @@
           updateResult.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> ${data.error}</div>`;
         } else {
           updateResult.innerHTML = `<div class="alert alert-success"><i class="bi bi-check-circle"></i> W12 sequence updated to ${newSequence}</div>`;
+          const sanitizedSequence = Number.isFinite(newSequence) ? newSequence : 0;
+          const nextTag = data.new_start_tag || `${document.getElementById('tag-prefix').textContent}${zeroPad(sanitizedSequence)}`;
+          document.getElementById('current-tag').textContent = nextTag;
+          const sequenceDigits = nextTag.includes('-') ? nextTag.split('-').slice(1).join('-') : zeroPad(sanitizedSequence);
+          document.getElementById('tag-sequence').textContent = sequenceDigits;
+          document.getElementById('last-updated').textContent = new Date().toLocaleString();
           newW12SequenceInput.value = '';
-          previewW12Sequence.textContent = '####';
+          previewW12Sequence.textContent = zeroPad(sanitizedSequence);
         }
         updateResult.style.display = 'block';
         
@@ -288,7 +306,7 @@
     document.getElementById('update-test-sequence-form').addEventListener('submit', function(e) {
       e.preventDefault();
       
-      const newSequence = parseInt(newTestSequenceInput.value);
+  const newSequence = parseInt(newTestSequenceInput.value, 10);
       const updateResult = document.getElementById('update-test-result');
       
       fetch('/reset-asset-tag', {
@@ -307,8 +325,14 @@
           updateResult.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> ${data.error}</div>`;
         } else {
           updateResult.innerHTML = `<div class="alert alert-success"><i class="bi bi-check-circle"></i> TEST sequence updated to ${newSequence}</div>`;
+          const sanitizedSequence = Number.isFinite(newSequence) ? newSequence : 0;
+          const nextTestTag = data.new_start_tag || `TEST-${zeroPad(sanitizedSequence)}`;
+          document.getElementById('current-test-tag').textContent = nextTestTag;
+          const testSequenceDigits = nextTestTag.includes('-') ? nextTestTag.split('-').slice(1).join('-') : zeroPad(sanitizedSequence);
+          document.getElementById('test-tag-sequence').textContent = testSequenceDigits;
+          document.getElementById('test-last-updated').textContent = new Date().toLocaleString();
           newTestSequenceInput.value = '';
-          previewTestSequence.textContent = '####';
+          previewTestSequence.textContent = zeroPad(sanitizedSequence);
           
           // Refresh the TEST sequence display
           loadTestSequence();
