@@ -70,7 +70,7 @@
 
 ### Implementation for User Story 2
 
-- [ ] T019 [US2] Add a blueprint prefix audit table to `specs/002-ensure-my-flask/research.md`, mapping current prefixes from `request_tracker_utils/routes/*.py` to required prefixes.
+- [x] T019 [US2] Add a blueprint prefix audit table to `specs/002-ensure-my-flask/research.md`, mapping current prefixes from `request_tracker_utils/routes/*.py` to required prefixes.
 - [ ] T020 [US2] Update the implementation roadmap in `specs/002-ensure-my-flask/plan.md` to include sequential tasks for normalizing blueprint prefixes and registering them in `request_tracker_utils/__init__.py`.
 - [ ] T021 [US2] Extend the Utility Module entity in `specs/002-ensure-my-flask/data-model.md` with target subpackage attributes (`integrations/`, `services/`, `infrastructure/`) and dependency rules.
 - [ ] T022 [US2] Create `specs/002-ensure-my-flask/contracts/error_handling_contract.md` defining standardized error and logging envelopes for routes and utilities.

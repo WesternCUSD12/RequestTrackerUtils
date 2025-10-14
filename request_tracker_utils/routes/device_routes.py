@@ -479,10 +479,11 @@ def checkin_logs():
         file_logs = csv_logger.get_available_logs()
         
         # Get unique dates from the database
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
+        conn = None
         try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
             cursor.execute("SELECT DISTINCT date FROM device_logs ORDER BY date DESC")
             db_dates = [row['date'] for row in cursor.fetchall()]
             
@@ -516,7 +517,8 @@ def checkin_logs():
                     except Exception as date_error:
                         logger.error(f"Error processing database date {date_str}: {date_error}")
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()
             
         # Sort all logs by date (newest first)
         file_logs.sort(key=lambda x: x['filename'], reverse=True)

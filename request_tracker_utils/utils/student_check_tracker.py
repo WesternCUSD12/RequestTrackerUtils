@@ -113,6 +113,8 @@ class StudentDeviceTracker:
             
     def _migrate_json_to_sqlite_if_needed(self):
         """Check if we need to migrate data from JSON to SQLite"""
+        conn = None
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -177,10 +179,10 @@ class StudentDeviceTracker:
                 
         except Exception as e:
             logger.error(f"Error checking/migrating JSON data to SQLite: {e}")
-            if 'conn' in locals():
+            if conn is not None:
                 conn.rollback()
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
                 
     def get_all_students(self, limit=None):
@@ -193,6 +195,8 @@ class StudentDeviceTracker:
         Returns:
             list: List of student data dictionaries
         """
+        conn = None
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -248,7 +252,7 @@ class StudentDeviceTracker:
             logger.error(f"Error getting all students: {e}")
             return []
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
     
     def get_student(self, student_id):
@@ -261,6 +265,8 @@ class StudentDeviceTracker:
         Returns:
             dict: Student data or None if not found
         """
+        conn = None
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -303,7 +309,7 @@ class StudentDeviceTracker:
             logger.error(f"Error getting student {student_id}: {e}")
             return None
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
     
     def add_update_student(self, student_id, student_data):
@@ -317,6 +323,8 @@ class StudentDeviceTracker:
         Returns:
             bool: Success status
         """
+        conn = None
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -370,11 +378,11 @@ class StudentDeviceTracker:
             
         except Exception as e:
             logger.error(f"Error adding/updating student {student_id}: {e}")
-            if 'conn' in locals():
+            if conn is not None:
                 conn.rollback()
             return False
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
     
     def remove_student(self, student_id):
@@ -387,6 +395,8 @@ class StudentDeviceTracker:
         Returns:
             bool: Success status
         """
+        conn = None
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -402,11 +412,11 @@ class StudentDeviceTracker:
             
         except Exception as e:
             logger.error(f"Error removing student {student_id}: {e}")
-            if 'conn' in locals():
+            if conn is not None:
                 conn.rollback()
             return False
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
     
     def mark_device_checked_in(self, student_id, asset_data=None, is_auto_checkin=False):
@@ -421,6 +431,8 @@ class StudentDeviceTracker:
         Returns:
             bool: Success status
         """
+        conn = None
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -495,11 +507,11 @@ class StudentDeviceTracker:
             
         except Exception as e:
             logger.error(f"Error marking device checked in for student {student_id}: {e}")
-            if 'conn' in locals():
+            if conn is not None:
                 conn.rollback()
             return False
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
     
     def mark_device_not_checked_in(self, student_id):
@@ -512,6 +524,8 @@ class StudentDeviceTracker:
         Returns:
             bool: Success status
         """
+        conn = None
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -530,11 +544,11 @@ class StudentDeviceTracker:
             
         except Exception as e:
             logger.error(f"Error marking device not checked in for student {student_id}: {e}")
-            if 'conn' in locals():
+            if conn is not None:
                 conn.rollback()
             return False
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
     
     def checkout_device_to_student(self, student_id, asset_tag, device_type='Unknown', notes='', asset_data=None):
@@ -551,6 +565,8 @@ class StudentDeviceTracker:
         Returns:
             bool: Success status
         """
+        conn = None
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -608,11 +624,11 @@ class StudentDeviceTracker:
             
         except Exception as e:
             logger.error(f"Error checking out device {asset_tag} to student {student_id}: {e}")
-            if 'conn' in locals():
+            if conn is not None:
                 conn.rollback()
             return False
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
     
     def import_students_from_csv(self, csv_file):
@@ -625,6 +641,8 @@ class StudentDeviceTracker:
         Returns:
             dict: Result with counts of added, updated, and failed
         """
+        conn = None
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -713,14 +731,14 @@ class StudentDeviceTracker:
                 
         except Exception as e:
             logger.error(f"Error importing students from CSV: {e}")
-            if 'conn' in locals():
+            if conn is not None:
                 conn.rollback()
             return {
                 "success": False,
                 "error": str(e)
             }
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
     
     def export_students_to_csv(self, include_device_info=True):
@@ -786,6 +804,7 @@ class StudentDeviceTracker:
         Returns:
             dict: Student data or None if not found
         """
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -827,7 +846,7 @@ class StudentDeviceTracker:
             logger.error(f"Error getting student from asset {asset_id}: {e}")
             return None
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
     
     def clear_all_students(self):
@@ -837,6 +856,7 @@ class StudentDeviceTracker:
         Returns:
             dict: Result with count of removed students
         """
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -861,14 +881,14 @@ class StudentDeviceTracker:
                 
         except Exception as e:
             logger.error(f"Error clearing students: {e}")
-            if 'conn' in locals():
+            if conn is not None:
                 conn.rollback()
             return {
                 "success": False,
                 "error": str(e)
             }
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
     
     def get_statistics(self):
@@ -878,6 +898,7 @@ class StudentDeviceTracker:
         Returns:
             dict: Statistics
         """
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -911,7 +932,7 @@ class StudentDeviceTracker:
                 "completion_rate": 0
             }
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()
     
     def undo_manual_check_in(self, student_id):
@@ -922,6 +943,7 @@ class StudentDeviceTracker:
         Returns:
             bool: Success status
         """
+        conn = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -949,9 +971,9 @@ class StudentDeviceTracker:
             return True
         except Exception as e:
             logger.error(f"Error undoing manual check-in for student {student_id}: {e}")
-            if 'conn' in locals():
+            if conn is not None:
                 conn.rollback()
             return False
         finally:
-            if 'conn' in locals():
+            if conn is not None:
                 conn.close()

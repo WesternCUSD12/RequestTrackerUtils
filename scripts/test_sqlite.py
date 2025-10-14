@@ -74,6 +74,7 @@ def print_divider(title=""):
 def test_db_connection():
     """Test the database connection"""
     print_divider("Testing Database Connection")
+    conn = None
     try:
         # Setup database first
         setup_database()
@@ -91,16 +92,23 @@ def test_db_connection():
         student_count = cursor.fetchone()[0]
         print(f"Number of students in database: {student_count}")
         
-        conn.close()
+        if conn is not None:
+            conn.close()
         return True
     except Exception as e:
         print(f"Error connecting to database: {e}")
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
         return False
 
 def test_crud_operations():
     """Test CRUD operations on the database directly"""
     print_divider("Testing CRUD Operations")
     
+    conn = None
     try:
         # Setup database first
         setup_database()
@@ -213,13 +221,20 @@ def test_crud_operations():
         student = cursor.fetchone()
         print(f"Student after deletion (should be None): {student}")
         
-        conn.close()
+        if conn is not None:
+            conn.close()
         return True
     except Exception as e:
         print(f"Error testing CRUD operations: {e}")
-        if 'conn' in locals():
-            conn.rollback()
-            conn.close()
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            try:
+                conn.close()
+            except Exception:
+                pass
         return False
 
 def test_json_migration():
@@ -304,7 +319,8 @@ def test_json_migration():
                     else:
                         print("✅ Student already exists in database")
                     
-                    conn.close()
+                    if conn is not None:
+                        conn.close()
             
             return True
         else:
