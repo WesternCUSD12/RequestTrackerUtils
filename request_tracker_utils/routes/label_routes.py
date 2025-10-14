@@ -491,6 +491,12 @@ def print_label():
     # Select appropriate template based on size
     template_name = 'small_label.html' if size == 'small' else 'label.html'
     current_app.logger.debug(f"Rendering {template_name} template with asset label data")
+    
+    # Add metadata for size toggle
+    asset_label_data['current_size'] = size
+    asset_label_data['asset_id'] = asset_id
+    asset_label_data['asset_name'] = asset_name
+    
     return render_template(template_name, **asset_label_data)
 
 

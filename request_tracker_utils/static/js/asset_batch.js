@@ -409,4 +409,24 @@ document.addEventListener('DOMContentLoaded', function () {
   if (testModeToggle) {
     testModeToggle.addEventListener('change', loadNextTag);
   }
+
+  // Auto-select label size based on category
+  const categoryField = document.getElementById('category');
+  const labelSizeSmall = document.getElementById('label_size_small');
+  const labelSizeLarge = document.getElementById('label_size_large');
+
+  if (categoryField && labelSizeSmall && labelSizeLarge) {
+    categoryField.addEventListener('input', function () {
+      const category = this.value.toLowerCase().trim();
+
+      // Auto-select small label for chargers, large for everything else
+      if (category === 'charger') {
+        labelSizeSmall.checked = true;
+        console.log('Auto-selected small label for charger');
+      } else if (category !== '') {
+        labelSizeLarge.checked = true;
+        console.log('Auto-selected large label for', category);
+      }
+    });
+  }
 });

@@ -345,8 +345,11 @@ def create_asset():
         
         current_app.logger.info(f'Asset {asset_tag} created successfully (ID: {asset_id}, Internal: {internal_name})')
         
-        # Generate label URL for the newly created asset
-        label_url = f'/labels/print?assetId={asset_id}'
+        # Generate label URL for the newly created asset with size parameter
+        label_size = data.get('label_size', 'large')
+        if label_size not in ['large', 'small']:
+            label_size = 'large'  # Default to large if invalid
+        label_url = f'/labels/print?assetId={asset_id}&size={label_size}'
         
         return jsonify({
             'success': True,

@@ -48,6 +48,18 @@
 <div class="no-print" style="margin-top: 20px; text-align: center;">
     <button onclick="printLabel();" class="btn btn-primary">Print Label</button>
     <a href="{{ url_for('label_routes.label_home') }}" class="btn btn-secondary">Back</a>
+    
+    <!-- Size Toggle -->
+    <div class="btn-group ms-3" role="group" aria-label="Label size">
+        <button type="button" class="btn btn-outline-primary active" disabled>
+            Large (100×62mm)
+        </button>
+        {% if asset_id or asset_name %}
+        <a href="{{ url_for('label_routes.print_label', assetId=asset_id, assetName=asset_name, size='small') }}" class="btn btn-outline-primary">
+            Small (90×29mm)
+        </a>
+        {% endif %}
+    </div>
 </div>
 
 <script>
