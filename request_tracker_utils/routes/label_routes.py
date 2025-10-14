@@ -11,6 +11,8 @@ from PIL import Image
 from barcode import Code128
 from barcode.writer import ImageWriter
 from request_tracker_utils.utils.rt_api import fetch_asset_data, search_assets, find_asset_by_name, rt_api_request
+from request_tracker_utils.utils.label_config import LABEL_TEMPLATES
+from request_tracker_utils.utils.text_utils import truncate_text_to_width
 
 bp = Blueprint('label_routes', __name__)
 
@@ -33,12 +35,30 @@ def get_custom_field_value(custom_fields, field_name, default="N/A"):
         default
     )
 
-def generate_qr_code(url):
+def get_default_label_size(asset_type: str) -> str:
+    """
+    Determine default label size based on asset type.
+    
+    Args:
+        asset_type: The type of asset (e.g., 'Charger', 'Laptop', 'Cable')
+        
+    Returns:
+        'small' for chargers and similar small items, 'large' for everything else
+    """
+    small_label_types = current_app.config.get(
+        'SMALL_LABEL_ASSET_TYPES',
+        ['Charger', 'Power Adapter', 'Cable']
+    )
+    # Case-insensitive comparison
+    return 'small' if asset_type.lower() in [t.lower() for t in small_label_types] else 'large'
+
+def generate_qr_code(url, box_size=10):
     """
     Generate a QR code image and return as base64 string.
     
     Args:
         url (str): URL to encode in the QR code
+        box_size (int): Size of each box in pixels (default: 10 for large labels, use 5 for small labels)
         
     Returns:
         str: Base64 encoded QR code image
@@ -48,8 +68,8 @@ def generate_qr_code(url):
         qr = qrcode.QRCode(
             version=1,  # Fixed version to avoid issues
             error_correction=ERROR_CORRECT_M,  # Medium error correction (15% damage recovery)
-            box_size=10,  # Increased box size for larger QR code
-            border=2      # Maintain smaller border
+            box_size=box_size,  # Configurable box size for different label sizes
+            border=1      # Minimum quiet zone (1 module)
         )
         qr.add_data(url)
         qr.make(fit=True)
@@ -100,13 +120,15 @@ def calculate_checksum(content):
     checksum = sum(ord(c) for c in content) % 10
     return f"{content}*{checksum}"
 
-def generate_barcode(content):
+def generate_barcode(content, width_mm=80.0, height_mm=15.0):
     """
     Generate a barcode image and return as base64 string.
     Appends a verification checksum to the content for error detection.
     
     Args:
         content (str): Content to encode in the barcode
+        width_mm (float): Target barcode width in millimeters (default: 80.0 for large labels)
+        height_mm (float): Target barcode height in millimeters (default: 15.0 for large labels)
         
     Returns:
         str: Base64 encoded barcode image
@@ -114,33 +136,43 @@ def generate_barcode(content):
     # Add verification checksum to content
     verified_content = calculate_checksum(content)
     barcode = Code128(verified_content, writer=ImageWriter())
-    # Adjust barcode parameters for better printing
+    
+    # Adjust barcode parameters for better printing with configurable dimensions
+    # Using module_height to control the height (in mm)
     barcode_writer_options = {
-        "module_width": 0.5,  # Increased width for better resolution
-        "module_height": 10,  # Increased height for better resolution
-        "quiet_zone": 1,      # Minimal quiet zone
+        "module_width": 0.2,  # Thin bars for better density
+        "module_height": height_mm,  # Configurable height in mm
+        "quiet_zone": 2.5,  # Standard quiet zone
         "write_text": False,
-        "dpi": 300            # Higher DPI for better print quality
+        "font_size": 8,
+        "text_distance": 1.0,
+        "dpi": 300  # Higher DPI for better print quality
     }
     barcode_buffer = io.BytesIO()
     barcode.write(barcode_buffer, options=barcode_writer_options)
     
-    # Resize the barcode to make it wider
+    # Resize the barcode to match target width while maintaining quality
     try:
         barcode_buffer.seek(0)  # Reset buffer position
         barcode_image = Image.open(barcode_buffer)
-        width, height = barcode_image.size
+        current_width, current_height = barcode_image.size
         
-        # Make the barcode wider while maintaining quality
-        new_width = min(width * 1.2, 450)  # Controlled width increase
-        new_height = min(int(height * 0.8), 28)  # Less height reduction for better clarity
+        # Calculate target width in pixels (assuming 300 DPI)
+        # 1 inch = 25.4mm, so pixels = (mm / 25.4) * dpi
+        target_width_px = int((width_mm / 25.4) * 300)
+        
+        # Maintain aspect ratio for height or use target height
+        # Scale height proportionally to width change
+        scale_factor = target_width_px / current_width
+        target_height_px = int(current_height * scale_factor)
         
         # Use LANCZOS for best quality resizing
         try:
-            resize_method = 1  # LANCZOS
-        except Exception:
-            resize_method = 3  # BICUBIC
-        resized_barcode = barcode_image.resize((int(new_width), new_height), resize_method)
+            resize_method = Image.Resampling.LANCZOS
+        except AttributeError:
+            resize_method = 1  # LANCZOS constant for older PIL versions
+            
+        resized_barcode = barcode_image.resize((target_width_px, target_height_px), resize_method)
         
         # Save the resized image with high quality settings
         resized_buffer = io.BytesIO()
@@ -178,20 +210,31 @@ def print_label():
 
     This function retrieves either the asset ID or asset name from the request arguments,
     fetches the corresponding asset data from the RT API, and renders a label using
-    the "label.html" template.
+    the appropriate template ("label.html" for large labels, "small_label.html" for small).
 
     Returns:
         Response: A Flask response object containing the rendered label template
         or an error message with the appropriate HTTP status code.
 
     Raises:
-        400 Bad Request: If neither 'assetId' nor 'assetName' parameter is in the request.
+        400 Bad Request: If neither 'assetId' nor 'assetName' parameter is in the request,
+                        or if an invalid 'size' parameter is provided.
         404 Not Found: If the asset name provided doesn't match any asset.
         500 Internal Server Error: If there is an error fetching asset data from the RT API.
     """
     asset_id = request.args.get('assetId')
     asset_name = request.args.get('assetName')
     direct_lookup = request.args.get('direct', 'false').lower() == 'true'
+    size = request.args.get('size', 'large')
+    
+    # Validate size parameter
+    if size not in ['large', 'small']:
+        current_app.logger.warning(f"Invalid size parameter: {size}")
+        return jsonify({"error": "Invalid size parameter. Must be 'large' or 'small'"}), 400
+    
+    # Get template configuration
+    template_config = LABEL_TEMPLATES.get(size, LABEL_TEMPLATES['large'])
+    current_app.logger.info(f"Using {size} label template with config: {template_config.name}")
     
     # Log what we received with higher log level for debugging
     current_app.logger.info(f"Received parameters: assetId={asset_id}, assetName={asset_name}, direct={direct_lookup}")
@@ -377,26 +420,55 @@ def print_label():
             "label_height": current_app.config.get("LABEL_HEIGHT_MM", 62) - 4
         }
 
+        # Truncate asset name based on template configuration
+        asset_name_text = asset_label_data["name"]
+        truncated_name = truncate_text_to_width(
+            asset_name_text,
+            'Helvetica',
+            template_config.font_size_pt,
+            template_config.text_max_width_mm
+        )
+        asset_label_data["truncated_name"] = truncated_name
+        
+        # Add truncation warning if name was truncated
+        if truncated_name != asset_name_text and truncated_name.endswith("..."):
+            asset_label_data["truncation_warning"] = f"Asset name was truncated from '{asset_name_text}' to fit label"
+        
         # Generate QR Code with the RT URL
         try:
             rt_asset_url = f"https://tickets.wc-12.com/Asset/Display.html?id={asset_id}"
             current_app.logger.debug(f"Generating QR code for URL: {rt_asset_url}")
-            asset_label_data["qr_code"] = generate_qr_code(rt_asset_url)
-            current_app.logger.debug("QR code generation successful")
+            
+            # Use appropriate QR box size for label size
+            qr_box_size = 5 if size == 'small' else 10
+            asset_label_data["qr_code"] = generate_qr_code(rt_asset_url, box_size=qr_box_size)
+            current_app.logger.debug(f"QR code generation successful (box_size={qr_box_size})")
+            
+            # Add QR warning for small labels with long URLs
+            if size == 'small' and len(rt_asset_url) > 80:
+                asset_label_data["qr_warning"] = "QR code contains a long URL. Test scannability before printing batch."
         except Exception as qr_error:
             current_app.logger.error(f"Error generating QR code: {qr_error}")
             # Provide a placeholder if QR code generation fails
             asset_label_data["qr_code"] = ""
         
-        # Generate Barcode
+        # Generate Barcode with template-specific dimensions
         try:
             current_app.logger.debug(f"Generating barcode for content: {asset_label_data['name']}")
-            asset_label_data["barcode"] = generate_barcode(asset_label_data["name"])
-            current_app.logger.debug("Barcode generation successful")
+            asset_label_data["barcode"] = generate_barcode(
+                asset_label_data["name"],
+                width_mm=template_config.barcode_width_mm,
+                height_mm=template_config.barcode_height_mm
+            )
+            current_app.logger.debug(f"Barcode generation successful ({template_config.barcode_width_mm}mm x {template_config.barcode_height_mm}mm)")
         except Exception as barcode_error:
             current_app.logger.error(f"Error generating barcode: {barcode_error}")
             # Provide a placeholder if barcode generation fails
             asset_label_data["barcode"] = ""
+        
+        # Get default size for this asset type (for form display)
+        asset_type = get_custom_field_value(custom_fields, "Type", "Unknown")
+        asset_label_data["default_size"] = get_default_label_size(asset_type)
         
         # Log the final data - be careful not to log large binary data
         log_data = {k: v if k not in ["qr_code", "barcode"] else "[binary data]" for k, v in asset_label_data.items()}
@@ -416,9 +488,10 @@ def print_label():
             "asset_id": asset_id
         }), 500
 
-    # Render the label using the template
-    current_app.logger.debug("Rendering the label template with asset label data")
-    return render_template("label.html", **asset_label_data)
+    # Select appropriate template based on size
+    template_name = 'small_label.html' if size == 'small' else 'label.html'
+    current_app.logger.debug(f"Rendering {template_name} template with asset label data")
+    return render_template(template_name, **asset_label_data)
 
 
 @bp.route('/batch', methods=['GET', 'POST'])

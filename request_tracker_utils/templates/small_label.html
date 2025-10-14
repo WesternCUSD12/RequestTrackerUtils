@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Small Asset Label{% endblock %}
+
+{% block content %}
+<style>
+    .label-small {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: flex-start;
+        width: 90.3mm;
+        height: 29mm;
+        border: 1px solid var(--label-border-color);
+        padding: 2mm;
+        box-sizing: border-box;
+        font-family: var(--text-font-family);
+        position: relative;
+        background-color: var(--label-bg-color);
+    }
+
+    @media print {
+        @page {
+            size: 90.3mm 29mm;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body, html {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 90.3mm !important;
+            height: 29mm !important;
+            overflow: hidden !important;
+        }
+        
+        .container {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 90.3mm !important;
+            height: 29mm !important;
+            max-width: 90.3mm !important;
+            overflow: hidden !important;
+        }
+        
+        .label-small {
+            border: none;
+            width: 90.3mm !important;
+            height: 29mm !important;
+            padding: 2mm !important;
+            margin: 0 !important;
+            overflow: hidden !important;
+            box-sizing: border-box !important;
+            page-break-inside: avoid !important;
+        }
+        
+        .qr-code {
+            width: 20mm !important;
+            height: 20mm !important;
+            top: 2mm !important;
+            left: 2mm !important;
+        }
+        
+        .text-content {
+            margin-left: 23mm !important;
+            margin-top: 2mm !important;
+        }
+        
+        .text-content h1 {
+            font-size: 11pt !important;
+            font-weight: 700 !important;
+            margin: 0 0 1mm 0 !important;
+        }
+        
+        .text-content p {
+            font-size: 8pt !important;
+            margin: 1mm 0 !important;
+            line-height: 1.1 !important;
+            font-weight: 500 !important;
+        }
+        
+        .barcode {
+            bottom: 2mm !important;
+            width: 90% !important;
+            left: 5% !important;
+        }
+        
+        .barcode img {
+            height: 4mm !important;
+            width: 100% !important;
+        }
+        
+        .school-name {
+            font-size: 9pt !important;
+        }
+    }
+
+    .qr-code {
+        position: absolute;
+        top: 2mm;
+        left: 2mm;
+        width: 20mm;
+        height: 20mm;
+    }
+
+    .qr-code img {
+        width: 100%;
+        height: 100%;
+    }
+
+    .text-content {
+        margin-left: 23mm;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: flex-start;
+    }
+
+    .text-content h1 {
+        font-size: 11pt;
+        font-weight: 700;
+        margin: 0 0 1mm 0;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .text-content p {
+        font-size: 8pt;
+        margin: 1mm 0;
+        line-height: 1.1;
+        font-weight: 500;
+    }
+
+    .school-name {
+        padding: 0;
+        margin-bottom: 0;
+        font-size: 9pt;
+        font-weight: bold;
+    }
+
+    .barcode {
+        position: absolute;
+        bottom: 2mm;
+        left: 5%;
+        width: 90%;
+        text-align: center;
+    }
+
+    .barcode img {
+        height: 4mm;
+        width: 100%;
+    }
+    
+    .no-print {
+        margin-top: 20px;
+        text-align: center;
+    }
+</style>
+
+<div class="label-small">
+    <!-- QR Code (left side) -->
+    <div class="qr-code">
+        {% if qr_code %}
+        <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code">
+        {% else %}
+        <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #f0f0f0;">
+            <span style="font-size: 8px;">QR</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Text Content -->
+    <div class="text-content">
+        <h1>{{ truncated_name if truncated_name else name }}</h1>
+        {% if internal_name and internal_name != "N/A" %}
+        <p><strong>N:</strong> {{ internal_name }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Bottom-aligned Barcode -->
+    <div class="barcode">
+        <h3 class="school-name">Western CUSD #12</h3>
+        {% if barcode %}
+        <img src="data:image/png;base64,{{ barcode }}" alt="Barcode">
+        {% else %}
+        <div style="width: 100%; height: 6mm; display: flex; align-items: center; justify-content: center; background: #f0f0f0;">
+            <span style="font-size: 6px;">{{ name }}</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="no-print" style="margin-top: 20px; text-align: center;">
+    <button onclick="printLabel();" class="btn btn-primary">Print Label</button>
+    <a href="{{ url_for('label_routes.label_home') }}" class="btn btn-secondary">Back</a>
+    {% if truncation_warning %}
+    <div class="alert alert-warning" style="margin-top: 15px;">
+        <strong>⚠️ Truncation Warning:</strong> {{ truncation_warning }}
+    </div>
+    {% endif %}
+    {% if qr_warning %}
+    <div class="alert alert-warning" style="margin-top: 10px;">
+        <strong>⚠️ QR Code Warning:</strong> {{ qr_warning }}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    // Script to ensure proper printing
+    window.addEventListener('beforeprint', function() {
+        // This helps prevent browsers from scaling content
+        document.body.style.width = '90.3mm';
+        document.body.style.height = '29mm';
+    });
+    
+    // Print button script - direct printing
+    function printLabel() {
+        window.print();
+    }
+</script>
+{% endblock %}

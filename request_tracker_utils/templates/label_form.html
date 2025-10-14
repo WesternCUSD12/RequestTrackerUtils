@@ -56,6 +56,26 @@
             </div>
           </div>
           
+          <!-- Label Size Selection -->
+          <div class="mb-3">
+            <label class="form-label"><strong>Label Size</strong></label>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="size" id="sizeLarge" value="large" checked>
+              <label class="form-check-label" for="sizeLarge">
+                <strong>Large Label</strong> (100mm x 62mm) - Includes serial number
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="size" id="sizeSmall" value="small">
+              <label class="form-check-label" for="sizeSmall">
+                <strong>Small Label</strong> (90.3mm x 29mm / 3.5" x 1.1") - Compact, no serial number
+              </label>
+            </div>
+            <div class="help-note mt-2" style="background: #d1ecf1; padding: 8px; border-left: 3px solid #0c5460; font-size: 0.9em; border-radius: 4px;">
+              ℹ️ <strong>Note:</strong> Small labels omit serial numbers to save space. Select <strong>Large label</strong> if serial tracking is required for this asset.
+            </div>
+          </div>
+          
           <script>
             // Add validation to ensure at least one field is filled
             document.getElementById('label-form').addEventListener('submit', function(e) {
@@ -119,7 +139,8 @@
         <h5>Label Information</h5>
       </div>
       <div class="card-body">
-        <p>Labels will include the following information:</p>
+        <h6>Large Labels (100mm x 62mm)</h6>
+        <p>Includes:</p>
         <ul>
           <li>Asset Name/Tag</li>
           <li>Description</li>
@@ -128,7 +149,19 @@
           <li>QR Code linking to RT</li>
           <li>Barcode</li>
         </ul>
-        <p>Labels are designed to fit standard {{ config.LABEL_WIDTH_MM }}mm x {{ config.LABEL_HEIGHT_MM }}mm label printers.</p>
+        
+        <h6 class="mt-3">Small Labels (90.3mm x 29mm / 3.5" x 1.1")</h6>
+        <p>Compact landscape format with:</p>
+        <ul>
+          <li>Asset Name/Tag (truncated if needed)</li>
+          <li>Smaller QR Code linking to RT</li>
+          <li>Compact Barcode</li>
+          <li><em>Serial number omitted to save space</em></li>
+        </ul>
+        
+        <div class="alert alert-info mt-3" style="font-size: 0.9em;">
+          <strong>Tip:</strong> Small labels are ideal for chargers, cables, and other compact assets. Large labels work best for laptops, tablets, and equipment requiring serial tracking.
+        </div>
       </div>
     </div>
   </div>
