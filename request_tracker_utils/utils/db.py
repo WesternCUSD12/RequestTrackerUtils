@@ -94,6 +94,86 @@ def init_db():
         END
         ''')
         
+        # Create audit_sessions table (Feature 004-student-device-audit)
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_sessions (
+            session_id TEXT PRIMARY KEY,
+            creator_name TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'active' CHECK(status IN ('active', 'completed')),
+            student_count INTEGER DEFAULT 0
+        )
+        ''')
+        
+        # Create audit_students table (Feature 004-student-device-audit)
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_students (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            grade TEXT NOT NULL,
+            advisor TEXT NOT NULL,
+            username TEXT,
+            audited INTEGER DEFAULT 0,
+            audit_timestamp TIMESTAMP,
+            auditor_name TEXT,
+            FOREIGN KEY (session_id) REFERENCES audit_sessions(session_id) ON DELETE CASCADE
+        )
+        ''')
+        
+        # Add username column if it doesn't exist (migration)
+        try:
+            cursor.execute("SELECT username FROM audit_students LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE audit_students ADD COLUMN username TEXT")
+        
+        # Create audit_device_records table (Feature 004-student-device-audit)
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_device_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            audit_student_id INTEGER NOT NULL,
+            asset_id TEXT NOT NULL,
+            asset_tag TEXT,
+            serial_number TEXT,
+            device_type TEXT,
+            verified INTEGER DEFAULT 0,
+            FOREIGN KEY (audit_student_id) REFERENCES audit_students(id) ON DELETE CASCADE
+        )
+        ''')
+        
+        # Create audit_notes table (Feature 004-student-device-audit)
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            audit_student_id INTEGER NOT NULL,
+            note_text TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_by TEXT,
+            FOREIGN KEY (audit_student_id) REFERENCES audit_students(id) ON DELETE CASCADE
+        )
+        ''')
+        
+        # Create indexes for audit tables (Feature 004-student-device-audit)
+        cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_audit_students_session 
+        ON audit_students(session_id)
+        ''')
+        
+        cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_audit_students_audited 
+        ON audit_students(audited)
+        ''')
+        
+        cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_audit_device_records_student 
+        ON audit_device_records(audit_student_id)
+        ''')
+        
+        cursor.execute('''
+        CREATE INDEX IF NOT EXISTS idx_audit_notes_student 
+        ON audit_notes(audit_student_id)
+        ''')
+        
         conn.commit()
         logger.info("Database schema initialized")
     except Exception as e:

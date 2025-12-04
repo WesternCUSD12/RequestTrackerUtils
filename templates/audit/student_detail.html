@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% block title %}Verify Student Devices - {{ student.name|default:"Student" }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Device Verification</h1>
+        <a href="{% url 'audit:view_session' session_id=student.session_id %}" class="btn btn-secondary">Back to Student List</a>
+    </div>
+    
+    <!-- Student Information Card -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h3 class="mb-0">Student Information</h3>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <strong>Name:</strong> {{ student.name }}
+                </div>
+                <div class="col-md-4">
+                    <strong>Grade:</strong> {{ student.grade }}
+                </div>
+                <div class="col-md-4">
+                    <strong>Advisor:</strong> {{ student.advisor }}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Device List -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="mb-0">Assigned Devices</h3>
+            <div id="deviceLoadingSpinner" class="spinner-border spinner-border-sm" role="status">
+                <span class="visually-hidden">Loading devices...</span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="deviceError" class="alert alert-danger d-none"></div>
+            
+            <div id="noDevicesMessage" class="alert alert-info d-none">
+                <strong>No devices found</strong>
+                <p>This student has no devices assigned in Request Tracker. You can still submit the audit with a note explaining the situation.</p>
+            </div>
+            
+            <div id="deviceTableContainer" class="d-none">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">Verified</th>
+                            <th>Asset Tag</th>
+                            <th>Serial Number</th>
+                            <th>Device Type</th>
+                        </tr>
+                    </thead>
+                    <tbody id="deviceTableBody">
+                        <!-- Populated by JavaScript -->
+                    </tbody>
+                </table>
+                
+                <div class="alert alert-warning d-none" id="incompleteWarning">
+                    <strong>Warning:</strong> All devices must be verified before submitting.
+                </div>
+            </div>
+            
+            <!-- Notes Section -->
+            <div class="mt-4">
+                <label for="auditNotes" class="form-label"><strong>Notes (Optional)</strong></label>
+                <textarea class="form-control" id="auditNotes" rows="3" placeholder="Add any notes about this audit..."></textarea>
+            </div>
+            
+            <!-- Auditor Name -->
+            <div class="mt-3">
+                <label for="auditorName" class="form-label"><strong>Your Name</strong></label>
+                <input type="text" class="form-control" id="auditorName" required placeholder="Enter your name">
+            </div>
+            
+            <!-- Submit Button -->
+            <div class="mt-4">
+                <button class="btn btn-primary btn-lg" id="submitAuditBtn" disabled>
+                    <span id="submitSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                    Submit Audit
+                </button>
+            </div>
+            
+            <div id="submitError" class="alert alert-danger mt-3 d-none"></div>
+            <div id="submitSuccess" class="alert alert-success mt-3 d-none"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Student data from template
+const STUDENT_ID = {{ student.id }};
+const STUDENT_NAME = "{{ student.name }}";
+const SESSION_ID = "{{ student.session_id }}";
+
+// Device data loaded from RT
+let deviceData = [];
+
+// Load devices on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadDevices();
+    
+    // Submit button handler
+    document.getElementById('submitAuditBtn').addEventListener('click', submitAudit);
+    
+    // Enable submit button when auditor name is entered
+    document.getElementById('auditorName').addEventListener('input', updateSubmitButton);
+});
+
+function loadDevices() {
+    const spinner = document.getElementById('deviceLoadingSpinner');
+    const errorDiv = document.getElementById('deviceError');
+    const noDevicesDiv = document.getElementById('noDevicesMessage');
+    const tableContainer = document.getElementById('deviceTableContainer');
+    
+    spinner.classList.remove('d-none');
+    errorDiv.classList.add('d-none');
+    
+    fetch(`/audit/student/${STUDENT_ID}/devices`)
+        .then(response => response.json())
+        .then(data => {
+            spinner.classList.add('d-none');
+            
+            if (data.error) {
+                if (data.devices && data.devices.length === 0) {
+                    noDevicesDiv.classList.remove('d-none');
+                    deviceData = [];
+                    updateSubmitButton();
+                } else {
+                    errorDiv.textContent = `Error: ${data.error}`;
+                    errorDiv.classList.remove('d-none');
+                }
+                return;
+            }
+            
+            deviceData = data.devices;
+            
+            if (deviceData.length === 0) {
+                noDevicesDiv.classList.remove('d-none');
+            } else {
+                tableContainer.classList.remove('d-none');
+                renderDevices();
+            }
+            
+            updateSubmitButton();
+        })
+        .catch(error => {
+            spinner.classList.add('d-none');
+            errorDiv.textContent = `Failed to load devices: ${error.message}`;
+            errorDiv.classList.remove('d-none');
+        });
+}
+
+function renderDevices() {
+    const tbody = document.getElementById('deviceTableBody');
+    tbody.innerHTML = '';
+    
+    deviceData.forEach((device, index) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <input type="checkbox" class="form-check-input device-checkbox" data-index="${index}" ${device.verified ? 'checked' : ''}>
+            </td>
+            <td>${device.asset_tag}</td>
+            <td>${device.serial_number}</td>
+            <td>${device.device_type}</td>
+        `;
+        tbody.appendChild(row);
+    });
+    
+    document.querySelectorAll('.device-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const index = parseInt(this.dataset.index);
+            deviceData[index].verified = this.checked;
+            updateSubmitButton();
+        });
+    });
+}
+
+function updateSubmitButton() {
+    const submitBtn = document.getElementById('submitAuditBtn');
+    const auditorName = document.getElementById('auditorName').value.trim();
+    const warningDiv = document.getElementById('incompleteWarning');
+    
+    const allVerified = deviceData.length === 0 || deviceData.every(d => d.verified);
+    
+    if (deviceData.length > 0 && !allVerified) {
+        warningDiv.classList.remove('d-none');
+    } else {
+        warningDiv.classList.add('d-none');
+    }
+    
+    submitBtn.disabled = !auditorName || (deviceData.length > 0 && !allVerified);
+}
+
+function submitAudit() {
+    const auditorName = document.getElementById('auditorName').value.trim();
+    const notes = document.getElementById('auditNotes').value.trim();
+    const submitBtn = document.getElementById('submitAuditBtn');
+    const spinner = document.getElementById('submitSpinner');
+    const errorDiv = document.getElementById('submitError');
+    const successDiv = document.getElementById('submitSuccess');
+    
+    if (!auditorName) {
+        errorDiv.textContent = 'Please enter your name';
+        errorDiv.classList.remove('d-none');
+        return;
+    }
+    
+    if (deviceData.length > 0 && !deviceData.every(d => d.verified)) {
+        errorDiv.textContent = 'All devices must be verified before submitting';
+        errorDiv.classList.remove('d-none');
+        return;
+    }
+    
+    errorDiv.classList.add('d-none');
+    successDiv.classList.add('d-none');
+    submitBtn.disabled = true;
+    spinner.classList.remove('d-none');
+    
+    const payload = {
+        auditor_name: auditorName,
+        device_records: deviceData.map(d => ({
+            asset_id: d.id,
+            asset_tag: d.asset_tag,
+            serial_number: d.serial_number,
+            device_type: d.device_type,
+            verified: d.verified
+        })),
+        notes: notes
+    };
+    
+    fetch(`/audit/student/${STUDENT_ID}/verify`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            successDiv.textContent = 'Audit submitted successfully! Redirecting...';
+            successDiv.classList.remove('d-none');
+            
+            setTimeout(() => {
+                window.location.href = `/audit/session/${SESSION_ID}`;
+            }, 1500);
+        } else if (data.error) {
+            errorDiv.textContent = `Error: ${data.error}`;
+            errorDiv.classList.remove('d-none');
+            submitBtn.disabled = false;
+            spinner.classList.add('d-none');
+        }
+    })
+    .catch(error => {
+        errorDiv.textContent = `Failed to submit audit: ${error.message}`;
+        errorDiv.classList.remove('d-none');
+        submitBtn.disabled = false;
+        spinner.classList.add('d-none');
+    });
+}
+</script>
+{% endblock %}

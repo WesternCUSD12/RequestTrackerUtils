@@ -31,36 +31,13 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-**Integration-First Architecture**:
-- [ ] Feature integrates with existing RT/Google Workspace systems
-- [ ] Provides both REST API endpoints and web interface
-- [ ] Maintains cross-system data consistency
-
-**Error Handling & Logging**:
-- [ ] All external API calls include try/catch with descriptive errors
-- [ ] Sufficient logging for debugging without exposing sensitive data
-- [ ] Rate limiting and retry logic for external APIs
-
-**API Compatibility**:
-- [ ] Maintains backward compatibility for existing endpoints
-- [ ] New fields only, no removal/type changes to existing fields
-- [ ] Follows semantic versioning for breaking changes
-
-**Data Integrity**:
-- [ ] Atomic operations with proper transaction handling
-- [ ] Database validation at API and schema levels
-- [ ] Migration scripts with rollback procedures
-
-**Observability**:
-- [ ] Clear success/failure feedback with actionable errors
-- [ ] Audit logging with timestamps for all operations
-- [ ] Administrative status reporting
+[Gates determined based on constitution file]
 
 ## Project Structure
 
 ### Documentation (this feature)
 
-```
+```text
 specs/[###-feature]/
 ├── plan.md              # This file (/speckit.plan command output)
 ├── research.md          # Phase 0 output (/speckit.plan command)
@@ -78,7 +55,7 @@ specs/[###-feature]/
   not include Option labels.
 -->
 
-```
+```text
 # [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
 src/
 ├── models/
@@ -119,7 +96,7 @@ directories captured above]
 
 ## Complexity Tracking
 
-*Fill ONLY if Constitution Check has violations that must be justified*
+> **Fill ONLY if Constitution Check has violations that must be justified**
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|

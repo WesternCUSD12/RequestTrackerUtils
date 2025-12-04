@@ -223,6 +223,15 @@ export RT_URL="https://your-rt-instance.com"
 export RT_TOKEN="your-rt-api-token"
 export API_ENDPOINT="/REST/2.0"
 
+# LDAP/Active Directory Authentication (Feature 006-ldap-auth)
+export LDAP_SERVER="ldaps://dc.westerncusd12.org:636"
+export LDAP_BASE_DN="DC=westerncusd12,DC=org"
+export LDAP_TECH_GROUP="tech-team"           # Optional: defaults to "tech-team"
+export LDAP_TEACHER_GROUP="TEACHERS"          # Optional: defaults to "TEACHERS"
+export LDAP_VERIFY_CERT="true"                # Optional: defaults to "true"
+export LDAP_CA_CERT_FILE="/path/to/ca.crt"   # Optional: system default if not set
+export LDAP_TIMEOUT="10"                      # Optional: defaults to 10 seconds
+
 # Asset Tag Configuration
 export PREFIX="W12-"  # Default asset tag prefix
 export ASSET_TAG_SEQUENCE_FILE="asset_tag_sequence.txt"
@@ -236,7 +245,28 @@ export LABEL_TEMPLATE_PATH="templates/label.html"
 # Logging Configuration
 export LOG_LEVEL="INFO"
 export LOG_FILE="instance/logs/app.log"
-````
+```
+
+### Authentication
+
+RTUtils uses **LDAP/Active Directory authentication** for user access control:
+
+- **Tech Team** (`tech-team` AD group): Full access to all features (device management, asset creation, labels, student audit, Django admin)
+- **Teachers** (`TEACHERS` AD group): Limited access to student device audit feature only
+- **Public Routes**: Label printing routes (`/labels/*`) remain public for external integrations
+
+**First-time setup:**
+
+1. Ensure LDAP_SERVER and LDAP_BASE_DN environment variables are set
+2. Verify your AD account is in either `tech-team` or `TEACHERS` group
+3. Navigate to `/auth/login` and sign in with your AD credentials (username, not email)
+4. Sessions are infinite - you remain logged in until explicit sign-out
+
+**Troubleshooting:**
+
+- "Invalid credentials" → Check username is sAMAccountName (not email)
+- "Not authorized" → Verify AD group membership (tech-team or TEACHERS)
+- "Service unavailable" → Check LDAP_SERVER is reachable on port 636`
 
 ### Installation Steps
 

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Session - {{ session_id|slice:":8" }}...{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'audit:audit_home' %}">Audit</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Session {{ session_id|slice:":8" }}...</li>
+        </ol>
+    </nav>
+
+    <h1>Audit Session</h1>
+    <p class="lead">Session ID: <code>{{ session_id }}</code></p>
+
+    <div class="alert alert-info">
+        <strong>TODO:</strong> Session details view to be implemented
+    </div>
+</div>
+{% endblock %}

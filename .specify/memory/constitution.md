@@ -1,93 +1,176 @@
 <!--
-Sync Impact Report:
-- Version change: [NEW] → 1.0.0
-- Added principles: All 5 core principles established
-- Added sections: Integration Standards, Development Workflow
-- Templates requiring updates: ✅ Plan, Spec, Tasks templates compatible
-- Follow-up TODOs: None
+  Sync Impact Report:
+  - Version: 1.0.0 → 2.0.0 (MAJOR: Django migration - framework change)
+  - Modified Principles: II. Modular Routing Architecture (Flask blueprints → Django apps)
+  - Modified Sections: Technology Stack Standards (added Django 4.2 LTS)
+  - Added: Authentication requirements (public /labels, protected others)
+  - Templates Requiring Updates:
+    ⚠ Pending: Update plan-template.md Constitution Check for Django apps
+    ⚠ Pending: Update copilot-instructions.md with Django stack
+  - Follow-up TODOs:
+    - Remove Flask references after 005-django-refactor merges
+    - Update deployment docs for Django WSGI
 -->
 
-# RequestTrackerUtils Constitution
+# RequestTracker Utils Constitution
 
 ## Core Principles
 
-### I. Integration-First Architecture
+### I. Documentation-First Development
 
-All features MUST integrate seamlessly with existing external systems (RT, Google Workspace) and internal components. New functionality MUST provide both REST API endpoints and web interface access. Cross-system data consistency is NON-NEGOTIABLE - failures in one system MUST NOT corrupt data in others.
+Every feature begins with comprehensive documentation **before** implementation. Subsystem documentation lives in `docs/architecture/` and must be updated before code changes. Developers MUST:
 
-**Rationale**: The project's core value is bridging multiple systems (RT, Google Admin, local database) reliably. Integration failures cause operational disruption in educational environments.
+- Create specification in `specs/[feature]/spec.md` with user stories, acceptance criteria, and success metrics
+- Update or create subsystem documentation in `docs/architecture/` describing current state before refactoring
+- Maintain evidence snapshots in `docs/architecture/_inputs/` with timestamps and provenance
+- Link all changes back to specification requirements
 
-### II. Comprehensive Error Handling & Logging
+**Rationale**: Documentation-first prevents scope creep, ensures shared understanding, and creates onboarding artifacts. The README's "Architecture" section explicitly mandates this workflow: "Start here when onboarding or researching changes."
 
-Every API call, database operation, and external integration MUST include try/catch blocks with descriptive error messages. All operations MUST log sufficient detail for debugging without exposing sensitive data. Rate limiting and retry logic MUST be implemented for external API calls.
+### II. Modular Routing Architecture
 
-**Rationale**: Educational institutions require high reliability. Debugging integration issues across multiple external systems requires comprehensive logging to identify failure points quickly.
+All routes MUST be organized into Django apps with explicit, non-overlapping URL prefixes. Every app represents a cohesive functional domain. Developers MUST:
 
-### III. Backward-Compatible API Evolution
+- Register apps in `INSTALLED_APPS` and include URLs with explicit `path()` prefixes (e.g., `/labels/`, `/devices/`, `/students/`, `/assets/`)
+- Maintain separation of concerns: one app per subsystem
+- Keep view handlers thin: delegate business logic to utility modules
+- Follow naming convention: `apps/[subsystem]/urls.py` with `app_name = '[subsystem]'`
+- Organize models, views, urls, and admin in each app directory
 
-All REST API endpoints MUST maintain backward compatibility when modified. New fields MAY be added to responses, but existing fields MUST NOT be removed or changed in type. API versioning MUST follow semantic versioning (MAJOR.MINOR.PATCH) where breaking changes increment MAJOR version.
+**Rationale**: Django app architecture prevents route collisions, enables modular testing, and maps directly to subsystem documentation structure. This pattern is consistently enforced across all 5 app modules in the codebase.
 
-**Rationale**: Multiple systems and scripts depend on the API. Breaking changes cause cascading failures across integrated workflows.
+### III. Specification-Driven Testing
 
-### IV. Database-First Data Integrity
+All features require independently testable user stories with explicit acceptance scenarios. Testing MUST cover:
 
-All data modifications MUST be atomic with proper transaction handling. Foreign key relationships MUST be enforced. Data validation MUST occur at both API and database levels. Migration scripts MUST be tested with rollback procedures.
+- **Unit tests**: For utilities and business logic (e.g., RT API clients, database operations, CSV validators)
+- **Integration tests**: For multi-component workflows (e.g., device check-in flow, asset creation + label printing)
+- **Independent testability**: Each user story must be verifiable in isolation without implementing other stories
 
-**Rationale**: Student device tracking requires accurate audit trails and data consistency. Corrupted relationships between students, devices, and transactions cause operational problems.
+Test files MUST be organized under `tests/unit/` and `tests/integration/` mirroring the code structure. Use `pytest` as the standard test runner.
 
-### V. Observable Operations
+**Rationale**: Specification-driven testing ensures features deliver measurable user value and prevents regression. The spec template explicitly requires "INDEPENDENTLY TESTABLE" user stories, and implementation checklists mandate test creation for all utilities and workflows.
 
-All user-facing operations MUST provide clear success/failure feedback with actionable error messages. Background processes MUST generate audit logs with timestamps. Administrative operations MUST include comprehensive logging and status reporting.
+### IV. Request Tracker API Integration Standard
 
-**Rationale**: IT staff need visibility into system operations to troubleshoot issues and maintain accountability for device assignments and returns.
+All interactions with the Request Tracker (RT) system MUST go through centralized API utilities. Developers MUST:
 
-## Integration Standards
+- Use `common/rt_api.py` for all RT API calls
+- Handle RT API failures gracefully with user-friendly error messages
+- Implement retry logic for transient failures (network timeouts, rate limits)
+- Log all RT API interactions with structured logging (request details, response status, error context)
 
-### External System Requirements
+No direct RT API calls from view handlers. API utilities must be independently testable with mocked responses.
 
-- **RT Integration**: All asset operations MUST sync with Request Tracker within 30 seconds
-- **Google Workspace**: Chromebook data synchronization MUST handle rate limiting gracefully
-- **Authentication**: All external API calls MUST use secure token-based authentication
-- **Failure Handling**: External system failures MUST NOT prevent core operations from completing
+**Rationale**: Centralized RT integration isolates external dependencies, enables consistent error handling, and simplifies testing. This pattern is observed in Student-Device integration and asset management features.
 
-### Data Consistency Rules
+### V. Configuration & Environment Management
 
-- Device ownership changes MUST update both RT and local database atomically
-- Student check-in/check-out MUST maintain referential integrity across all systems
-- Asset tag assignments MUST be sequential and collision-free
-- Audit trails MUST be immutable once written
+Application configuration MUST be externalized and environment-specific. Developers MUST:
 
-## Development Workflow
+- Use environment variables for all deployment-specific values (RT URLs, API tokens, file paths, database locations)
+- Implement **fail-fast validation**: Application MUST abort startup with clear error if required configuration is missing (e.g., `RT_TOKEN`)
+- Provide sensible defaults for development environments in `rtutils/settings/development.py`
+- Use Django's settings module pattern with base/development/production splits
+- Document all configuration options in README with required/optional distinction
+- Never commit secrets or environment-specific values to version control
 
-### Code Organization
+Platform detection (macOS vs Linux) for default paths is acceptable but must be overridable via environment variables.
 
-- Use Flask Blueprint pattern for all route organization
-- Utility functions MUST be in dedicated modules with clear interfaces
-- Database operations MUST use the established connection pattern
-- Configuration MUST use environment variables with documented defaults
+**Rationale**: Environment-based configuration enables safe multi-environment deployment (dev/staging/production) and prevents configuration-related incidents. Django's settings framework provides structured environment management.
 
-### Testing Requirements
+## Technology Stack Standards
 
-- Integration tests MUST be provided for all external API interactions
-- Database operations MUST include rollback testing
-- New features MUST include both positive and negative test cases
-- Performance testing MUST verify sub-30-second response times for sync operations
+### Language & Framework
 
-### Documentation Standards
+- **Python**: 3.11+ (minimum version)
+- **Web Framework**: Django 4.2 LTS
+- **Database**: SQLite3 (stored in `{WORKING_DIR}/database.sqlite`), managed via Django ORM
+- **Template Engine**: Django Template Language (DTL)
+- **Testing**: pytest with pytest-django for database and RT API mocking
+- **Admin Interface**: Django Admin for model management
 
-- All public functions MUST include docstrings with parameters and return values
-- API endpoints MUST be documented with usage examples
-- Integration guides MUST be maintained for external system setup
-- Configuration options MUST be documented with security implications
+### Required Libraries
+
+- `requests` 2.28+ (RT API client)
+- `reportlab` 3.6+ (PDF label generation)
+- `qrcode` 7.3+ (QR code generation)
+- `python-barcode` 0.13+ (barcode generation)
+- `Pillow` (image manipulation for labels)
+- `whitenoise` (static file serving in production)
+
+### Authentication Requirements
+
+- **Public Routes**: `/labels/*` routes MUST remain public (no authentication) for external system access (RT webhooks, label printers)
+- **Protected Routes**: All other routes (`/devices/*`, `/students/*`, `/audit/*`, `/assets/*`, `/admin/*`) require HTTP Basic Authentication
+- **Implementation**: Use Django middleware (`common/middleware.py`) with `PUBLIC_PATHS` configuration
+- **Credentials**: `AUTH_USERNAME` and `AUTH_PASSWORD` environment variables
+
+### Code Quality Tools
+
+- **Linting**: `ruff check .` (enforced in CI/CD)
+- **Formatting**: Follow PEP 8 with ruff defaults
+- **Docstrings**: Google-style docstrings for all public functions (Args/Returns/Raises)
+
+### Deployment
+
+- **NixOS**: Primary deployment target using `flake.nix` and `devenv.nix`
+- **Deployment Command**: `sudo nixos-rebuild switch --flake /etc/nixos#request-tracker-utils`
+- **Service Management**: systemd service module with configurable host/port/secrets
+- **WSGI Server**: Django's built-in runserver for development; Gunicorn/uWSGI for production
+- **Static Files**: `python manage.py collectstatic` with WhiteNoise middleware
+
+## Documentation-First Workflow
+
+### Subsystem Documentation Requirements
+
+1. **Before Code Changes**: Update or create subsystem documentation in `docs/architecture/[subsystem].md`
+2. **Evidence Capture**: Embed snapshots (tree outputs, command results, diagrams) in `docs/architecture/_inputs/` with timestamps
+3. **Cross-Reference**: Link changes in `specs/[feature]/quickstart.md` and README after subsystem docs are updated
+4. **Review Gate**: All merge requests touching `request_tracker_utils/` MUST cite the affected subsystem doc
+
+### Specification Structure
+
+Every feature must have a directory under `specs/[NNN-feature-name]/` containing:
+
+- `spec.md`: User stories with priorities (P1/P2/P3), acceptance scenarios, success criteria
+- `plan.md`: Technical implementation plan, database schema, API contracts, risk register
+- `tasks.md`: Granular task breakdown with dependencies and parallelization markers
+- `checklists/implementation.md`: Progress tracking checklist with 100+ verification items
+- `research.md`: Answers to pre-implementation research questions
+
+### Documentation Update Sequence
+
+1. Create/update specification → 2. Update subsystem architecture docs → 3. Implement code → 4. Update README/quickstart guides
 
 ## Governance
 
-This constitution establishes the non-negotiable architectural and operational standards for RequestTrackerUtils. All development decisions MUST align with these principles.
+### Amendment Process
 
-**Amendment Process**: Changes to core principles require documentation of impact analysis, migration plan, and approval from project maintainers. Implementation changes that support existing principles may proceed without constitutional amendment.
+1. Propose amendment with rationale and affected principles
+2. Document impact on existing features and templates
+3. Increment version according to semantic versioning:
+   - **MAJOR**: Backward-incompatible governance changes or principle removals
+   - **MINOR**: New principles added or material expansions
+   - **PATCH**: Clarifications, wording improvements, non-semantic refinements
+4. Update `LAST_AMENDED_DATE` to current date (ISO 8601 format: YYYY-MM-DD)
+5. Propagate changes to all affected templates and command prompts
 
-**Compliance Verification**: All pull requests MUST verify adherence to integration-first architecture, error handling standards, and API compatibility requirements. Performance and reliability testing MUST be documented for changes affecting external integrations.
+### Compliance Verification
 
-**Reference Documentation**: Runtime development guidance is maintained in `CLAUDE.md` and `README.md`. These files MUST be updated when constitutional principles drive implementation changes.
+- All pull requests MUST verify compliance with core principles
+- Code review checklist must include constitution compliance check
+- Deviations require explicit justification and documentation in spec's risk register
+- Complexity additions must be justified with measurable benefits
+- All merge requests touching `apps/` or `common/` MUST cite the affected subsystem doc
 
-**Version**: 1.0.0 | **Ratified**: 2025-10-08 | **Last Amended**: 2025-10-08
+### Template Synchronization
+
+When constitution changes, verify and update:
+
+- `.specify/templates/plan-template.md` (Constitution Check section alignment)
+- `.specify/templates/spec-template.md` (User story and acceptance criteria requirements)
+- `.specify/templates/tasks-template.md` (Task categorization and testing requirements)
+- `.specify/templates/commands/*.md` (Agent-specific guidance alignment)
+
+**Version**: 2.0.0 | **Ratified**: 2025-01-08 | **Last Amended**: 2025-12-01

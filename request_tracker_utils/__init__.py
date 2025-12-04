@@ -5,8 +5,10 @@ from request_tracker_utils.routes import (
     device_routes as device_routes,
     student_routes as student_routes,
     asset_routes as asset_routes,
+    audit_routes as audit_routes,
 )
 from .utils.db import init_db  # Import the database initialization function
+from .auth import requires_auth  # Import authentication decorator
 
 def request_wants_json():
     """Check if the request prefers JSON response.
@@ -37,6 +39,22 @@ def create_app():
     with app.app_context():
         init_db()
 
+    # Add authentication to all routes except /labels
+    @app.before_request
+    def require_authentication():
+        """Require authentication for all routes except /labels/*."""
+        # Allow all /labels routes without authentication
+        if request.path.startswith('/labels'):
+            return None
+        
+        # Check authentication for all other routes
+        auth = request.authorization
+        from .auth import check_auth, authenticate
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
+        
+        return None
+
     # Register blueprints with explicit, non-overlapping prefixes
     app.register_blueprint(label_routes.bp, url_prefix='/labels')
     # Mount tag routes at the application root so endpoints like
@@ -46,6 +64,7 @@ def create_app():
     app.register_blueprint(device_routes.bp, url_prefix='/devices')
     app.register_blueprint(student_routes.bp, url_prefix='/students')
     app.register_blueprint(asset_routes.bp, url_prefix='/assets')
+    app.register_blueprint(audit_routes.bp, url_prefix='/devices')
 
     # Add homepage route
     @app.route('/')
@@ -115,6 +134,49 @@ def create_app():
             "methods": ["POST"],
             "description": "Webhook endpoint for RT to call when a new asset is created",
             "usage": "POST /webhook/asset-created with JSON body: {'asset_id': '123', 'event': 'create'}"
+        })
+        
+        # Audit routes
+        routes.append({
+            "endpoint": "/devices/audit",
+            "methods": ["GET"],
+            "description": "Student device audit home page - upload CSV and manage audit sessions",
+            "usage": "GET /devices/audit"
+        })
+        
+        routes.append({
+            "endpoint": "/devices/audit/upload",
+            "methods": ["POST"],
+            "description": "Upload CSV file with student list to create audit session",
+            "usage": "POST /devices/audit/upload with multipart form: file=<csv_file>, creator_name=<name>"
+        })
+        
+        routes.append({
+            "endpoint": "/devices/audit/session/<session_id>",
+            "methods": ["GET"],
+            "description": "View audit session with searchable student list",
+            "usage": "GET /devices/audit/session/<session_id>"
+        })
+        
+        routes.append({
+            "endpoint": "/devices/audit/student/<student_id>",
+            "methods": ["GET"],
+            "description": "Verify student device possession - view RT devices and submit audit",
+            "usage": "GET /devices/audit/student/<student_id>"
+        })
+        
+        routes.append({
+            "endpoint": "/devices/audit/notes",
+            "methods": ["GET"],
+            "description": "IT staff notes report with filtering and export",
+            "usage": "GET /devices/audit/notes?session_id=<id>&date_from=<date>&date_to=<date>"
+        })
+        
+        routes.append({
+            "endpoint": "/devices/audit/session/<session_id>/completed",
+            "methods": ["GET"],
+            "description": "View completed audits for a session with re-audit option",
+            "usage": "GET /devices/audit/session/<session_id>/completed"
         })
         
         # Add documentation for RT webhook configuration
