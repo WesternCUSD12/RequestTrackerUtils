@@ -21,7 +21,11 @@ in
 
   # git.enable = true;
 
-  packages = with pkgs;[ruff pyright mypy];
+  packages = with pkgs;[
+    ruff
+    pyright
+    mypy
+  ];
 
   languages.python = {
     enable = true;

@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+
+{% block title %}Label Printing{% endblock %}
+
+{% block content %}
+<div class="container-fluid pb-3">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Label Printing</li>
+    </ol>
+  </nav>
+</div>
+
+<h1>Print Asset Labels</h1>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5>Single Label Printing</h5>
+      </div>
+      <div class="card-body">
+        <form id="label-form" action="{% url 'labels:print' %}" method="get" target="_blank">
+          <ul class="nav nav-tabs mb-3" id="labelTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="id-tab" data-bs-toggle="tab" data-bs-target="#id-content" type="button" role="tab" aria-controls="id-content" aria-selected="true">By Asset ID</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="name-tab" data-bs-toggle="tab" data-bs-target="#name-content" type="button" role="tab" aria-controls="name-content" aria-selected="false">By Asset Name</button>
+            </li>
+          </ul>
+          
+          <div class="tab-content" id="labelTabsContent">
+            <div class="tab-pane fade show active" id="id-content" role="tabpanel" aria-labelledby="id-tab">
+              <div class="mb-3">
+                <label for="assetId" class="form-label">RT Asset ID</label>
+                <input type="text" class="form-control" id="assetId" name="assetId" placeholder="Enter RT asset ID">
+                <div class="form-text">Enter the RT asset ID to generate a label</div>
+              </div>
+            </div>
+            
+            <div class="tab-pane fade" id="name-content" role="tabpanel" aria-labelledby="name-tab">
+              <div class="mb-3">
+                <label for="assetName" class="form-label">RT Asset Name</label>
+                <input type="text" class="form-control" id="assetName" name="assetName" placeholder="Enter RT asset name (e.g., W12-00001)">
+                <div class="form-text">Enter the RT asset name/tag to generate a label</div>
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" value="true" id="directLookup" name="direct">
+                <label class="form-check-label" for="directLookup">
+                  Use direct lookup (more reliable but slower)
+                </label>
+                <div class="form-text">Enable this if you're having trouble finding assets by name</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Label Size Selection -->
+          <div class="mb-3">
+            <label class="form-label"><strong>Label Size</strong></label>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="size" id="sizeLarge" value="large" checked>
+              <label class="form-check-label" for="sizeLarge">
+                <strong>Large Label</strong> (100mm x 62mm) - Includes serial number
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="size" id="sizeSmall" value="small">
+              <label class="form-check-label" for="sizeSmall">
+                <strong>Small Label</strong> (90.3mm x 29mm / 3.5" x 1.1") - Compact, no serial number
+              </label>
+            </div>
+            <div class="help-note mt-2" style="background: #d1ecf1; padding: 8px; border-left: 3px solid #0c5460; font-size: 0.9em; border-radius: 4px;">
+              ℹ️ <strong>Note:</strong> Small labels omit serial numbers to save space. Select <strong>Large label</strong> if serial tracking is required for this asset.
+            </div>
+          </div>
+          
+          <script>
+            // Add validation to ensure at least one field is filled
+            document.getElementById('label-form').addEventListener('submit', function(e) {
+              const assetId = document.getElementById('assetId').value.trim();
+              const assetName = document.getElementById('assetName').value.trim();
+              
+              if (!assetId && !assetName) {
+                e.preventDefault();
+                alert('Please enter either an Asset ID or Asset Name');
+                return false;
+              }
+              
+              return true;
+            });
+            
+            // Clear other field when one is filled
+            document.getElementById('assetId').addEventListener('input', function() {
+              if (this.value.trim()) {
+                document.getElementById('assetName').value = '';
+              }
+            });
+            
+            document.getElementById('assetName').addEventListener('input', function() {
+              if (this.value.trim()) {
+                document.getElementById('assetId').value = '';
+              }
+            });
+          </script>
+          
+          <button type="submit" class="btn btn-primary">Generate Label</button>
+        </form>
+      </div>
+    </div>
+    
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5>Batch Label Printing</h5>
+      </div>
+      <div class="card-body">
+        <p>Need to print multiple labels? Use our batch printing feature:</p>
+        <a href="{% url 'labels:batch' %}" class="btn btn-success">Batch Label Printing</a>
+        <div class="form-text mt-2">Search for assets by query and print multiple labels at once</div>
+      </div>
+    </div>
+    
+    <div class="card">
+      <div class="card-header bg-info text-white">
+        <h5>Troubleshooting</h5>
+      </div>
+      <div class="card-body">
+        <p>Having trouble finding assets?</p>
+        <a href="{% url 'labels:debug' %}" class="btn btn-info">Asset Lookup Tools</a>
+        <div class="form-text mt-2">Use our diagnostic tools to find assets when regular search isn't working</div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5>Label Information</h5>
+      </div>
+      <div class="card-body">
+        <h6>Large Labels (100mm x 62mm)</h6>
+        <p>Includes:</p>
+        <ul>
+          <li>Asset Name/Tag</li>
+          <li>Description</li>
+          <li>Serial Number</li>
+          <li>Model</li>
+          <li>QR Code linking to RT</li>
+          <li>Barcode</li>
+        </ul>
+        
+        <h6 class="mt-3">Small Labels (90.3mm x 29mm / 3.5" x 1.1")</h6>
+        <p>Compact landscape format with:</p>
+        <ul>
+          <li>Asset Name/Tag (truncated if needed)</li>
+          <li>Smaller QR Code linking to RT</li>
+          <li>Compact Barcode</li>
+          <li><em>Serial number omitted to save space</em></li>
+        </ul>
+        
+        <div class="alert alert-info mt-3" style="font-size: 0.9em;">
+          <strong>Tip:</strong> Small labels are ideal for chargers, cables, and other compact assets. Large labels work best for laptops, tablets, and equipment requiring serial tracking.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-4 text-center">
+  <a href="{% url 'home' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to Home
+  </a>
+</div>
+{% endblock %}

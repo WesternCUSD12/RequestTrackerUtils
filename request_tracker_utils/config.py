@@ -22,6 +22,10 @@ def get_default_working_dir():
 
 RT_TOKEN = os.getenv("RT_TOKEN", "default-token-if-not-set")
 
+# Authentication credentials
+AUTH_USERNAME = os.getenv("AUTH_USERNAME", "admin")
+AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "admin")
+
 # Ensure WORKING_DIR is always an absolute path
 working_dir_env = os.getenv("WORKING_DIR")
 if working_dir_env:

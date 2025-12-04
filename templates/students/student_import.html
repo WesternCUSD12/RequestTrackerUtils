@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+
+{% block title %}Import Students{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <!-- Breadcrumb Navigation -->
+  <nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">Home</a></li>
+      <li class="breadcrumb-item"><a href="/devices">Devices</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'students:student-devices' %}">Student Device Check-in</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Import Students</li>
+    </ol>
+  </nav>
+
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1 class="mb-3">Import Students</h1>
+      <p class="lead">Upload a CSV file with student information to import into the tracking system.</p>
+    </div>
+  </div>
+
+  <!-- Error/Success Messages -->
+  {% if error %}
+  <div class="alert alert-danger">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    <strong>Error:</strong> {{ error }}
+  </div>
+  {% endif %}
+
+  {% if success %}
+  <div class="alert alert-success">
+    <i class="bi bi-check-circle-fill me-2"></i>
+    <strong>Success!</strong> Imported {{ added }} new students and updated {{ updated }} existing students.
+    {% if failed > 0 %}
+    <div class="mt-2">
+      <strong>Note:</strong> {{ failed }} records were skipped due to errors.
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Import Form -->
+  <div class="row">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">Upload CSV File</h5>
+        </div>
+        <div class="card-body">
+          <form action="{% url 'students:import' %}" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label for="file" class="form-label">CSV File</label>
+              <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+              <div class="form-text">Select a CSV file with student data</div>
+            </div>
+            <button type="submit" class="btn btn-primary">Upload and Import</button>
+            <a href="{% url 'students:student-devices' %}" class="btn btn-outline-secondary">Cancel</a>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header bg-info text-white">
+          <h5 class="mb-0">CSV Format</h5>
+        </div>
+        <div class="card-body">
+          <p>Your CSV file should include these columns:</p>
+          <ul>
+            <li><strong>id</strong> - Student ID (required)</li>
+            <li><strong>first_name</strong> - First Name</li>
+            <li><strong>last_name</strong> - Last Name</li>
+            <li><strong>grade</strong> - Grade Level</li>
+            <li><strong>rt_user_id</strong> - RT User ID (optional)</li>
+          </ul>
+          <p>Example:</p>
+          <pre class="bg-light p-2">id,first_name,last_name,grade,rt_user_id
+12345,John,Doe,9,john.doe
+67890,Jane,Smith,10,jane.smith</pre>
+          <p class="text-muted small">The first row must contain column headers. The "id" column is required.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sample Template Download -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card bg-light">
+        <div class="card-body">
+          <h5>Need a template?</h5>
+          <p>Download this sample CSV template to get started:</p>
+          <button class="btn btn-outline-primary" id="downloadTemplateBtn">
+            <i class="bi bi-download"></i> Download Template
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Template download button
+  document.getElementById('downloadTemplateBtn').addEventListener('click', function() {
+    // Create a sample CSV content
+    const csvContent = 'id,first_name,last_name,grade,rt_user_id\n' +
+                      '12345,John,Doe,9,john.doe\n' +
+                      '67890,Jane,Smith,10,jane.smith';
+    
+    // Create a Blob with the CSV content
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    
+    // Create a link element
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = 'student_import_template.csv';
+    
+    // Append to the body, click it, and remove it
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}IT Staff Notes Report{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>IT Staff Notes Report</h1>
+        <a href="{% url 'audit:audit_home' %}" class="btn btn-secondary">Back to Audit Home</a>
+    </div>
+    
+    <!-- Filter Controls -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3>Filters</h3>
+        </div>
+        <div class="card-body">
+            <form id="filterForm" method="GET" action="{% url 'audit:audit_notes' %}">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="sessionFilter" class="form-label">Session ID</label>
+                        <input type="text" class="form-control" id="sessionFilter" name="session_id" 
+                               value="{{ request.GET.session_id|default:'' }}" 
+                               placeholder="Leave blank for all sessions">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="dateFrom" class="form-label">Date From</label>
+                        <input type="date" class="form-control" id="dateFrom" name="date_from" 
+                               value="{{ request.GET.date_from|default:'' }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="dateTo" class="form-label">Date To</label>
+                        <input type="date" class="form-control" id="dateTo" name="date_to" 
+                               value="{{ request.GET.date_to|default:'' }}">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">Apply Filter</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Export Button -->
+    <div class="mb-3 text-end">
+        <a href="{% url 'audit:export_notes' %}?{{ request.GET.urlencode }}" 
+           class="btn btn-success">
+            <i class="bi bi-download"></i> Export to CSV
+        </a>
+    </div>
+    
+    <!-- Notes Table -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Audit Notes</h3>
+            <small class="text-muted">Total: {{ notes|length }} notes</small>
+        </div>
+        <div class="card-body">
+            {% if notes %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Grade</th>
+                            <th>Advisor</th>
+                            <th>Note</th>
+                            <th>Devices</th>
+                            <th>Missing</th>
+                            <th>Date</th>
+                            <th>Auditor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for note in notes %}
+                        <tr>
+                            <td>{{ note.student_name }}</td>
+                            <td>{{ note.grade }}</td>
+                            <td>{{ note.advisor }}</td>
+                            <td>{{ note.note_text }}</td>
+                            <td>{{ note.total_devices }}</td>
+                            <td>
+                                {% if note.missing_devices > 0 %}
+                                <span class="badge bg-danger fw-bold">{{ note.missing_devices }}</span>
+                                {% else %}
+                                <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ note.created_at }}</td>
+                            <td>{{ note.auditor_name }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                No notes found matching your filter criteria.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

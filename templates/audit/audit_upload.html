@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Student Device Audit{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Breadcrumb Navigation -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Device Audit</li>
+        </ol>
+    </nav>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="mb-3">Student Device Audit</h1>
+            <p class="lead">Upload student lists and track device verification progress across audit sessions.</p>
+        </div>
+    </div>
+
+    <!-- Dashboard Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-info text-white h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Total Students</h5>
+                    <h2 class="display-4">{{ stats.total_students|default:0 }}</h2>
+                    <p class="card-text small">In active audit session</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card bg-success text-white h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Audited</h5>
+                    <h2 class="display-4">{{ stats.audited|default:0 }}</h2>
+                    <p class="card-text small">Devices verified</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card bg-warning text-dark h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Pending</h5>
+                    <h2 class="display-4">{{ stats.pending|default:0 }}</h2>
+                    <p class="card-text small">{{ stats.completion_rate|default:0|floatformat:1 }}% complete</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% if not session %}
+    <!-- CSV Upload Form -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h3>Upload Student List</h3>
+        </div>
+        <div class="card-body">
+            <form id="uploadForm" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="creatorName" class="form-label">Your Name</label>
+                    <input type="text" class="form-control" id="creatorName" name="creator_name" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="csvFile" class="form-label">CSV File</label>
+                    <input type="file" class="form-control" id="csvFile" name="file" accept=".csv" required>
+                    <div class="form-text">
+                        Upload a CSV file with student data. Required columns: name, grade, advisor
+                        <br>Maximum file size: 5MB | Maximum rows: 1000 students
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <details>
+                        <summary>CSV Format Example</summary>
+                        <pre class="bg-light p-3 mt-2">
+name,grade,advisor
+John Smith,9,Ms. Johnson
+Jane Doe,10,Mr. Williams
+Bob Johnson,11,Mrs. Davis</pre>
+                        {% load static %}
+                        <a href="{% static 'sample_audit.csv' %}" class="btn btn-sm btn-secondary" download>
+                            Download Template
+                        </a>
+                    </details>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" id="uploadBtn">
+                    <span id="uploadSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                    Upload CSV
+                </button>
+            </form>
+            
+            <div id="uploadError" class="alert alert-danger mt-3 d-none"></div>
+            <div id="uploadSuccess" class="alert alert-success mt-3 d-none"></div>
+            
+            <!-- Duplicate Confirmation Dialog -->
+            <div id="duplicateWarning" class="alert alert-warning mt-3 d-none">
+                <h5>Duplicate Students Detected</h5>
+                <p>The following students appear multiple times in your CSV:</p>
+                <ul id="duplicateList"></ul>
+                <button class="btn btn-warning" id="confirmDuplicates">Proceed Anyway</button>
+                <button class="btn btn-secondary" id="cancelUpload">Cancel</button>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- Student List Display -->
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3>Audit Session: {{ session.session_id|slice:":8" }}...</h3>
+            <div>
+                <span class="badge bg-info">{{ session.student_count }} students</span>
+                <span class="badge bg-secondary">Created by: {{ session.creator_name }}</span>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Search and Filter Controls -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <input type="text" class="form-control" id="searchInput" placeholder="Search by name, grade, or advisor...">
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" id="auditedFilter">
+                        <option value="false" selected>Not Audited Only</option>
+                        <option value="true">Audited Only</option>
+                        <option value="all">All Students</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-secondary" id="applyFilter">Filter</button>
+                </div>
+                <div class="col-md-3 text-end">
+                    <a href="{% url 'audit:completed_students' session_id=session_id %}" class="btn btn-info">
+                        View Completed Audits
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Student Table -->
+            <div id="studentTableContainer">
+                <table class="table table-striped table-hover" id="studentTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Grade</th>
+                            <th>Advisor</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="studentTableBody">
+                        <!-- Populated by JavaScript -->
+                    </tbody>
+                </table>
+                
+                <div id="loadingSpinner" class="text-center p-4">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                
+                <div id="noStudents" class="alert alert-info d-none">
+                    No students found matching your criteria.
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Session ID from template (if viewing session)
+{% if session_id %}
+const SESSION_ID = "{{ session_id }}";
+{% else %}
+const SESSION_ID = null;
+{% endif %}
+console.log('[AUDIT PAGE] Loaded at:', new Date().toISOString());
+console.log('[AUDIT PAGE] SESSION_ID:', SESSION_ID);
+console.log('[AUDIT PAGE] Document ready state:', document.readyState);
+</script>
+{% load static %}
+<script src="{% static 'js/audit.js' %}?v={{ random }}"></script>
+{% endblock %}

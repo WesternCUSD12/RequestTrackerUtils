@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+
+{% block title %}Device Check-in Logs{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <!-- Breadcrumb Navigation -->
+  <nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">Home</a></li>
+      <li class="breadcrumb-item"><a href="/devices">Devices</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Check-in Logs</li>
+    </ol>
+  </nav>
+
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1>Device Check-in Logs</h1>
+      <p class="lead">View and download device check-in history by day.</p>
+    </div>
+  </div>
+
+  {% if logs %}
+  <div class="card">
+    <div class="card-header bg-primary text-white">
+      <h2 class="h5 mb-0">Available Log Files</h2>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Devices</th>
+              <th>File Size</th>
+              <th>Last Modified</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in logs %}
+            <tr>
+              <td>{{ log.date }}</td>
+              <td>{{ log.device_count }}</td>
+              <td>{{ (log.size / 1024) | round(1) }} KB</td>
+              <td>{{ log.modified }}</td>
+              <td>
+                <div class="btn-group">
+                  <a href="{{ url_for('devices.preview_checkin_log', filename=log.filename) }}" 
+                     class="btn btn-sm btn-outline-info">
+                    <i class="bi bi-eye"></i> Preview
+                  </a>
+                  <a href="{{ url_for('devices.download_checkin_log', filename=log.filename) }}" 
+                     class="btn btn-sm btn-primary">
+                    <i class="bi bi-download"></i> Download
+                  </a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle-fill me-2"></i>
+    No check-in logs are available yet. Logs will appear here after devices have been checked in.
+  </div>
+  {% endif %}
+
+  <!-- Help Card -->
+  <div class="card mt-4">
+    <div class="card-header bg-info text-white">
+      <h3 class="h5 mb-0">About Check-in Logs</h3>
+    </div>
+    <div class="card-body">
+      <p>Check-in logs contain the following information for each device processed:</p>
+      <ul>
+        <li>Date and time of check-in</li>
+        <li>Asset ID and tag</li>
+        <li>Device type and serial number</li>
+        <li>Previous owner information</li>
+        <li>Ticket details (if created)</li>
+        <li>Condition information (broken screen, etc.)</li>
+        <li>User who performed the check-in</li>
+      </ul>
+      <p>Logs are automatically organized by day and can be downloaded as CSV files for further processing.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
