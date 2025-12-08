@@ -21,6 +21,12 @@ urlpatterns = [
     # T036: Mark student as audited API endpoint
     path('api/mark-audited/<str:session_id>/', views.mark_audited, name='mark_audited'),
     
+    # Rename session API endpoint (admin only)
+    path('api/rename-session/<str:session_id>/', views.rename_session, name='rename_session'),
+    
+    # Delete session API endpoint (admin only)
+    path('api/delete-session/<str:session_id>/', views.delete_session, name='delete_session'),
+    
     # T038: Close session API endpoint (admin only)
     path('api/close-session/<str:session_id>/', views.close_session, name='close_session'),
     
