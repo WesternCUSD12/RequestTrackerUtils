@@ -10,23 +10,10 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
     {% block styles %}
     <style>
-        :root {
-            --primary-bg-color: #f5f5f5;
-            --label-border-color: #000;
-            --label-bg-color: #fff;
-            --text-font-family: Arial, sans-serif;
-            --qr-width: 26mm;       /* Increased for better space usage */
-            --qr-height: 26mm;      /* Increased for better space usage */
-            --text-margin-left: 30mm; /* Adjusted for larger QR */
-            --heading-font-size: 16px; /* Larger font */
-            --text-font-size: 13px;    /* Larger font */
-            --barcode-height: 20px;    /* Smaller barcode */
-        }
-
         body {
             margin: 0;
             padding: 0;
-            background-color: var(--primary-bg-color);
+            background-color: #f5f5f5;
         }
         
         .container {
@@ -60,154 +47,6 @@
             color: white;
             font-size: 12px;
             margin-right: 10px;
-        }
-
-        .label {
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            align-items: flex-start;
-            width: {{ label_width }}mm; /* Dynamically set width */
-            height: {{ label_height }}mm; /* Dynamically set height */
-            border: 1px solid var(--label-border-color);
-            padding: 10px;
-            box-sizing: border-box;
-            font-family: var(--text-font-family);
-            position: relative;
-            background-color: var(--label-bg-color);
-        }
-
-        @media print {
-            /* Reset all print margins */
-            @page {
-                size: 100mm 62mm; /* Force exact label size */
-                margin: 0;
-                padding: 0;
-            }
-            
-            body, html {
-                margin: 0 !important;
-                padding: 0 !important;
-                width: 100mm !important;
-                height: 62mm !important;
-                overflow: hidden !important;
-            }
-            
-            .container {
-                margin: 0 !important;
-                padding: 0 !important;
-                width: 100mm !important;
-                height: 62mm !important;
-                max-width: 100mm !important;
-                overflow: hidden !important;
-            }
-            
-            .label {
-                border: none;
-                width: 100mm !important;
-                height: 62mm !important;
-                padding: 2mm !important; /* Smaller padding */
-                margin: 0 !important;
-                overflow: hidden !important;
-                box-sizing: border-box !important;
-                page-break-inside: avoid !important;
-            }
-            
-            /* Larger QR code for print */
-            .qr-code {
-                width: 24mm !important;
-                height: 24mm !important;
-                top: 3mm !important;
-                left: 3mm !important;
-            }
-            
-            /* Adjust text positioning */
-            .text-content {
-                margin-left: 28mm !important;
-                margin-top: 3mm !important;
-            }
-            
-            /* Ensure heading stays prominent when printed */
-            .text-content h1 {
-                font-size: 16px !important;
-                font-weight: 700 !important;
-                margin: 0 0 3px 0 !important;
-                text-transform: uppercase !important;
-            }
-            
-            /* Make details text more prominent when printed */
-            .text-content p {
-                font-size: 13px !important;
-                margin: 3px 0 !important;
-                line-height: 1.3 !important;
-                font-weight: 500 !important;
-            }
-            
-            /* Move barcode up */
-            .barcode {
-                bottom: 3mm !important;
-                width: 90% !important;
-            }
-            
-            /* Smaller barcode height */
-            .barcode img {
-                height: 15px !important;
-            }
-        }
-
-        .qr-code {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            width: var(--qr-width);
-            height: var(--qr-height);
-        }
-
-        .qr-code img {
-            width: 100%;
-            height: 100%;
-        }
-
-        .text-content {
-            margin-left: var(--text-margin-left);
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            align-items: flex-start;
-        }
-
-        .text-content h1 {
-            font-size: 16px; /* Larger than the default heading font size */
-            font-weight: 700; /* Extra bold */
-            margin: 0 0 3px 0; /* Added bottom margin */
-            text-transform: uppercase; /* All caps for emphasis */
-        }
-
-        .text-content p {
-            font-size: var(--text-font-size);
-            margin: 3px 0;
-            line-height: 1.2;
-            font-weight: 500; /* Slightly bolder than normal */
-        }
-
-        .school-name {
-            padding: 0;
-            margin-bottom: 0;
-        }
-
-        .barcode {
-            position: absolute;
-            bottom: 10px;
-            width: 95%;
-            text-align: center;
-        }
-
-        .barcode img {
-            width: 95%;
-            height: auto;
-            max-height: 25px;
-            image-rendering: -webkit-optimize-contrast;  /* Improves rendering in Chrome/Safari */
-            image-rendering: crisp-edges;                /* Modern browsers */
         }
     </style>
     {% endblock %}
@@ -257,12 +96,12 @@
                                 <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
                                 <path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1z"/>
                             </svg>
-                            {{ user.get_full_name|default:user.email }}
+                            {% if user.get_full_name %}{{ user.get_full_name }}{% else %}{{ user.email }}{% endif %}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
                             <li><span class="dropdown-item-text small text-muted">{{ user.email }}</span></li>
                             {% if user.user_role %}
-                            <li><span class="dropdown-item-text small text-muted">Role: {{ user.get_user_role_display|default:user.user_role }}</span></li>
+                            <li><span class="dropdown-item-text small text-muted">Role: {% if user.get_user_role_display %}{{ user.get_user_role_display }}{% else %}{{ user.user_role }}{% endif %}</span></li>
                             {% endif %}
                             <li><hr class="dropdown-divider"></li>
                             <li>
