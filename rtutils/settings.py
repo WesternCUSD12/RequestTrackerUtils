@@ -60,6 +60,11 @@ LDAP_TIMEOUT = int(os.environ.get('LDAP_TIMEOUT', '10'))
 if not LDAP_SERVER or not LDAP_BASE_DN:
     raise ValueError("LDAP_SERVER and LDAP_BASE_DN environment variables are required")
 
+# Authentication URLs
+LOGIN_URL = '/auth/login'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/auth/login'
+
 # Public paths (no authentication required)
 PUBLIC_PATHS = [
     '/auth/login',
