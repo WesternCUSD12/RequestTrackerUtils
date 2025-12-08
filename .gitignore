@@ -1,3 +1,5 @@
+# Exclude SQLite database
+database.sqlite
 ### Linux ###
 *~
 

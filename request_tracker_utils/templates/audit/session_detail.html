@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Audit Session {{ session.session_id }}{% endblock %}
+{% block title %}{{ session.name|default:"Audit Session "|add:session.session_id|stringformat:"s" }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -93,30 +93,34 @@
     .filters {
         background: white;
         border-radius: 8px;
-        padding: 1.5rem;
         margin-bottom: 2rem;
-        border: 1px solid #e5e7eb;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
     }
 
     .filters-header {
+        background: #0d6efd;
+        color: white;
         font-weight: 600;
-        color: #1f2937;
         font-size: 1rem;
-        margin-bottom: 1rem;
+        padding: 1rem 1.5rem;
         display: flex;
         align-items: center;
         gap: 0.5rem;
     }
 
     .filters-header i {
-        color: #667eea;
+        color: white;
+    }
+    
+    .filters form {
+        padding: 1.5rem;
     }
 
     .filter-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
+        grid-template-columns: 2fr 1fr 1fr;
+        gap: 1.5rem;
         margin-bottom: 1rem;
     }
 
@@ -130,7 +134,7 @@
 
     .filter-group select, .filter-group input {
         width: 100%;
-        padding: 0.5rem;
+        padding: 0.5rem 0.75rem;
         border: 1px solid #d1d5db;
         border-radius: 4px;
         font-size: 0.875rem;
@@ -138,8 +142,8 @@
 
     .filter-group select:focus, .filter-group input:focus {
         outline: none;
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
     }
 
     .filter-button {
@@ -334,7 +338,6 @@
         top: 0;
         left: 0;
         right: 0;
-        bottom: 0;
         background: rgba(0, 0, 0, 0.5);
         display: flex;
         align-items: center;
@@ -344,17 +347,16 @@
 
     .modal-content {
         background: white;
-        border-radius: 8px;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-        max-width: 500px;
-        width: 90%;
-        max-height: 90vh;
-        overflow-y: auto;
-    }
-
-    .modal-header {
-        display: flex;
-        justify-content: space-between;
+                {% for student in students %}
+                <tr>
+                    <td>{{ student.name }}</td>
+                    <td>{{ student.grade }}</td>
+                    <td>{{ student.device_serial }}</td>
+                    <td>{{ student.device_model }}</td>
+                    <td>{{ student.checkin_status }}</td>
+                    <td>{{ student.notes }}</td>
+                </tr>
+                {% endfor %}
         align-items: center;
         padding: 1.5rem;
         border-bottom: 1px solid #e5e7eb;
@@ -439,114 +441,130 @@
 {% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 1200px; margin-top: 2rem;">
-    <!-- Session Header -->
-    <div class="session-header">
-        <div class="header-info">
-            <h1>Audit Session {{ session.session_id }}</h1>
-            <p>Created by {{ session.created_by.get_full_name|default:session.created_by.username }} on {{ session.created_at|date:"F d, Y H:i" }}</p>
-            <div style="margin-top: 1rem;">
-                <span class="stat-badge"><strong>Status:</strong> {{ session.get_status_display }}</span>
-                <span class="stat-badge"><strong>Students:</strong> {{ summary.total_students }}</span>
+</div>
+<!-- Breadcrumbs -->
+<nav aria-label="breadcrumb" style="margin-bottom: 1rem;">
+    <ol class="breadcrumb">
+           <li class="breadcrumb-item"><a href="/">Home</a></li>
+            <li class="breadcrumb-item"><a href="/devices/">Devices</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Audit Session</li>
+    </ol>
+</nav>
+
+<!-- Page Title & Subtitle -->
+<div style="margin-bottom: 2rem;">
+    <h1 style="margin: 0; color: #1f2937; font-size: 2rem; font-weight: bold;">Audit Session{% if session.name %}: {{ session.name }}{% else %} {{ session.session_id }}{% endif %}</h1>
+    <p style="margin: 0.5rem 0 0 0; color: #6b7280; font-size: 1.1rem;">Track device check-ins for this session.</p>
+</div>
+
+<!-- Stats Cards -->
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem;">
+    <div style="background: #2563eb; color: white; border-radius: 8px; padding: 1.5rem; text-align: center;">
+        <div style="font-size: 2.5rem; font-weight: bold;">{{ summary.total_students }}</div>
+        <div style="font-size: 1rem; margin-top: 0.5rem;">Total Students</div>
+        <div style="font-size: 0.9rem; opacity: 0.8;">All students</div>
+    </div>
+    <div style="background: #16a34a; color: white; border-radius: 8px; padding: 1.5rem; text-align: center;">
+        <div style="font-size: 2.5rem; font-weight: bold;">{{ summary.checked_in }}</div>
+        <div style="font-size: 1rem; margin-top: 0.5rem;">Checked In</div>
+        <div style="font-size: 0.9rem; opacity: 0.8;">All students</div>
+    </div>
+    <div style="background: #facc15; color: #1e293b; border-radius: 8px; padding: 1.5rem; text-align: center;">
+        <div style="font-size: 2.5rem; font-weight: bold;">{{ summary.pending }}</div>
+        <div style="font-size: 1rem; margin-top: 0.5rem;">Pending</div>
+        <div style="font-size: 0.9rem; opacity: 0.8;">All students</div>
+    </div>
+    <div style="background: #06b6d4; color: white; border-radius: 8px; padding: 1.5rem; text-align: center;">
+        <div style="font-size: 2.5rem; font-weight: bold;">{{ summary.completion_rate|floatformat:1 }}%</div>
+        <div style="font-size: 1rem; margin-top: 0.5rem;">Completion Rate</div>
+        <div style="font-size: 0.9rem; opacity: 0.8;">All students</div>
+    </div>
+</div>
+
+<!-- Action Buttons -->
+<div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: center;">
+    <button class="btn btn-outline-primary" onclick="window.location.reload();">Refresh</button>
+    <button class="btn btn-outline-info">Check RT Assignments</button>
+    <button class="btn btn-outline-success">Import Students</button>
+    <button class="btn btn-outline-secondary">Export CSV</button>
+    <button class="btn btn-outline-danger">Clear All Students</button>
+    <div style="flex: 1;"></div>
+    <button class="btn btn-primary">+ Add Student</button>
+</div>
+
+<!-- Filter Students -->
+<div style="background: #2563eb; color: white; border-radius: 8px 8px 0 0; padding: 0.75rem 1.5rem; font-weight: 600; font-size: 1.1rem;">Filter Students</div>
+<div style="border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; padding: 1.5rem; margin-bottom: 2rem; background: #fff;">
+    <div style="display: flex; gap: 2rem; flex-wrap: wrap; align-items: center;">
+        <div>
+            <div style="font-weight: 500; margin-bottom: 0.5rem;">Grade Levels</div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;">
+                {% for grade in grades %}
+                    <label><input type="checkbox" name="grade" value="{{ grade }}"> Grade {{ grade }}</label>
+                {% endfor %}
+            </div>
+            <div style="margin-top: 0.5rem;">
+                <button class="btn btn-sm btn-outline-secondary">Select All</button>
+                <button class="btn btn-sm btn-outline-secondary">Clear</button>
+            </div>
+        </div>
+        <div>
+            <div style="font-weight: 500; margin-bottom: 0.5rem;">Advisor</div>
+            <select id="advisor-filter" class="form-select" style="min-width: 160px;">
+                <option value="">All Advisors</option>
+                {% for advisor in available_advisors %}
+                    <option value="{{ advisor }}">{{ advisor }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <div style="font-weight: 500; margin-bottom: 0.5rem;">Check-in Status</div>
+            <select class="form-select" style="min-width: 160px;">
+                <option>All Statuses</option>
+                <option>Checked In</option>
+                <option>Pending</option>
+            </select>
+        </div>
+        <div style="flex: 1; min-width: 220px;">
+            <div style="font-weight: 500; margin-bottom: 0.5rem;">Search Students</div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="text" class="form-control" placeholder="Name or ID..." style="max-width: 180px;">
+                <button class="btn btn-sm btn-outline-secondary">×</button>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Summary Cards -->
-    <div class="summary-cards">
-        <div class="stat-card card-primary">
-            <h3><i class="bi bi-people-fill"></i> Total Students</h3>
-            <div class="value">{{ summary.total_students }}</div>
-        </div>
-        <div class="stat-card card-success">
-            <h3><i class="bi bi-check-circle-fill"></i> Audited</h3>
-            <div class="value">{{ summary.audited_count }}</div>
-        </div>
-        <div class="stat-card card-warning">
-            <h3><i class="bi bi-clock-fill"></i> Pending</h3>
-            <div class="value">{{ summary.pending_count }}</div>
-        </div>
-        <div class="stat-card card-info">
-            <h3><i class="bi bi-graph-up-arrow"></i> Completion</h3>
-            <div class="value">{{ summary.audited_percent }}%</div>
-        </div>
-    </div>
-
-    <!-- Filters -->
-    <div class="filters">
-        <form method="get">
-            <div class="filters-header">
-                <i class="bi bi-funnel"></i>
-                <strong>Filter Students</strong>
+            <div>
+                <div style="font-weight: 500; margin-bottom: 0.5rem;">Advisor</div>
+                <select id="advisor-filter" class="form-select" style="min-width: 160px;">
+                    <option value="">All Advisors</option>
+                    {% for advisor in advisors %}
+                        <option value="{{ advisor }}">{{ advisor }}</option>
+                    {% endfor %}
+                </select>
             </div>
-            
-            <div class="filter-grid">
-                <div class="filter-group">
-                    <label for="grade-filter">Grade Level</label>
-                    <select id="grade-filter" name="grade" onchange="this.form.submit()">
-                        <option value="">All Grades</option>
-                        {% for grade in available_grades %}
-                        <option value="{{ grade }}" {% if filters.grade == grade %}selected{% endif %}>Grade {{ grade }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="filter-group">
-                    <label for="status-filter">Audit Status</label>
-                    <select id="status-filter" name="status" onchange="this.form.submit()">
-                        <option value="">All Statuses</option>
-                        <option value="audited" {% if filters.status == "audited" %}selected{% endif %}>✓ Audited</option>
-                        <option value="pending" {% if filters.status == "pending" %}selected{% endif %}>⏱ Pending</option>
-                    </select>
-                </div>
-
-                <div class="filter-group">
-                    <label for="advisor-filter">Advisor</label>
-                    <select id="advisor-filter" name="advisor" onchange="this.form.submit()">
-                        <option value="">All Advisors</option>
-                        {% for advisor in available_advisors %}
-                        <option value="{{ advisor }}" {% if filters.advisor == advisor %}selected{% endif %}>{{ advisor }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <div class="filter-button">
-                {% if filters.grade or filters.advisor or filters.status %}
-                <a href="?" class="btn btn-secondary btn-small">
-                    <i class="bi bi-x-circle"></i> Clear All Filters
-                </a>
-                {% endif %}
-            </div>
-        </form>
-    </div>
-
-    <!-- Students Table -->
-    {% if students %}
-        <h2 style="margin: 2rem 0 1rem 0; color: #1f2937;">Students in Session</h2>
-        <table class="student-table">
-            <thead>
+<!-- Student Device List -->
+<div style="background: #2563eb; color: white; border-radius: 8px 8px 0 0; padding: 0.75rem 1.5rem; font-weight: 600; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center;">
+    <span>Student Device List</span>
+    <span style="font-size: 0.95rem; background: #fff; color: #2563eb; border-radius: 12px; padding: 0.2rem 0.75rem; font-weight: 500;">{{ summary.total_students }} students</span>
+</div>
+{% if students %}
+    <div style="border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; padding: 0; background: #fff;">
+        <table class="table table-bordered table-striped student-table" style="margin-bottom: 0;">
+            <thead class="thead-light">
                 <tr>
-                    <th style="width: 40px;">Mark</th>
-                    <th>Student ID</th>
-                    <th>Name</th>
-                    <th>Grade</th>
-                    <th>Advisor</th>
-                    <th>Status</th>
-                    <th>Device Info</th>
-                    <th>Audit Date</th>
-                    <th style="width: 120px;">Actions</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Grade</th>
+                    <th scope="col">Advisor</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Device Info</th>
+                    <th scope="col">Audit Date</th>
                 </tr>
             </thead>
             <tbody>
                 {% for student in students %}
-                <tr data-student-id="{{ student.student.student_id }}">
-                    <td>
-                        <input type="checkbox" class="checkbox student-checkbox" 
-                               data-student-id="{{ student.student.student_id }}"
-                               {% if student.audited %}checked{% endif %}>
-                    </td>
-                    <td>{{ student.student.student_id }}</td>
+                <tr>
                     <td>{{ student.name }}</td>
                     <td>{{ student.grade }}</td>
                     <td>{{ student.advisor }}</td>
@@ -572,39 +590,19 @@
                             <span style="color: #9ca3af;">-</span>
                         {% endif %}
                     </td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="btn-icon" title="View Details" onclick="viewStudentDetails('{{ student.student.student_id }}')">
-                                <i class="bi bi-eye"></i> View
-                            </button>
-                            {% if not student.audited %}
-                            <button class="btn-icon" title="Mark as Audited" style="background: #10b981;" onclick="markStudentAudited(this, '{{ student.student.student_id }}')">
-                                <i class="bi bi-check"></i> Mark
-                            </button>
-                            {% else %}
-                            <button class="btn-icon" title="Undo Audit" style="background: #f59e0b;" onclick="undoAudit(this, '{{ student.student.student_id }}')">
-                                <i class="bi bi-arrow-counterclockwise"></i> Undo
-                            </button>
-                            {% endif %}
-                        </div>
-                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-
-        <div class="export-button">
-            <a href="{% url 'audit:export_session_csv' session.session_id %}" class="btn-export">
-                ↓ Export CSV
-            </a>
+    </div>
+{% else %}
+    <div style="border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; padding: 2.5rem 1.5rem; background: #fff; text-align: center; min-height: 180px;">
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
+            <div class="spinner-border text-primary" role="status" style="width: 2.5rem; height: 2.5rem; margin-bottom: 1rem;"></div>
+            <div style="font-size: 1.1rem; color: #6b7280;">Loading student data...</div>
         </div>
-
-    {% else %}
-        <div class="no-students">
-            <h2 style="margin: 0 0 0.5rem 0; color: #1f2937;">No Students in Session</h2>
-            <p>No students match the selected filters.</p>
-        </div>
-    {% endif %}
+    </div>
+{% endif %}
 </div>
 
 <script>
@@ -624,7 +622,7 @@ document.querySelectorAll('.student-checkbox').forEach(checkbox => {
                 },
                 body: JSON.stringify({
                     student_id: studentId,
-                    auditor_name: '{{ request.user.get_full_name|default:request.user.username }}',
+                    auditor_name: '{% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}',
                     notes: ''
                 })
             });
@@ -669,7 +667,7 @@ async function markStudentAudited(button, studentId) {
             },
             body: JSON.stringify({
                 student_id: studentId,
-                auditor_name: '{{ request.user.get_full_name|default:request.user.username }}',
+                auditor_name: '{% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}',
                 notes: ''
             })
         });
@@ -727,7 +725,7 @@ async function undoAudit(button, studentId) {
             },
             body: JSON.stringify({
                 student_id: studentId,
-                auditor_name: '{{ request.user.get_full_name|default:request.user.username }}',
+                auditor_name: '{% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}',
                 notes: '',
                 undo: true
             })
@@ -847,5 +845,57 @@ function closeStudentModal() {
         modal.remove();
     }
 }
+
+// Client-side search filtering
+function filterStudentsClient() {
+    const searchText = document.getElementById('search-input')?.value?.toLowerCase() || '';
+    const advisorValue = document.getElementById('advisor-filter')?.value || '';
+    const rows = document.querySelectorAll('.student-table tbody tr');
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+        const rowText = row.textContent.toLowerCase();
+        const advisorCell = row.querySelector('td:nth-child(3)'); // Adjust index if needed
+        const advisorText = advisorCell ? advisorCell.textContent.trim() : '';
+        const matchesSearch = rowText.includes(searchText);
+        const matchesAdvisor = !advisorValue || advisorText === advisorValue;
+        if (matchesSearch && matchesAdvisor) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    // Update count if element exists
+    const countElement = document.querySelector('[class*="student-count"]');
+    if (countElement) {
+        countElement.textContent = `${visibleCount} students`;
+    }
+}
+
+// Add event listeners for search
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('search-input');
+    const clearSearchBtn = document.getElementById('clear-search');
+    const advisorFilter = document.getElementById('advisor-filter');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', filterStudentsClient);
+    }
+
+    if (clearSearchBtn) {
+        clearSearchBtn.addEventListener('click', function() {
+            if (searchInput) {
+                searchInput.value = '';
+                filterStudentsClient();
+            }
+        });
+    }
+
+    if (advisorFilter) {
+        advisorFilter.addEventListener('change', filterStudentsClient);
+    }
+});
 </script>
 {% endblock %}
