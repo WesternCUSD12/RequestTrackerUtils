@@ -20,6 +20,8 @@ class AuditSession(models.Model):
         help_text="Teacher or admin who created the session"
     )
     creator_name = models.CharField(max_length=255)  # Denormalized for display
+    # Human-friendly session name for teachers/admins to see instead of raw UUID
+    name = models.CharField(max_length=255, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
@@ -30,6 +32,8 @@ class AuditSession(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
+        if self.name:
+            return f"{self.name} ({self.status})"
         return f"Audit {self.session_id} ({self.status})"
     
     @property
