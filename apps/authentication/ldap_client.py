@@ -234,8 +234,10 @@ class LDAPClient:
             - Both groups -> technology_staff (higher privilege wins)
             - Neither group -> None (unauthorized)
         """
-        is_tech = self.tech_group in groups
-        is_teacher = self.teacher_group in groups
+        # Case-insensitive group matching
+        groups_lower = [g.lower() for g in groups]
+        is_tech = self.tech_group.lower() in groups_lower
+        is_teacher = self.teacher_group.lower() in groups_lower
         
         if is_tech:
             return 'technology_staff'
