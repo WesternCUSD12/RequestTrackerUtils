@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}Device Audit Sessions{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .stat-card h3 {
+        margin: 0;
+        font-size: 0.875rem;
+        opacity: 0.9;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-card .stat-value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-top: 0.5rem;
+    }
+
+    .stat-card.info { 
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .stat-card.success {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+
+    .stat-card.warning {
+        background: linear-gradient(135deg, #f77f00 0%, #fcbf49 100%);
+    }
+
+    .session-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .session-table thead {
+        background: #f3f4f6;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .session-table th {
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: #374151;
+        font-size: 0.875rem;
+    }
+
+    .session-table td {
+        padding: 1rem;
+        border-bottom: 1px solid #e5e7eb;
+        color: #4b5563;
+    }
+
+    .session-table tbody tr:hover {
+        background: #f9fafb;
+    }
+
+    .session-id-link {
+        color: #667eea;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    .session-id-link:hover {
+        text-decoration: underline;
+    }
+
+    .progress-bar-wrapper {
+        background: #e5e7eb;
+        border-radius: 4px;
+        height: 24px;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.75rem;
+        font-weight: bold;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .badge-active {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .no-sessions {
+        text-align: center;
+        padding: 3rem;
+        color: #6b7280;
+        background: #f9fafb;
+        border-radius: 8px;
+    }
+
+    .button-group {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+        justify-content: flex-end;
+    }
+
+    .btn-primary, .btn-secondary {
+        padding: 0.75rem 1.5rem;
+        border-radius: 6px;
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+        background: #667eea;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #5568d3;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .btn-secondary:hover {
+        background: #d1d5db;
+    }
+
+    .section-header {
+        margin: 2rem 0 1.5rem 0;
+    }
+
+    .section-header h2 {
+        margin: 0;
+        color: #1f2937;
+        font-size: 1.5rem;
+    }
+
+    .section-header p {
+        margin: 0.25rem 0 0 0;
+        color: #6b7280;
+        font-size: 0.875rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1200px; margin-top: 2rem;">
+    <!-- Page Header -->
+    <div style="margin-bottom: 2rem;">
+        <h1 style="margin: 0; color: #1f2937; font-size: 2rem;">Device Audit Sessions</h1>
+        <p style="margin: 0.5rem 0 0 0; color: #6b7280;">View and manage active audit sessions</p>
+    </div>
+
+    {% if sessions %}
+        <!-- Summary Stats -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+            <div class="stat-card info">
+                <h3>Active Sessions</h3>
+                <div class="stat-value">{{ sessions|length }}</div>
+            </div>
+            <div class="stat-card success">
+                <h3>Total Students</h3>
+                <div class="stat-value">
+                    {% with total=0 %}
+                        {% for s in sessions %}
+                            {% if s.total_students %}
+                                {{ total|add:s.total_students }}
+                            {% endif %}
+                        {% endfor %}
+                    {% endwith %}
+                </div>
+            </div>
+            <div class="stat-card warning">
+                <h3>Overall Completion</h3>
+                <div class="stat-value">
+                    {% with audited=0 total=0 %}
+                        {% for s in sessions %}
+                            {% if s.total_students %}
+                                {{ audited|add:s.audited_count }} / {{ total|add:s.total_students }}
+                            {% endif %}
+                        {% endfor %}
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sessions Table -->
+        <div class="section-header">
+            <h2>Active Sessions</h2>
+            <p>Click on a session to view and manage students</p>
+        </div>
+
+        <table class="session-table">
+            <thead>
+                <tr>
+                    <th>Session ID</th>
+                    <th>Created By</th>
+                    <th>Created</th>
+                    <th>Students</th>
+                    <th>Audited</th>
+                    <th>Progress</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sessions %}
+                <tr>
+                    <td>
+                        <a href="{% url 'audit:session_detail' s.session.session_id %}" class="session-id-link">
+                            {{ s.session.session_id }}
+                        </a>
+                    </td>
+                    <td>{{ s.session.created_by.get_full_name|default:s.session.created_by.username }}</td>
+                    <td>{{ s.session.created_at|date:"M d, Y H:i" }}</td>
+                    <td>{{ s.total_students }}</td>
+                    <td>{{ s.audited_count }} / {{ s.total_students }}</td>
+                    <td>
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar" style="width: {{ s.audited_percent }}%;">
+                                {{ s.audited_percent }}%
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge badge-active">{{ s.session.status|upper }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Admin Actions -->
+        {% if is_admin %}
+        <div class="button-group">
+            <button class="btn btn-primary" onclick="createNewSession(event);">
+                + Create New Session
+            </button>
+            <button class="btn btn-secondary" onclick="window.location.reload();">
+                Refresh
+            </button>
+        </div>
+        {% endif %}
+
+    {% else %}
+        <div class="no-sessions">
+            <h2 style="margin: 0 0 0.5rem 0; color: #1f2937;">No Active Sessions</h2>
+            <p style="margin: 0; color: #6b7280;">There are currently no active audit sessions.</p>
+            {% if is_admin %}
+            <p style="margin: 1rem 0 0 0; color: #9ca3af;">
+                <a href="#" onclick="createNewSession(event); return false;" style="color: #667eea; text-decoration: none;">Create a new session →</a>
+            </p>
+            {% else %}
+            <p style="margin: 1rem 0 0 0; color: #9ca3af;">
+                Contact an administrator to create a new session.
+            </p>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+<script>
+async function createNewSession(event) {
+    // Prevent default action
+    if (event) {
+        event.preventDefault();
+    }
+    
+    // Show loading state
+    const btn = event ? event.target : document.querySelector('[onclick*="createNewSession"]');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+    
+    try {
+        const response = await fetch('{% url "audit:create_session" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Redirect to the new session
+            window.location.href = data.redirect_url;
+        } else {
+            alert('Error creating session: ' + (data.error || 'Unknown error'));
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error creating session: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+}
+</script>
+{% endblock %}

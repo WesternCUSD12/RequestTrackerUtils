@@ -7,13 +7,21 @@ class AuditSession(models.Model):
 
     STATUS_CHOICES = [
         ('active', 'Active'),
-        ('completed', 'Completed'),
-        ('cancelled', 'Cancelled'),
+        ('closed', 'Closed'),
     ]
 
-    session_id = models.UUIDField(default=uuid.uuid4, unique=True)
-    creator_name = models.CharField(max_length=255)
+    session_id = models.UUIDField(default=uuid.uuid4, unique=True, primary_key=False)
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.PROTECT,
+        related_name='audit_sessions',
+        null=True,
+        blank=True,
+        help_text="Teacher or admin who created the session"
+    )
+    creator_name = models.CharField(max_length=255)  # Denormalized for display
     created_at = models.DateTimeField(auto_now_add=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     student_count = models.IntegerField(default=0)
 
@@ -23,16 +31,28 @@ class AuditSession(models.Model):
 
     def __str__(self):
         return f"Audit {self.session_id} ({self.status})"
+    
+    @property
+    def is_closed(self):
+        """Check if session is closed"""
+        return self.status == 'closed'
 
 
 class AuditStudent(models.Model):
-    """Student in an audit session."""
+    """Student in an audit session. References unified Student table for core data."""
 
     session = models.ForeignKey(
         AuditSession,
         on_delete=models.CASCADE,
         related_name='students',
         to_field='session_id'
+    )
+    student = models.ForeignKey(
+        'students.Student',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_records'
     )
     name = models.CharField(max_length=255)
     grade = models.CharField(max_length=20, blank=True)

@@ -1,21 +1,5 @@
 from django.contrib import admin
-from .models import DeviceInfo, DeviceLog
-
-
-@admin.register(DeviceInfo)
-class DeviceInfoAdmin(admin.ModelAdmin):
-    list_display = ('asset_id', 'asset_tag', 'device_type', 'serial_number', 'student', 'check_in_timestamp')
-    list_filter = ('device_type', 'check_in_timestamp')
-    search_fields = ('asset_id', 'asset_tag', 'serial_number', 'student__name')
-    readonly_fields = ('check_in_timestamp',)
-    fieldsets = (
-        ('Asset Information', {
-            'fields': ('asset_id', 'asset_tag', 'device_type', 'serial_number')
-        }),
-        ('Assignment', {
-            'fields': ('student', 'check_in_timestamp')
-        }),
-    )
+from .models import DeviceLog
 
 
 @admin.register(DeviceLog)

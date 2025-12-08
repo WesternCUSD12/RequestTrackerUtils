@@ -93,6 +93,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # Third-party apps
     'django_extensions',
+    'import_export',
     # Project apps
     'apps.authentication',  # OAuth2 authentication (Feature 006-google-auth)
     'apps.labels',
@@ -118,7 +119,7 @@ ROOT_URLCONF = 'rtutils.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [BASE_DIR / 'templates', BASE_DIR / 'request_tracker_utils' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [

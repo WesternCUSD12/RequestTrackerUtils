@@ -1,115 +1,354 @@
 """
 Audit views for student device verification.
 
-Django migration from request_tracker_utils/routes/audit_routes.py
+Phase 5: Teacher Device Audit Session
+
+Implements teacher and admin workflows for verifying device possession through
+unified Student data model.
 """
-from django.shortcuts import render, redirect
-from django.http import JsonResponse
+from django.shortcuts import render, redirect, get_object_or_404
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods
-from django.urls import reverse
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q, Count
+from django.utils import timezone
 from django.conf import settings
 import logging
+import csv
+from apps.audit.models import AuditSession, AuditStudent
+from apps.students.models import Student
 
 logger = logging.getLogger(__name__)
 
-# TODO: Migrate AuditTracker from utils/audit_tracker.py
-# TODO: Migrate CSV validation from utils/csv_validator.py
-# TODO: Migrate RT API calls from common/rt_api.py
+
+def teacher_required(view_func):
+    """Decorator to restrict access to teachers and admins"""
+    def wrapper(request, *args, **kwargs):
+        # Require authentication
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+        
+        # Allow Django admins
+        if request.user.is_staff and request.user.is_superuser:
+            return view_func(request, *args, **kwargs)
+        
+        # Check if user is a teacher (in TEACHERS group)
+        if hasattr(request.user, 'groups'):
+            if request.user.groups.filter(name='TEACHERS').exists():
+                return view_func(request, *args, **kwargs)
+        
+        logger.warning(f"Access denied to audit for user {request.user.username}")
+        return JsonResponse({'error': 'Access denied. Teachers and admins only.'}, status=403)
+    
+    return wrapper
 
 
-def audit_home(request):
-    """Audit upload page with statistics - redirects to active session if one exists"""
-    # TODO: Implement statistics gathering
-    # TODO: Check for active session
-    # TODO: Redirect to session view if active
-    return render(request, 'audit/audit_upload.html', {})
+def admin_required(view_func):
+    """Decorator to restrict access to admins only"""
+    def wrapper(request, *args, **kwargs):
+        # Require authentication
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+        
+        if request.user.is_staff and request.user.is_superuser:
+            return view_func(request, *args, **kwargs)
+        
+        logger.warning(f"Admin access denied for user {request.user.username}")
+        return JsonResponse({'error': 'Access denied. Admins only.'}, status=403)
+    
+    return wrapper
 
 
-@require_http_methods(["POST"])
-def upload_csv(request):
+@login_required
+@teacher_required
+def audit_list(request):
+    """T034: View active audit sessions with summary stats
+    
+    GET /audit/ → Shows all active audit sessions
+    - Summary cards: total students, audited count, completion %
+    - Session list with timestamps and creator
+    - Create session button (admin only)
+    
+    Requirements:
+    - FR-008: Status display with summary
+    - FR-008c: Global shared sessions across teachers
     """
-    POST /devices/audit/upload
-    Accepts CSV file upload, validates, creates audit session
-    Returns: JSON with session_id and student_count or error details
+    # Get active sessions (newest first)
+    active_sessions = AuditSession.objects.filter(status='active').order_by('-created_at')
+    
+    # Calculate summary stats for each session
+    sessions_with_stats = []
+    for session in active_sessions:
+        total = session.students.count()
+        audited = session.students.filter(audited=True).count()
+        percent = round((audited / total * 100)) if total > 0 else 0
+        
+        sessions_with_stats.append({
+            'session': session,
+            'total_students': total,
+            'audited_count': audited,
+            'audited_percent': percent,
+            'pending_count': total - audited,
+        })
+    
+    context = {
+        'sessions': sessions_with_stats,
+        'is_admin': request.user.is_staff and request.user.is_superuser,
+        'page_title': 'Device Audit Sessions',
+        'page_description': 'View and manage device audit sessions'
+    }
+    
+    return render(request, 'audit/session_list.html', context)
+
+
+@login_required
+@admin_required
+@require_http_methods(["POST"])
+def create_session(request):
+    """Create a new audit session - admin only
+    
+    POST /audit/create/ → Creates a new active session
+    
+    Returns JSON response with session ID and redirect URL
     """
-    # TODO: Validate file upload
-    # TODO: Parse CSV with parse_audit_csv
-    # TODO: Create audit session
-    # TODO: Return JSON response
-    return JsonResponse({'error': 'Not implemented'}, status=501)
+    try:
+        # Create new session
+        session = AuditSession.objects.create(
+            created_by=request.user,
+            creator_name=request.user.get_full_name() or request.user.username,
+            status='active'
+        )
+        
+        # Get all active students
+        active_students = Student.objects.filter(is_active=True).order_by('last_name', 'first_name')
+        
+        # Create AuditStudent records for each active student
+        audit_students = [
+            AuditStudent(
+                session=session,
+                student=student,
+                name=student.full_name,
+                grade=str(student.grade),
+                advisor=student.advisor or '',
+                audited=False
+            )
+            for student in active_students
+        ]
+        AuditStudent.objects.bulk_create(audit_students)
+        
+        logger.info(f"Admin {request.user.username} created audit session {session.session_id}")
+        
+        return JsonResponse({
+            'success': True,
+            'session_id': str(session.session_id),
+            'redirect_url': f'/devices/audit/session/{session.session_id}/'
+        })
+    except Exception as e:
+        logger.error(f"Error creating audit session: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
 
 
-def view_session(request, session_id):
-    """View audit session details"""
-    # TODO: Fetch session data
-    # TODO: Render session template
-    return render(request, 'audit/audit_session.html', {'session_id': session_id})
+@login_required
+@teacher_required
+def audit_session_detail(request, session_id):
+    """T035: View audit session with student list and filters
+    
+    GET /audit/session/<id> → Shows students in session with filters
+    - Grade filter dropdown
+    - Advisor filter dropdown (pre-filtered to teacher's advisees)
+    - Student table: Name, Grade, Advisor, Audited checkbox
+    - Summary cards: total, audited, pending, % complete
+    
+    Query params:
+    - ?grade=10 - Filter by grade
+    - ?advisor=name - Filter by advisor
+    
+    Requirements:
+    - FR-008a: Filter by grade and advisor
+    - FR-008b: Mark students as audited
+    - FR-008c: Teacher sees only their advisees (if teacher)
+    """
+    session = get_object_or_404(AuditSession, session_id=session_id, status='active')
+    
+    # Get base queryset
+    queryset = AuditStudent.objects.filter(session=session).select_related('student')
+    
+    # If teacher (not admin), filter to their advisees
+    if not (request.user.is_staff and request.user.is_superuser):
+        # Get advisor name from user profile or default
+        teacher_advisor = getattr(request.user, 'advisor', None)
+        if teacher_advisor:
+            queryset = queryset.filter(advisor=teacher_advisor)
+    
+    # Apply grade filter
+    grade = request.GET.get('grade', '').strip()
+    if grade:
+        queryset = queryset.filter(grade=grade)
+    
+    # Apply advisor filter
+    advisor = request.GET.get('advisor', '').strip()
+    if advisor:
+        queryset = queryset.filter(advisor=advisor)
+    
+    # Get available grades and advisors for filters
+    all_students = AuditStudent.objects.filter(session=session)
+    available_grades = sorted(set(all_students.filter(grade__isnull=False).values_list('grade', flat=True)))
+    available_advisors = sorted(set(all_students.filter(advisor__isnull=False).values_list('advisor', flat=True)))
+    
+    # Calculate summary stats
+    total = all_students.count()
+    audited = all_students.filter(audited=True).count()
+    pending = total - audited
+    audited_percent = round((audited / total * 100)) if total > 0 else 0
+    
+    context = {
+        'session': session,
+        'students': queryset.order_by('name'),
+        'summary': {
+            'total_students': total,
+            'audited_count': audited,
+            'pending_count': pending,
+            'audited_percent': audited_percent,
+        },
+        'filters': {
+            'grade': grade,
+            'advisor': advisor,
+        },
+        'available_grades': available_grades,
+        'available_advisors': available_advisors,
+        'page_title': f'Audit Session {session.session_id}',
+        'page_description': 'Review and mark students as audited'
+    }
+    
+    return render(request, 'audit/session_detail.html', context)
 
 
-def session_students(request, session_id):
-    """Get students for a session (JSON endpoint)"""
-    # TODO: Fetch students for session
-    # TODO: Return JSON with student list
-    return JsonResponse({'students': []})
-
-
-def student_detail(request, student_id):
-    """Student device verification page"""
-    # TODO: Fetch student data
-    # TODO: Fetch RT devices for student
-    # TODO: Render student detail template
-    return render(request, 'audit/student_detail.html', {'student_id': student_id})
-
-
-def student_devices(request, student_id):
-    """Get student's devices (JSON endpoint)"""
-    # TODO: Fetch devices for student from RT
-    # TODO: Return JSON with device list
-    return JsonResponse({'devices': []})
-
-
+@teacher_required
 @require_http_methods(["POST"])
-def verify_student(request, student_id):
-    """Mark student as audited"""
-    # TODO: Update audit status
-    # TODO: Save notes if provided
-    # TODO: Return success/error JSON
-    return JsonResponse({'success': False, 'error': 'Not implemented'}, status=501)
+def mark_audited(request, session_id):
+    """T036: API endpoint to mark student as audited
+    
+    POST /audit/api/mark-audited/<session_id>
+    
+    Body: {
+        'student_id': 'S001',
+        'auditor_name': 'John Smith',
+        'notes': 'Device verified and working'
+    }
+    
+    Response: {
+        'success': True,
+        'student_id': 'S001',
+        'audited': True,
+        'timestamp': '2025-12-05T14:30:00Z'
+    }
+    
+    Requirements:
+    - FR-008b: Mark students as audited with timestamp
+    - FR-019: Preserve audit history
+    """
+    import json
+    
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    
+    session = get_object_or_404(AuditSession, session_id=session_id, status='active')
+    student_id = data.get('student_id', '').strip()
+    auditor_name = data.get('auditor_name', request.user.get_full_name() or request.user.username)
+    notes = data.get('notes', '').strip()
+    
+    if not student_id:
+        return JsonResponse({'success': False, 'error': 'student_id required'}, status=400)
+    
+    try:
+        audit_student = AuditStudent.objects.get(session=session, student__student_id=student_id)
+    except AuditStudent.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Student not found in session'}, status=404)
+    
+    # Mark as audited
+    audit_student.audited = True
+    audit_student.audit_timestamp = timezone.now()
+    audit_student.auditor_name = auditor_name
+    audit_student.save()
+    
+    logger.info(f"[Audit] {auditor_name} marked {student_id} as audited in session {session.session_id}")
+    
+    return JsonResponse({
+        'success': True,
+        'student_id': student_id,
+        'audited': True,
+        'timestamp': audit_student.audit_timestamp.isoformat(),
+        'auditor_name': auditor_name,
+    })
 
 
+@admin_required
 @require_http_methods(["POST"])
-def re_audit_student(request, student_id):
-    """Reset audit status for student"""
-    # TODO: Reset audit status
-    # TODO: Clear verification data
-    # TODO: Return success/error JSON
-    return JsonResponse({'success': False, 'error': 'Not implemented'}, status=501)
+def close_session(request, session_id):
+    """T038: API endpoint for admin-only session closure
+    
+    POST /audit/api/close-session/<session_id>
+    
+    Response: {
+        'success': True,
+        'session_id': '...',
+        'status': 'closed',
+        'closed_at': '2025-12-05T14:30:00Z'
+    }
+    
+    Requirements:
+    - FR-020: Admin-only session closure
+    - FR-019: Keep closed sessions visible (never delete)
+    """
+    session = get_object_or_404(AuditSession, session_id=session_id, status='active')
+    
+    # Close the session
+    session.status = 'closed'
+    session.closed_at = timezone.now()
+    session.save()
+    
+    logger.info(f"[Audit] Admin {request.user.username} closed session {session.session_id}")
+    
+    return JsonResponse({
+        'success': True,
+        'session_id': str(session.session_id),
+        'status': session.status,
+        'closed_at': session.closed_at.isoformat(),
+    })
 
 
-def completed_students(request, session_id):
-    """View completed audits for session"""
-    # TODO: Fetch completed students
-    # TODO: Render completed students template
-    return render(request, 'audit/completed_students.html', {'session_id': session_id})
-
-
-def audit_notes(request):
-    """View/filter audit notes"""
-    # TODO: Fetch and filter audit notes
-    # TODO: Render notes template
-    return render(request, 'audit/audit_notes.html', {})
-
-
-def export_notes(request):
-    """Export notes to CSV"""
-    # TODO: Generate CSV from notes
-    # TODO: Return CSV download response
-    return JsonResponse({'error': 'Not implemented'}, status=501)
-
-
-@require_http_methods(["POST"])
-def clear_audit(request):
-    """Clear audit data"""
-    # TODO: Clear audit session data
-    # TODO: Return success/error JSON
-    return JsonResponse({'success': False, 'error': 'Not implemented'}, status=501)
+@login_required
+@teacher_required
+def export_session_csv(request, session_id):
+    """T052: Export audit results to CSV
+    
+    GET /audit/session/<id>/export-csv → CSV download
+    
+    Columns: Student ID, Name, Grade, Advisor, Audited, Audit Timestamp, Auditor
+    
+    Requirements:
+    - FR-019: Export audit history
+    """
+    session = get_object_or_404(AuditSession, session_id=session_id)
+    
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="audit_session_{session.session_id}.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['Student ID', 'Name', 'Grade', 'Advisor', 'Audited', 'Audit Timestamp', 'Auditor Name'])
+    
+    for audit_student in session.students.all().order_by('name'):
+        writer.writerow([
+            audit_student.student.student_id if audit_student.student else '',
+            audit_student.name,
+            audit_student.grade or '',
+            audit_student.advisor or '',
+            'Yes' if audit_student.audited else 'No',
+            audit_student.audit_timestamp.strftime('%Y-%m-%d %H:%M:%S') if audit_student.audit_timestamp else '',
+            audit_student.auditor_name or '',
+        ])
+    
+    return response

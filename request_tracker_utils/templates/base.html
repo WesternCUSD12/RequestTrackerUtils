@@ -214,7 +214,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body>
-    <!-- Navigation Bar (Feature 006-google-auth T023) -->
+    <!-- Navigation Bar (Feature 006-google-auth T023 + T062: Role-aware navigation) -->
     {% if user.is_authenticated %}
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
@@ -224,6 +224,33 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
+                    <!-- T062: Tech Staff Navigation -->
+                    {% with tech_staff_groups=user.groups.filter|dictsort:"name" %}
+                        {% if "TECH_STAFF" in user.groups.values_list:"name" %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="/devices/check-in">Device Check-in</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="/students/check-in-status">Check-in Status</a>
+                            </li>
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <!-- T062: Teacher Navigation -->
+                    {% if "TEACHERS" in user.groups.values_list:"name" %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="/devices/audit">Audit Sessions</a>
+                        </li>
+                    {% endif %}
+                    
+                    <!-- T062: Admin Navigation -->
+                    {% if user.is_superuser or user.is_staff %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin">Admin Panel</a>
+                        </li>
+                    {% endif %}
+                    
+                    <!-- User Account Dropdown -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-circle me-1" viewBox="0 0 16 16">

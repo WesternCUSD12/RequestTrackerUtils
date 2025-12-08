@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Device Check-In Status{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-container {
+        padding: 20px;
+    }
+    .summary-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .summary-card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-left: 4px solid #2196F3;
+    }
+    .summary-card.success {
+        border-left-color: #4caf50;
+    }
+    .summary-card.warning {
+        border-left-color: #ff9800;
+    }
+    .summary-card.info {
+        border-left-color: #2196F3;
+    }
+    .summary-card h5 {
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .summary-card .value {
+        font-size: 36px;
+        font-weight: bold;
+        color: #333;
+    }
+    .summary-card .percent {
+        font-size: 24px;
+        color: #4caf50;
+    }
+    .summary-card .text {
+        font-size: 14px;
+        color: #999;
+        margin-top: 10px;
+    }
+    
+    .filters {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .filter-row {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+    .filter-group {
+        flex: 1;
+        min-width: 200px;
+    }
+    .filter-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 5px;
+        font-size: 14px;
+    }
+    .filter-group select,
+    .filter-group input {
+        width: 100%;
+    }
+    
+    .table-container {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .table-responsive table {
+        margin: 0;
+    }
+    .table thead {
+        background: #f8f9fa;
+    }
+    .table th {
+        font-weight: 600;
+        border-bottom: 2px solid #dee2e6;
+        padding: 15px;
+        cursor: pointer;
+        user-select: none;
+    }
+    .table th:hover {
+        background: #e9ecef;
+    }
+    .table th.sortable::after {
+        content: ' ⬍';
+        font-size: 12px;
+        opacity: 0.5;
+    }
+    .table th.sorted-asc::after {
+        content: ' ⬆';
+        opacity: 1;
+        color: #2196F3;
+    }
+    .table th.sorted-desc::after {
+        content: ' ⬇';
+        opacity: 1;
+        color: #2196F3;
+    }
+    .table td {
+        padding: 15px;
+    }
+    .table tbody tr:hover {
+        background: #f8f9fa;
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .status-checked-in {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+    .status-pending {
+        background: #fff3e0;
+        color: #e65100;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+    }
+    .empty-state i {
+        font-size: 48px;
+        margin-bottom: 20px;
+        opacity: 0.3;
+    }
+    
+    .page-title {
+        margin-bottom: 30px;
+    }
+    .page-title h1 {
+        font-size: 32px;
+        font-weight: 700;
+        margin-bottom: 5px;
+    }
+    .page-title p {
+        color: #999;
+        font-size: 16px;
+    }
+    
+    .export-btn {
+        margin-left: 10px;
+    }
+    
+    .no-results {
+        text-align: center;
+        padding: 40px 20px;
+        color: #999;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="status-container">
+    <!-- Page Title -->
+    <div class="page-title">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1>Device Check-In Status</h1>
+                <p>Real-time view of student device check-in progress</p>
+            </div>
+            <a href="{% url 'device_checkin' %}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Check In Device
+            </a>
+        </div>
+    </div>
+    
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+        <div class="summary-card info">
+            <h5>Total Students</h5>
+            <div class="value">{{ summary.total_students }}</div>
+            <div class="text">in selected grades</div>
+        </div>
+        
+        <div class="summary-card success">
+            <h5>Checked In</h5>
+            <div>
+                <span class="value">{{ summary.checked_in_count }}</span>
+                <span class="percent">({{ summary.checked_in_percent|floatformat:1 }}%)</span>
+            </div>
+            <div class="text">devices assigned and checked</div>
+        </div>
+        
+        <div class="summary-card warning">
+            <h5>Pending Check-In</h5>
+            <div class="value">{{ summary.pending_count }}</div>
+            <div class="text">students awaiting device check-in</div>
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="filters">
+        <form method="GET" id="filterForm">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="gradeFilter">Grade:</label>
+                    <select name="grade" id="gradeFilter" class="form-control">
+                        <option value="">All Grades</option>
+                        {% for g in grades %}
+                            <option value="{{ g }}" {% if request.GET.grade == g|stringformat:"s" %}selected{% endif %}>
+                                Grade {{ g }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="searchFilter">Search:</label>
+                    <input type="text" name="search" id="searchFilter" class="form-control" 
+                           placeholder="Name or student ID" value="{{ request.GET.search }}">
+                </div>
+                
+                <div class="filter-group">
+                    <label for="sortFilter">Sort By:</label>
+                    <select name="sort" id="sortFilter" class="form-control">
+                        <option value="student_id" {% if request.GET.sort == "student_id" %}selected{% endif %}>
+                            Student ID
+                        </option>
+                        <option value="first_name" {% if request.GET.sort == "first_name" %}selected{% endif %}>
+                            First Name
+                        </option>
+                        <option value="last_name" {% if request.GET.sort == "last_name" %}selected{% endif %}>
+                            Last Name
+                        </option>
+                        <option value="grade" {% if request.GET.sort == "grade" %}selected{% endif %}>
+                            Grade
+                        </option>
+                        <option value="device_checked_in" {% if request.GET.sort == "device_checked_in" %}selected{% endif %}>
+                            Check-In Status
+                        </option>
+                        <option value="check_in_date" {% if request.GET.sort == "check_in_date" %}selected{% endif %}>
+                            Check-In Date
+                        </option>
+                    </select>
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-filter"></i> Apply Filters
+                    </button>
+                    <a href="{% url 'checkin_status' %}" class="btn btn-secondary">
+                        <i class="fas fa-redo"></i> Clear
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Student Table -->
+    <div class="table-container">
+        {% if students %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Student ID</th>
+                            <th>Name</th>
+                            <th>Grade</th>
+                            <th>Advisor</th>
+                            <th>Device</th>
+                            <th>Status</th>
+                            <th>Check-In Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                            <tr>
+                                <td><code>{{ student.student_id }}</code></td>
+                                <td>{{ student.first_name }} {{ student.last_name }}</td>
+                                <td>
+                                    {% if student.grade %}
+                                        Grade {{ student.grade }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td>{{ student.advisor|default:"—" }}</td>
+                                <td>
+                                    {% if student.device_info.device_asset_tag %}
+                                        <code>{{ student.device_info.device_asset_tag }}</code>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if student.device_checked_in %}
+                                        <span class="status-badge status-checked-in">
+                                            <i class="fas fa-check"></i> Checked In
+                                        </span>
+                                    {% else %}
+                                        <span class="status-badge status-pending">
+                                            <i class="fas fa-clock"></i> Pending
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if student.check_in_date %}
+                                        <small>{{ student.check_in_date|date:"M d, Y H:i" }}</small>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="padding: 15px; background: #f8f9fa; text-align: right; border-top: 1px solid #dee2e6;">
+                <small class="text-muted">Showing {{ students|length }} of {{ summary.total_students }} students</small>
+                <a href="{% url 'checkin_status' %}?export=csv{% if request.GET.grade %}&grade={{ request.GET.grade }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}" 
+                   class="btn btn-sm btn-outline-primary export-btn">
+                    <i class="fas fa-download"></i> Export CSV
+                </a>
+            </div>
+        {% else %}
+            <div class="no-results">
+                <i class="fas fa-inbox"></i>
+                <h5>No students found</h5>
+                <p>
+                    {% if request.GET.search or request.GET.grade %}
+                        Try adjusting your filters or search terms
+                    {% else %}
+                        Add students to see check-in status
+                    {% endif %}
+                </p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Make table headers sortable
+document.querySelectorAll('.table th').forEach(th => {
+    if (th.textContent.includes('Sort')) return;
+    th.classList.add('sortable');
+    th.style.cursor = 'pointer';
+});
+
+// Show filter icon based on active filters
+function updateFilterIcon() {
+    const grade = document.getElementById('gradeFilter').value;
+    const search = document.getElementById('searchFilter').value;
+    const sort = document.getElementById('sortFilter').value;
+    
+    const hasFilters = grade || search || sort !== 'student_id';
+    if (hasFilters) {
+        console.log('Active filters detected');
+    }
+}
+
+updateFilterIcon();
+</script>
+{% endblock %}

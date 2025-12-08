@@ -302,30 +302,44 @@ def update_asset(request):
             try:
                 logger.info(f"Setting owner to Nobody for asset {asset_id}")
                 
-                # STUDENT DEVICE INTEGRATION: Check if this device belongs to a student
+                # STUDENT DEVICE INTEGRATION: Check if device owner (RT user ID) has a student record
                 # and mark them as checked in before updating the RT asset
                 try:
-                    from ..utils.student_check_tracker import StudentDeviceTracker
-                    tracker = StudentDeviceTracker()
+                    from apps.students.views import find_student_by_rt_user, update_student_checkin
                     
-                    # Look up student by asset ID
-                    student = tracker.get_student_from_asset(asset_id)
-                    if student:
-                        logger.info(f"Found student {student.get('name', student.get('id'))} for asset {asset_id}")
-                        student_info = {
-                            'id': student['id'],
-                            'name': student.get('name', student['id'])
-                        }
-                        
-                        # Mark the student as checked in with the current asset data
-                        if tracker.mark_device_checked_in(student['id'], current_asset):
-                            logger.info(f"Successfully marked student {student['id']} as checked in via device check-in")
-                            student_updated = True
-                        else:
-                            logger.warning(f"Failed to mark student {student['id']} as checked in")
+                    # Extract device details from the asset data
+                    asset_tag = current_asset.get('Name', '')
+                    device_type = current_asset.get('Type', '')
+                    serial_number = current_asset.get('SerialNumber', '')
+                    
+                    # If we have an owner ID (not "Nobody"), try to find and update student
+                    if owner_data and owner_data != "Nobody":
+                        try:
+                            owner_id = int(owner_data)
+                            student = find_student_by_rt_user(owner_id)
+                            
+                            if student:
+                                logger.info(f"Found student {student.full_name} for RT user {owner_id}, asset {asset_tag}")
+                                student_info = {
+                                    'student_id': student.student_id,
+                                    'name': student.full_name
+                                }
+                                
+                                # Mark the student as checked in
+                                if update_student_checkin(student, asset_id, asset_tag, serial_number, device_type):
+                                    logger.info(f"Successfully marked student {student.student_id} as checked in")
+                                    student_updated = True
+                                else:
+                                    logger.warning(f"Failed to update student checkin for {student.student_id}")
+                            else:
+                                logger.info(f"No active student found for RT user {owner_id}")
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Invalid RT user ID format: {owner_data}, {str(e)}")
                     else:
-                        logger.info(f"No student found for asset {asset_id} - proceeding with device check-in only")
+                        logger.info(f"No owner or 'Nobody' is the owner - skipping student lookup")
                         
+                except ImportError:
+                    logger.warning("Student integration module not available - skipping student update")
                 except Exception as student_error:
                     # Log the error but don't fail the device check-in process
                     logger.error(f"Error during student device integration: {student_error}")
@@ -364,7 +378,7 @@ def update_asset(request):
                 }
                 
                 # Use the specialized create_ticket function instead of rt_api_request directly
-                from ..utils.rt_api import create_ticket
+                from common.rt_api import create_ticket
                 logger.info(f"Creating ticket with data: {json.dumps(ticket_data)}")
                 
                 # Call create_ticket with individual parameters from the ticket_data dictionary
@@ -402,7 +416,7 @@ def update_asset(request):
                 current_user = "web-user"  # This can be enhanced later with actual user authentication
                 
                 # Import and use the CSV logger with fallback location handling
-                from ..utils.csv_logger import DeviceCheckInLogger
+                from apps.devices.utils.csv_logger import DeviceCheckInLogger
                 
                 # Try to use the default configured directory first
                 try:
@@ -782,3 +796,246 @@ def preview_checkin_log(filename):
         return JsonResponse({
             "error": f"Failed to preview log file: {str(e)}"
         }), 500
+
+
+# ============================================================================
+# Phase 4: Device Check-In Interface (Unified Student Data)
+# ============================================================================
+
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
+from apps.devices.forms import DeviceCheckInForm
+from apps.students.views import find_student_by_rt_user, update_student_checkin
+from apps.students.models import Student
+
+
+def tech_staff_required(view_func):
+    """
+    Decorator to restrict access to tech staff only.
+    
+    Checks if user is in LDAP Tech-Team group or is Django admin.
+    Returns 403 Forbidden if access denied.
+    """
+    def wrapper(request, *args, **kwargs):
+        # Check if user is tech staff (from LDAP_TECH_GROUP in settings)
+        tech_group = getattr(settings, 'LDAP_TECH_GROUP', 'Tech-Team')
+        
+        # Allow Django admins
+        if request.user.is_staff and request.user.is_superuser:
+            return view_func(request, *args, **kwargs)
+        
+        # Check LDAP groups (if using LDAP auth)
+        if hasattr(request.user, 'ldap_user') and hasattr(request.user.ldap_user, 'group_dns'):
+            if any(tech_group.lower() in str(group).lower() for group in request.user.ldap_user.group_dns):
+                return view_func(request, *args, **kwargs)
+        
+        # Check groups attribute (standard Django groups)
+        if hasattr(request.user, 'groups'):
+            if request.user.groups.filter(name=tech_group).exists():
+                return view_func(request, *args, **kwargs)
+        
+        logger.warning(f"Access denied to device check-in for user {request.user.username}")
+        return JsonResponse({'error': 'Access denied. Tech staff only.'}, status=403)
+    
+    return wrapper
+
+
+@login_required
+@tech_staff_required
+@require_http_methods(["GET", "POST"])
+def device_checkin(request):
+    """
+    Device check-in interface for tech staff.
+    
+    GET: Display device check-in form
+    POST: Process device check-in (form submission)
+    
+    Requirements:
+    - FR-007: Device check-in form
+    - FR-017: Fail-safe - don't update if RT API fails
+    - FR-018: Re-check-in warning with confirmation
+    """
+    if request.method == 'GET':
+        form = DeviceCheckInForm()
+        return render(request, 'devices/checkin.html', {
+            'form': form,
+            'page_title': 'Device Check-In',
+            'page_description': 'Scan or enter device asset tag to check in a device'
+        })
+    
+    # POST: Handle form submission
+    form = DeviceCheckInForm(request.POST)
+    if not form.is_valid():
+        return render(request, 'devices/checkin.html', {
+            'form': form,
+            'error': 'Please correct the errors below',
+            'page_title': 'Device Check-In'
+        }, status=400)
+    
+    asset_tag = form.cleaned_data.get('asset_tag')
+    confirm_recheck = form.cleaned_data.get('confirm_recheck', False)
+    
+    # Redirect to API endpoint for processing (AJAX-friendly)
+    return JsonResponse({
+        'asset_tag': asset_tag,
+        'confirm_recheck': confirm_recheck,
+        'message': 'Form submitted. Processing check-in...'
+    })
+
+
+@login_required
+@tech_staff_required
+@require_http_methods(["POST"])
+def device_checkin_api(request):
+    """
+    API endpoint for device check-in.
+    
+    POST /devices/api/check-in with:
+    - asset_tag: Device asset tag (required)
+    - confirm_recheck: Boolean to confirm re-check-in (optional)
+    
+    Returns JSON with:
+    - success: Boolean
+    - device_info: Device details from RT API
+    - student_info: Student details (if found)
+    - message: Status message
+    - error: Error message (if failed)
+    
+    Requirements:
+    - FR-007: Lookup device and student
+    - FR-017: Fail-safe on RT API error
+    - FR-018: Re-check-in warning
+    """
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON request body'
+        }, status=400)
+    
+    asset_tag = data.get('asset_tag', '').strip()
+    confirm_recheck = data.get('confirm_recheck', False)
+    
+    if not asset_tag:
+        return JsonResponse({
+            'success': False,
+            'error': 'Asset tag is required'
+        }, status=400)
+    
+    logger.info(f"[Device Check-In] Asset tag: {asset_tag}, confirm_recheck: {confirm_recheck}")
+    
+    # Step 1: Look up device in RT API (Fail-safe pattern - FR-017)
+    try:
+        device_info = _lookup_device_in_rt(asset_tag)
+        if not device_info:
+            return JsonResponse({
+                'success': False,
+                'error': f'Device with asset tag "{asset_tag}" not found in RT',
+                'asset_tag': asset_tag
+            }, status=404)
+    except Exception as e:
+        logger.error(f"[Device Check-In] RT API error looking up device {asset_tag}: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'RT API error: {str(e)}. Device NOT checked in locally.',
+            'asset_tag': asset_tag,
+            'rt_error': True
+        }, status=500)  # FR-017: Fail-safe - return error, don't update student
+    
+    # Step 2: Get device owner from RT (find associated student)
+    rt_owner_id = device_info.get('Owner', {}).get('id') if device_info.get('Owner') else None
+    student = None
+    
+    if rt_owner_id:
+        student = find_student_by_rt_user(rt_owner_id)
+    
+    if not student:
+        return JsonResponse({
+            'success': True,
+            'warning': True,
+            'message': f'Device "{asset_tag}" found in RT but no active student assigned',
+            'device_info': {
+                'asset_tag': asset_tag,
+                'owner': device_info.get('Owner', {}).get('Name', 'Unassigned'),
+                'cf_device_type': device_info.get('CF', {}).get('Device Type', 'Unknown')
+            },
+            'student_info': None
+        })
+    
+    # Step 3: Check if student already checked in (FR-018 - Re-check-in warning)
+    if student.device_checked_in and not confirm_recheck:
+        logger.warning(f"[Device Check-In] Re-check-in attempt for student {student.student_id}")
+        return JsonResponse({
+            'success': False,
+            'recheck_warning': True,
+            'message': f'Student {student.full_name} already has device checked in. Confirm to override.',
+            'student_info': {
+                'student_id': student.student_id,
+                'full_name': student.full_name,
+                'grade': student.grade,
+                'advisor': student.advisor
+            },
+            'device_info': {
+                'asset_tag': asset_tag,
+                'owner': device_info.get('Owner', {}).get('Name', ''),
+                'cf_device_type': device_info.get('CF', {}).get('Device Type', 'Unknown')
+            }
+        }, status=409)  # 409 Conflict
+    
+    # Step 4: Update student check-in status
+    success = update_student_checkin(
+        student=student,
+        asset_id=device_info.get('id', ''),
+        asset_tag=asset_tag,
+        serial_number=device_info.get('CF', {}).get('Serial Number', ''),
+        device_type=device_info.get('CF', {}).get('Device Type', '')
+    )
+    
+    if not success:
+        logger.error(f"[Device Check-In] Failed to update student {student.student_id}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Failed to update student record. Please try again.',
+            'student_info': {
+                'student_id': student.student_id,
+                'full_name': student.full_name
+            }
+        }, status=500)
+    
+    logger.info(f"[Device Check-In] Success: Student {student.student_id} checked in device {asset_tag}")
+    
+    return JsonResponse({
+        'success': True,
+        'message': f'✓ Device checked in for {student.full_name}',
+        'student_info': {
+            'student_id': student.student_id,
+            'full_name': student.full_name,
+            'grade': student.grade,
+            'advisor': student.advisor,
+            'device_checked_in': True
+        },
+        'device_info': {
+            'asset_tag': asset_tag,
+            'owner': student.full_name,
+            'cf_device_type': device_info.get('CF', {}).get('Device Type', 'Unknown')
+        }
+    })
+
+
+def _lookup_device_in_rt(asset_tag):
+    """
+    Look up device in RT API by asset tag.
+    
+    Args:
+        asset_tag (str): Asset tag to look up
+        
+    Returns:
+        dict: Device info from RT or None if not found
+        
+    Raises:
+        Exception: If RT API call fails
+    """
+    # Use existing RT API function to look up device
+    # This is the fail-safe point - exceptions here will be caught by caller
+    return fetch_asset_data(asset_tag)

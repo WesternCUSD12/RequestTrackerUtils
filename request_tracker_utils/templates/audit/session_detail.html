@@ -1,0 +1,851 @@
+{% extends "base.html" %}
+{% block title %}Audit Session {{ session.session_id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .session-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid #e5e7eb;
+        padding-bottom: 1.5rem;
+    }
+
+    .header-info h1 {
+        margin: 0;
+        color: #1f2937;
+        font-size: 2rem;
+    }
+
+    .header-info p {
+        margin: 0.25rem 0 0 0;
+        color: #6b7280;
+        font-size: 0.875rem;
+    }
+
+    .stat-badge {
+        display: inline-block;
+        background: #f3f4f6;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        color: #374151;
+        font-size: 0.875rem;
+        margin-right: 0.5rem;
+    }
+
+    .stat-badge strong {
+        color: #1f2937;
+    }
+
+    .summary-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        border-radius: 8px;
+        padding: 1.5rem;
+        text-align: center;
+        color: white;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .stat-card h3 {
+        margin: 0;
+        font-size: 0.875rem;
+        color: rgba(255, 255, 255, 0.9);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }
+
+    .stat-card .value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-top: 0.75rem;
+    }
+
+    .stat-card.card-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .stat-card.card-success {
+        background: linear-gradient(135deg, #11b981 0%, #059669 100%);
+    }
+
+    .stat-card.card-warning {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+
+    .stat-card.card-info {
+        background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+    }
+
+    .filters {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .filters-header {
+        font-weight: 600;
+        color: #1f2937;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .filters-header i {
+        color: #667eea;
+    }
+
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .filter-group label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .filter-group select, .filter-group input {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 0.875rem;
+    }
+
+    .filter-group select:focus, .filter-group input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .filter-button {
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-end;
+        margin-top: 1rem;
+    }
+
+    .btn {
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+        background: #667eea;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #5568d3;
+    }
+
+    .btn-secondary {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .btn-secondary:hover {
+        background: #d1d5db;
+    }
+
+    .btn-small {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.75rem;
+    }
+
+    .student-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .student-table thead {
+        background: #f3f4f6;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .student-table th {
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: #374151;
+        font-size: 0.875rem;
+    }
+
+    .student-table td {
+        padding: 1rem;
+        border-bottom: 1px solid #e5e7eb;
+        color: #4b5563;
+    }
+
+    .student-table tbody tr {
+        transition: background 0.2s ease;
+    }
+
+    .student-table tbody tr:hover {
+        background: #f9fafb;
+    }
+
+    .checkbox {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        border-radius: 4px;
+        border: 2px solid #d1d5db;
+        transition: all 0.2s ease;
+    }
+
+    .checkbox:checked {
+        background: #667eea;
+        border-color: #667eea;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .badge-pending {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .badge-audited {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .btn-icon {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        white-space: nowrap;
+    }
+
+    .btn-icon:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-icon i {
+        font-size: 0.875rem;
+    }
+
+    .btn-icon {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.75rem;
+        border: 1px solid #d1d5db;
+        background: white;
+        color: #374151;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .btn-icon:hover {
+        background: #f3f4f6;
+    }
+
+    .no-students {
+        text-align: center;
+        padding: 3rem;
+        color: #6b7280;
+        background: #f9fafb;
+        border-radius: 8px;
+    }
+
+    .export-button {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1.5rem;
+        justify-content: flex-end;
+    }
+
+    .btn-export {
+        padding: 0.75rem 1.5rem;
+        background: #11998e;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        transition: all 0.2s ease;
+    }
+
+    .btn-export:hover {
+        background: #0d7863;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(17, 153, 142, 0.4);
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        color: #1f2937;
+        font-size: 1.5rem;
+    }
+
+    .close-btn {
+        background: none;
+        border: none;
+        font-size: 2rem;
+        color: #6b7280;
+        cursor: pointer;
+        padding: 0;
+        width: 2rem;
+        height: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: color 0.2s ease;
+    }
+
+    .close-btn:hover {
+        color: #1f2937;
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+    }
+
+    .details-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .details-table tr {
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .details-table th {
+        text-align: left;
+        font-weight: 600;
+        color: #374151;
+        padding: 0.75rem 0;
+        width: 120px;
+    }
+
+    .details-table td {
+        padding: 0.75rem 0;
+        color: #4b5563;
+    }
+
+    .modal-footer {
+        padding: 1.5rem;
+        border-top: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+    }
+
+    .btn-icon {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: all 0.2s ease;
+    }
+
+    .btn-icon:hover {
+        background: #5568d3;
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1200px; margin-top: 2rem;">
+    <!-- Session Header -->
+    <div class="session-header">
+        <div class="header-info">
+            <h1>Audit Session {{ session.session_id }}</h1>
+            <p>Created by {{ session.created_by.get_full_name|default:session.created_by.username }} on {{ session.created_at|date:"F d, Y H:i" }}</p>
+            <div style="margin-top: 1rem;">
+                <span class="stat-badge"><strong>Status:</strong> {{ session.get_status_display }}</span>
+                <span class="stat-badge"><strong>Students:</strong> {{ summary.total_students }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+        <div class="stat-card card-primary">
+            <h3><i class="bi bi-people-fill"></i> Total Students</h3>
+            <div class="value">{{ summary.total_students }}</div>
+        </div>
+        <div class="stat-card card-success">
+            <h3><i class="bi bi-check-circle-fill"></i> Audited</h3>
+            <div class="value">{{ summary.audited_count }}</div>
+        </div>
+        <div class="stat-card card-warning">
+            <h3><i class="bi bi-clock-fill"></i> Pending</h3>
+            <div class="value">{{ summary.pending_count }}</div>
+        </div>
+        <div class="stat-card card-info">
+            <h3><i class="bi bi-graph-up-arrow"></i> Completion</h3>
+            <div class="value">{{ summary.audited_percent }}%</div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+        <form method="get">
+            <div class="filters-header">
+                <i class="bi bi-funnel"></i>
+                <strong>Filter Students</strong>
+            </div>
+            
+            <div class="filter-grid">
+                <div class="filter-group">
+                    <label for="grade-filter">Grade Level</label>
+                    <select id="grade-filter" name="grade" onchange="this.form.submit()">
+                        <option value="">All Grades</option>
+                        {% for grade in available_grades %}
+                        <option value="{{ grade }}" {% if filters.grade == grade %}selected{% endif %}>Grade {{ grade }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="status-filter">Audit Status</label>
+                    <select id="status-filter" name="status" onchange="this.form.submit()">
+                        <option value="">All Statuses</option>
+                        <option value="audited" {% if filters.status == "audited" %}selected{% endif %}>✓ Audited</option>
+                        <option value="pending" {% if filters.status == "pending" %}selected{% endif %}>⏱ Pending</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="advisor-filter">Advisor</label>
+                    <select id="advisor-filter" name="advisor" onchange="this.form.submit()">
+                        <option value="">All Advisors</option>
+                        {% for advisor in available_advisors %}
+                        <option value="{{ advisor }}" {% if filters.advisor == advisor %}selected{% endif %}>{{ advisor }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="filter-button">
+                {% if filters.grade or filters.advisor or filters.status %}
+                <a href="?" class="btn btn-secondary btn-small">
+                    <i class="bi bi-x-circle"></i> Clear All Filters
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <!-- Students Table -->
+    {% if students %}
+        <h2 style="margin: 2rem 0 1rem 0; color: #1f2937;">Students in Session</h2>
+        <table class="student-table">
+            <thead>
+                <tr>
+                    <th style="width: 40px;">Mark</th>
+                    <th>Student ID</th>
+                    <th>Name</th>
+                    <th>Grade</th>
+                    <th>Advisor</th>
+                    <th>Status</th>
+                    <th>Device Info</th>
+                    <th>Audit Date</th>
+                    <th style="width: 120px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in students %}
+                <tr data-student-id="{{ student.student.student_id }}">
+                    <td>
+                        <input type="checkbox" class="checkbox student-checkbox" 
+                               data-student-id="{{ student.student.student_id }}"
+                               {% if student.audited %}checked{% endif %}>
+                    </td>
+                    <td>{{ student.student.student_id }}</td>
+                    <td>{{ student.name }}</td>
+                    <td>{{ student.grade }}</td>
+                    <td>{{ student.advisor }}</td>
+                    <td>
+                        {% if student.audited %}
+                        <span class="status-badge badge-audited">✓ Audited</span>
+                        {% else %}
+                        <span class="status-badge badge-pending">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if student.student.device_info %}
+                            {{ student.student.device_info.asset_tag }}
+                            {% if student.student.device_info.device_type %}({{ student.student.device_info.device_type }}){% endif %}
+                        {% else %}
+                            <span style="color: #9ca3af;">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if student.audit_timestamp %}
+                            {{ student.audit_timestamp|date:"M d, Y" }}
+                        {% else %}
+                            <span style="color: #9ca3af;">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-icon" title="View Details" onclick="viewStudentDetails('{{ student.student.student_id }}')">
+                                <i class="bi bi-eye"></i> View
+                            </button>
+                            {% if not student.audited %}
+                            <button class="btn-icon" title="Mark as Audited" style="background: #10b981;" onclick="markStudentAudited(this, '{{ student.student.student_id }}')">
+                                <i class="bi bi-check"></i> Mark
+                            </button>
+                            {% else %}
+                            <button class="btn-icon" title="Undo Audit" style="background: #f59e0b;" onclick="undoAudit(this, '{{ student.student.student_id }}')">
+                                <i class="bi bi-arrow-counterclockwise"></i> Undo
+                            </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="export-button">
+            <a href="{% url 'audit:export_session_csv' session.session_id %}" class="btn-export">
+                ↓ Export CSV
+            </a>
+        </div>
+
+    {% else %}
+        <div class="no-students">
+            <h2 style="margin: 0 0 0.5rem 0; color: #1f2937;">No Students in Session</h2>
+            <p>No students match the selected filters.</p>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+// Handle checkbox changes
+document.querySelectorAll('.student-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', async function() {
+        const studentId = this.dataset.studentId;
+        const sessionId = '{{ session.session_id }}';
+        const isChecked = this.checked;
+        
+        try {
+            const response = await fetch(`/audit/api/mark-audited/${sessionId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: JSON.stringify({
+                    student_id: studentId,
+                    auditor_name: '{{ request.user.get_full_name|default:request.user.username }}',
+                    notes: ''
+                })
+            });
+            
+            if (!response.ok) {
+                alert('Error marking student');
+                this.checked = !isChecked;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error marking student');
+            this.checked = !isChecked;
+        }
+    });
+});
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+async function markStudentAudited(button, studentId) {
+    const sessionId = '{{ session.session_id }}';
+    const row = document.querySelector(`[data-student-id="${studentId}"]`);
+    
+    try {
+        const response = await fetch(`/devices/audit/api/mark-audited/${sessionId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify({
+                student_id: studentId,
+                auditor_name: '{{ request.user.get_full_name|default:request.user.username }}',
+                notes: ''
+            })
+        });
+        
+        if (response.ok) {
+            // Update checkbox
+            const checkbox = row.querySelector('.student-checkbox');
+            checkbox.checked = true;
+            
+            // Update status badge
+            const statusCell = row.querySelector('td:nth-child(6)');
+            statusCell.innerHTML = '<span class="status-badge badge-audited">✓ Audited</span>';
+            
+            // Update audit date
+            const auditDateCell = row.querySelector('td:nth-child(8)');
+            const today = new Date();
+            const dateStr = today.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+            auditDateCell.textContent = dateStr;
+            
+            // Replace Mark button with Undo button
+            const actionCell = row.querySelector('td:nth-child(9)');
+            actionCell.innerHTML = `
+                <div class="action-buttons">
+                    <button class="btn-icon" title="View Details" onclick="viewStudentDetails('${studentId}')">
+                        <i class="bi bi-eye"></i> View
+                    </button>
+                    <button class="btn-icon" title="Undo Audit" style="background: #f59e0b;" onclick="undoAudit(this, '${studentId}')">
+                        <i class="bi bi-arrow-counterclockwise"></i> Undo
+                    </button>
+                </div>
+            `;
+        } else {
+            alert('Error marking student as audited');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error marking student as audited');
+    }
+}
+
+async function undoAudit(button, studentId) {
+    const sessionId = '{{ session.session_id }}';
+    const row = document.querySelector(`[data-student-id="${studentId}"]`);
+    
+    if (!confirm('Are you sure you want to undo the audit for this student?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/devices/audit/api/mark-audited/${sessionId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify({
+                student_id: studentId,
+                auditor_name: '{{ request.user.get_full_name|default:request.user.username }}',
+                notes: '',
+                undo: true
+            })
+        });
+        
+        if (response.ok) {
+            // Update checkbox
+            const checkbox = row.querySelector('.student-checkbox');
+            checkbox.checked = false;
+            
+            // Update status badge
+            const statusCell = row.querySelector('td:nth-child(6)');
+            statusCell.innerHTML = '<span class="status-badge badge-pending">Pending</span>';
+            
+            // Clear audit date
+            const auditDateCell = row.querySelector('td:nth-child(8)');
+            auditDateCell.innerHTML = '<span style="color: #9ca3af;">-</span>';
+            
+            // Replace Undo button with Mark button
+            const actionCell = row.querySelector('td:nth-child(9)');
+            actionCell.innerHTML = `
+                <div class="action-buttons">
+                    <button class="btn-icon" title="View Details" onclick="viewStudentDetails('${studentId}')">
+                        <i class="bi bi-eye"></i> View
+                    </button>
+                    <button class="btn-icon" title="Mark as Audited" style="background: #10b981;" onclick="markStudentAudited(this, '${studentId}')">
+                        <i class="bi bi-check"></i> Mark
+                    </button>
+                </div>
+            `;
+        } else {
+            alert('Error undoing audit');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error undoing audit');
+    }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function viewStudentDetails(studentId) {
+    // Find student in data and display details
+    const row = document.querySelector(`[data-student-id="${studentId}"]`);
+    if (!row) {
+        alert('Student not found');
+        return;
+    }
+    
+    // Extract student data from table row
+    const cells = row.querySelectorAll('td');
+    const name = cells[0].textContent.trim();
+    const grade = cells[1].textContent.trim();
+    const advisor = cells[2].textContent.trim();
+    const status = cells[3].querySelector('.status-badge') ? cells[3].querySelector('.status-badge').textContent.trim() : 'Pending';
+    const auditDate = cells[4].textContent.trim() || 'Not audited';
+    
+    // Create and show modal with student details
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'studentModal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>${name}</h2>
+                <button class="close-btn" onclick="closeStudentModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <table class="details-table">
+                    <tr>
+                        <th>Student ID:</th>
+                        <td>${studentId}</td>
+                    </tr>
+                    <tr>
+                        <th>Grade:</th>
+                        <td>${grade}</td>
+                    </tr>
+                    <tr>
+                        <th>Advisor:</th>
+                        <td>${advisor}</td>
+                    </tr>
+                    <tr>
+                        <th>Audit Status:</th>
+                        <td><span class="status-badge ${status === 'Audited' ? 'badge-audited' : 'badge-pending'}">${status}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Audit Date/Time:</th>
+                        <td>${auditDate}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeStudentModal()">Close</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function closeStudentModal() {
+    const modal = document.getElementById('studentModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+</script>
+{% endblock %}

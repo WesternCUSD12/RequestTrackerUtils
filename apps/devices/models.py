@@ -1,28 +1,6 @@
 from django.db import models
 
 
-class DeviceInfo(models.Model):
-    """Device assigned to a student."""
-
-    student = models.ForeignKey(
-        'students.Student',
-        on_delete=models.CASCADE,
-        related_name='devices'
-    )
-    asset_id = models.CharField(max_length=50)
-    asset_tag = models.CharField(max_length=50)
-    device_type = models.CharField(max_length=100)
-    serial_number = models.CharField(max_length=100, blank=True)
-    check_in_timestamp = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'device_info'
-        verbose_name_plural = 'Device info'
-
-    def __str__(self):
-        return f"{self.asset_tag} ({self.device_type})"
-
-
 class DeviceLog(models.Model):
     """Device check-in activity log entry."""
 

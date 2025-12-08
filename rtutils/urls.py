@@ -29,8 +29,8 @@ urlpatterns = [
     # Labels app (PUBLIC - no auth via middleware)
     path('labels/', include('apps.labels.urls')),
     
-    # Devices app (PROTECTED) - Templates need more work
-    # path('devices/', include('apps.devices.urls')),
+    # Devices app (PROTECTED)
+    path('devices/', include('apps.devices.urls')),
     
     # Audit app (PROTECTED, nested under /devices)
     path('devices/audit/', include('apps.audit.urls')),

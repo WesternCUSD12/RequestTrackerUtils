@@ -1,0 +1,11 @@
+student_id,first_name,last_name,username,grade,advisor
+S001,Alice,Smith,asmith,10,Smith
+S002,Benjamin,Johnson,bjohnson,11,Johnson
+S003,Charlotte,Williams,cwilliams,9,Williams
+S004,David,Brown,dbrown,12,Brown
+S005,Emma,Jones,ejones,10,Jones
+S006,Ethan,Garcia,egarcia,11,Garcia
+S007,Olivia,Miller,omiller,9,Miller
+S008,Isabella,Davis,idavis,12,Davis
+S009,Sophia,Rodriguez,srodriguez,10,Rodriguez
+S010,Jackson,Martinez,jmartinez,11,Martinez

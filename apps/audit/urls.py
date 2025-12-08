@@ -1,5 +1,7 @@
 """
-URL configuration for the audit app
+URL configuration for audit views.
+
+Phase 5: Teacher Device Audit Sessions
 """
 from django.urls import path
 from . import views
@@ -7,16 +9,21 @@ from . import views
 app_name = 'audit'
 
 urlpatterns = [
-    path('', views.audit_home, name='home'),
-    path('upload', views.upload_csv, name='upload'),
-    path('session/<str:session_id>', views.view_session, name='session'),
-    path('session/<str:session_id>/students', views.session_students, name='students'),
-    path('student/<int:student_id>', views.student_detail, name='student'),
-    path('student/<int:student_id>/devices', views.student_devices, name='devices'),
-    path('student/<int:student_id>/verify', views.verify_student, name='verify'),
-    path('student/<int:student_id>/re-audit', views.re_audit_student, name='re_audit'),
-    path('session/<str:session_id>/completed', views.completed_students, name='completed'),
-    path('notes', views.audit_notes, name='notes'),
-    path('notes/export', views.export_notes, name='export'),
-    path('clear', views.clear_audit, name='clear'),
+    # T034: Session list view
+    path('', views.audit_list, name='session_list'),
+    
+    # Create new session (admin only)
+    path('create/', views.create_session, name='create_session'),
+    
+    # T035: Session detail view with student list
+    path('session/<str:session_id>/', views.audit_session_detail, name='session_detail'),
+    
+    # T036: Mark student as audited API endpoint
+    path('api/mark-audited/<str:session_id>/', views.mark_audited, name='mark_audited'),
+    
+    # T038: Close session API endpoint (admin only)
+    path('api/close-session/<str:session_id>/', views.close_session, name='close_session'),
+    
+    # T052: Export audit results to CSV
+    path('session/<str:session_id>/export-csv/', views.export_session_csv, name='export_session_csv'),
 ]
