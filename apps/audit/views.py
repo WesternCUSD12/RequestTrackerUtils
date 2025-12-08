@@ -9,7 +9,6 @@ unified Student data model.
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods
-from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Count
 from django.utils import timezone
 from django.conf import settings
@@ -24,20 +23,19 @@ logger = logging.getLogger(__name__)
 def teacher_required(view_func):
     """Decorator to restrict access to teachers and admins"""
     def wrapper(request, *args, **kwargs):
-        # Require authentication
-        if not request.user.is_authenticated:
-            return JsonResponse({'error': 'Authentication required'}, status=401)
+        # Authentication is handled by middleware, check session
+        user_role = request.session.get('user_role')
+        username = request.session.get('username')
         
-        # Allow Django admins
-        if request.user.is_staff and request.user.is_superuser:
+        # Allow technology_staff (admins)
+        if user_role == 'technology_staff':
             return view_func(request, *args, **kwargs)
         
-        # Check if user is a teacher (in TEACHERS group)
-        if hasattr(request.user, 'groups'):
-            if request.user.groups.filter(name='TEACHERS').exists():
-                return view_func(request, *args, **kwargs)
+        # Allow teachers
+        if user_role == 'teacher':
+            return view_func(request, *args, **kwargs)
         
-        logger.warning(f"Access denied to audit for user {request.user.username}")
+        logger.warning(f"Access denied to audit for user {username} (role: {user_role})")
         return JsonResponse({'error': 'Access denied. Teachers and admins only.'}, status=403)
     
     return wrapper
@@ -46,20 +44,20 @@ def teacher_required(view_func):
 def admin_required(view_func):
     """Decorator to restrict access to admins only"""
     def wrapper(request, *args, **kwargs):
-        # Require authentication
-        if not request.user.is_authenticated:
-            return JsonResponse({'error': 'Authentication required'}, status=401)
+        # Authentication is handled by middleware, check session
+        user_role = request.session.get('user_role')
+        username = request.session.get('username')
         
-        if request.user.is_staff and request.user.is_superuser:
+        # Only technology_staff allowed
+        if user_role == 'technology_staff':
             return view_func(request, *args, **kwargs)
         
-        logger.warning(f"Admin access denied for user {request.user.username}")
+        logger.warning(f"Admin access denied for user {username} (role: {user_role})")
         return JsonResponse({'error': 'Access denied. Admins only.'}, status=403)
     
     return wrapper
 
 
-@login_required
 @teacher_required
 def audit_list(request):
     """T034: View active audit sessions with summary stats
@@ -93,7 +91,7 @@ def audit_list(request):
     
     context = {
         'sessions': sessions_with_stats,
-        'is_admin': request.user.is_staff and request.user.is_superuser,
+        'is_admin': request.session.get('user_role') == 'technology_staff',
         'page_title': 'Device Audit Sessions',
         'page_description': 'View and manage device audit sessions'
     }
@@ -101,7 +99,6 @@ def audit_list(request):
     return render(request, 'audit/session_list.html', context)
 
 
-@login_required
 @admin_required
 @require_http_methods(["POST"])
 def create_session(request):
@@ -114,8 +111,9 @@ def create_session(request):
     try:
         # Create new session
         session = AuditSession.objects.create(
-            created_by=request.user,
-            creator_name=request.user.get_full_name() or request.user.username,
+            created_by=None,  # Session-based auth, no User object
+            creator_name=request.session.get('display_name') or request.session.get('username'),
+            name=f"Audit {timezone.now().strftime('%Y-%m-%d %H:%M')} - {request.session.get('display_name') or request.session.get('username')}",
             status='active'
         )
         
@@ -136,7 +134,7 @@ def create_session(request):
         ]
         AuditStudent.objects.bulk_create(audit_students)
         
-        logger.info(f"Admin {request.user.username} created audit session {session.session_id}")
+        logger.info(f"Admin {request.session.get('username')} created audit session {session.session_id}")
         
         return JsonResponse({
             'success': True,
@@ -148,7 +146,6 @@ def create_session(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
 @teacher_required
 def audit_session_detail(request, session_id):
     """T035: View audit session with student list and filters
@@ -174,11 +171,11 @@ def audit_session_detail(request, session_id):
     queryset = AuditStudent.objects.filter(session=session).select_related('student')
     
     # If teacher (not admin), filter to their advisees
-    if not (request.user.is_staff and request.user.is_superuser):
-        # Get advisor name from user profile or default
-        teacher_advisor = getattr(request.user, 'advisor', None)
-        if teacher_advisor:
-            queryset = queryset.filter(advisor=teacher_advisor)
+    user_role = request.session.get('user_role')
+    if user_role != 'technology_staff':
+        # Teachers see only their advisees (not implemented yet - would need advisor field in session)
+        # For now, teachers see all students in the session
+        pass
     
     # Apply grade filter
     grade = request.GET.get('grade', '').strip()
@@ -209,6 +206,9 @@ def audit_session_detail(request, session_id):
             'audited_count': audited,
             'pending_count': pending,
             'audited_percent': audited_percent,
+            'checked_in': audited,  # For stats card
+            'pending': pending,
+            'completion_rate': audited_percent,
         },
         'filters': {
             'grade': grade,
@@ -216,7 +216,8 @@ def audit_session_detail(request, session_id):
         },
         'available_grades': available_grades,
         'available_advisors': available_advisors,
-        'page_title': f'Audit Session {session.session_id}',
+        'grades': [6,7,8,9,10,11,12],
+        'page_title': session.name or f'Audit Session {str(session.session_id)[:8]}',
         'page_description': 'Review and mark students as audited'
     }
     
@@ -256,7 +257,7 @@ def mark_audited(request, session_id):
     
     session = get_object_or_404(AuditSession, session_id=session_id, status='active')
     student_id = data.get('student_id', '').strip()
-    auditor_name = data.get('auditor_name', request.user.get_full_name() or request.user.username)
+    auditor_name = data.get('auditor_name', request.session.get('display_name') or request.session.get('username'))
     notes = data.get('notes', '').strip()
     
     if not student_id:
@@ -286,6 +287,71 @@ def mark_audited(request, session_id):
 
 @admin_required
 @require_http_methods(["POST"])
+def rename_session(request, session_id):
+    """API endpoint to rename an audit session (admin only)
+    
+    POST /audit/api/rename-session/<session_id>
+    Body: {"name": "New Name"}
+    
+    Response: {"success": True, "session_id": "...", "name": "..."}
+    """
+    import json
+    
+    try:
+        data = json.loads(request.body)
+        new_name = data.get('name', '').strip()
+        
+        if not new_name:
+            return JsonResponse({'success': False, 'error': 'Name is required'}, status=400)
+        
+        session = get_object_or_404(AuditSession, session_id=session_id)
+        session.name = new_name
+        session.save()
+        
+        logger.info(f"[Audit] Admin {request.session.get('username')} renamed session {session.session_id} to '{new_name}'")
+        
+        return JsonResponse({
+            'success': True,
+            'session_id': str(session.session_id),
+            'name': session.name
+        })
+    except Exception as e:
+        logger.error(f"Error renaming session {session_id}: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@admin_required
+@require_http_methods(["POST"])
+def delete_session(request, session_id):
+    """API endpoint to delete an audit session (admin only)
+    
+    POST /audit/api/delete-session/<session_id>
+    
+    Response: {"success": True, "session_id": "..."}
+    """
+    try:
+        session = get_object_or_404(AuditSession, session_id=session_id)
+        session_id_str = str(session.session_id)
+        
+        # Delete associated audit students first (cascade should handle this, but being explicit)
+        session.students.all().delete()
+        
+        # Delete the session
+        session.delete()
+        
+        logger.info(f"[Audit] Admin {request.session.get('username')} deleted session {session_id_str}")
+        
+        return JsonResponse({
+            'success': True,
+            'session_id': session_id_str
+        })
+    except Exception as e:
+        logger.error(f"Error deleting session {session_id}: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@admin_required
+@require_http_methods(["POST"])
 def close_session(request, session_id):
     """T038: API endpoint for admin-only session closure
     
@@ -309,7 +375,7 @@ def close_session(request, session_id):
     session.closed_at = timezone.now()
     session.save()
     
-    logger.info(f"[Audit] Admin {request.user.username} closed session {session.session_id}")
+    logger.info(f"[Audit] Admin {request.session.get('username')} closed session {session.session_id}")
     
     return JsonResponse({
         'success': True,
@@ -319,7 +385,6 @@ def close_session(request, session_id):
     })
 
 
-@login_required
 @teacher_required
 def export_session_csv(request, session_id):
     """T052: Export audit results to CSV
