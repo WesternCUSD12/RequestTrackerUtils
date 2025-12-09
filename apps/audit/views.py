@@ -14,6 +14,8 @@ from django.utils import timezone
 from django.conf import settings
 import logging
 import csv
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from apps.audit.models import AuditSession, AuditStudent, AuditDeviceRecord, AuditChangeLog
 from apps.students.models import Student
 
@@ -136,6 +138,13 @@ def create_session(request):
         AuditStudent.objects.bulk_create(audit_students)
         
         logger.info(f"Admin {request.session.get('username')} created audit session {session.session_id}")
+        # Dispatch background prefetch of RT devices so teachers see devices immediately
+        try:
+            thread = threading.Thread(target=prefetch_session_devices, args=(str(session.session_id),), daemon=True)
+            thread.start()
+            logger.info(f"Dispatched background prefetch for session {session.session_id}")
+        except Exception as e:
+            logger.error(f"Failed to dispatch prefetch thread: {e}")
         
         return JsonResponse({
             'success': True,
@@ -145,6 +154,144 @@ def create_session(request):
     except Exception as e:
         logger.error(f"Error creating audit session: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
+
+
+def prefetch_session_devices(session_id):
+    """Background worker: fetch devices for all AuditStudents in a session using ThreadPoolExecutor.
+
+    This runs in a daemon thread and uses parallel workers to fetch RT data for multiple
+    students concurrently. Errors for individual students are logged and do not stop the overall run.
+    """
+    from django.db import close_old_connections
+    
+    close_old_connections()
+    
+    print(f"\n{'='*80}")
+    print(f"[PREFETCH] Starting device prefetch for session {session_id}")
+    print(f"{'='*80}\n")
+    logger.info(f"[prefetch] Starting device prefetch for session {session_id}")
+    
+    try:
+        session = AuditSession.objects.get(session_id=session_id)
+        print(f"[PREFETCH] ✓ Found session: {session}")
+        
+        audit_students = list(AuditStudent.objects.filter(session=session).select_related('student'))
+        student_count = len(audit_students)
+        print(f"[PREFETCH] ✓ Found {student_count} audit students")
+
+        # Import RT API helpers lazily
+        try:
+            from common.rt_api import fetch_user_data, get_assets_by_owner
+            print(f"[PREFETCH] ✓ RT API helpers imported")
+        except Exception as import_err:
+            logger.error(f"[prefetch] Could not import RT API helpers: {import_err}")
+            print(f"[PREFETCH] ✗ Import error: {import_err}")
+            return
+
+        # Process students in parallel using ThreadPoolExecutor (5 worker threads)
+        print(f"[PREFETCH] Starting parallel fetch with 5 workers...\n")
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [
+                executor.submit(_prefetch_student_devices, audit_student, fetch_user_data, get_assets_by_owner)
+                for audit_student in audit_students
+            ]
+            # Wait for all futures to complete
+            for future in futures:
+                try:
+                    future.result()  # Blocks until complete, propagates exceptions if any
+                except Exception as e:
+                    logger.error(f"[prefetch] Task error: {e}")
+
+        logger.info(f"[prefetch] Completed device prefetch for session {session_id}")
+        print(f"\n[PREFETCH] ✓ Completed device prefetch for session {session_id} ({student_count} students)\n")
+    except AuditSession.DoesNotExist:
+        logger.error(f"[prefetch] AuditSession not found: {session_id}")
+        print(f"[PREFETCH] ✗ AuditSession not found: {session_id}\n")
+    except Exception as e:
+        logger.error(f"[prefetch] Unexpected error during prefetch: {e}")
+        print(f"[PREFETCH] ✗ Unexpected error: {e}\n")
+    finally:
+        close_old_connections()
+
+
+def _prefetch_student_devices(audit_student, fetch_user_data, get_assets_by_owner):
+    """Fetch and create device records for a single student. Called by ThreadPoolExecutor workers."""
+    from django.db import close_old_connections
+    
+    close_old_connections()
+    
+    try:
+        username = None
+        if audit_student.student and getattr(audit_student.student, 'username', None):
+            username = audit_student.student.username
+        elif audit_student.username:
+            username = audit_student.username
+
+        if not username:
+            logger.debug(f"[prefetch] Skipping student {audit_student.id} - no username")
+            return
+
+        print(f"[PREFETCH]   → {audit_student.name} (username={username})")
+        
+        try:
+            user_data = fetch_user_data(username)
+        except Exception as e:
+            logger.error(f"[prefetch] Error fetching user data for {username}: {e}")
+            print(f"[PREFETCH]     ✗ Fetch error: {e}")
+            return
+
+        numeric_id = None
+        hyperlinks = user_data.get('_hyperlinks', []) if isinstance(user_data, dict) else []
+        for link in hyperlinks:
+            if link.get('ref') == 'self' and link.get('type') == 'user':
+                numeric_id = str(link.get('id'))
+                break
+
+        if not numeric_id:
+            logger.debug(f"[prefetch] No numeric RT id for username={username}")
+            return
+
+        try:
+            assets = get_assets_by_owner(numeric_id)
+        except Exception as e:
+            logger.error(f"[prefetch] Error getting assets for owner {numeric_id}: {e}")
+            print(f"[PREFETCH]     ✗ Assets error: {e}")
+            return
+
+        device_count = 0
+        for asset in assets:
+            try:
+                asset_id = asset.get('id') or asset.get('asset_id') or ''
+                asset_name = asset.get('Name') or asset.get('asset_name') or ''
+                asset_tag = asset.get('Name') or asset.get('asset_tag') or ''
+
+                device_type = 'Unknown'
+                custom_fields = asset.get('CustomFields', [])
+                if isinstance(custom_fields, list):
+                    for cf in custom_fields:
+                        if isinstance(cf, dict) and cf.get('name') == 'Device Type':
+                            device_type = cf.get('value', 'Unknown')
+                            break
+                elif isinstance(custom_fields, dict):
+                    device_type = custom_fields.get('Device Type', 'Unknown')
+
+                AuditDeviceRecord.objects.get_or_create(
+                    audit_student=audit_student,
+                    asset_id=asset_id,
+                    defaults={
+                        'asset_tag': asset_tag,
+                        'asset_name': asset_name,
+                        'device_type': device_type,
+                    }
+                )
+                device_count += 1
+            except Exception as asset_err:
+                logger.error(f"[prefetch] Error creating device record for asset {asset}: {asset_err}")
+
+        print(f"[PREFETCH]     ✓ Created {device_count} device records")
+    except Exception as e:
+        logger.error(f"[prefetch] Error processing audit_student {audit_student.id}: {e}")
+        print(f"[PREFETCH]     ✗ Processing error: {e}")
 
 
 @teacher_required
