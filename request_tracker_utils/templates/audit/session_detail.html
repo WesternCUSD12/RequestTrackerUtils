@@ -254,6 +254,21 @@
         color: #166534;
     }
 
+    .badge-correct {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .badge-extra {
+        background: #fce7f3;
+        color: #be185d;
+    }
+
+    .badge-other {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+
     .action-buttons {
         display: flex;
         gap: 0.5rem;
@@ -333,30 +348,18 @@
     }
 
     /* Modal Styles */
-    .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        background: rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
+    /* Custom modal styling for device audit */
+    .modal-lg {
+        max-width: 800px;
     }
 
     .modal-content {
-        background: white;
-                {% for student in students %}
-                <tr>
-                    <td>{{ student.name }}</td>
-                    <td>{{ student.grade }}</td>
-                    <td>{{ student.device_serial }}</td>
-                    <td>{{ student.device_model }}</td>
-                    <td>{{ student.checkin_status }}</td>
-                    <td>{{ student.notes }}</td>
-                </tr>
-                {% endfor %}
+        border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+        display: flex;
         align-items: center;
         padding: 1.5rem;
         border-bottom: 1px solid #e5e7eb;
@@ -366,6 +369,7 @@
         margin: 0;
         color: #1f2937;
         font-size: 1.5rem;
+        flex: 1;
     }
 
     .close-btn {
@@ -389,6 +393,8 @@
 
     .modal-body {
         padding: 1.5rem;
+        flex: 1;
+        overflow-y: auto;
     }
 
     .details-table {
@@ -489,6 +495,9 @@
     <button class="btn btn-outline-secondary">Export CSV</button>
     <button class="btn btn-outline-danger">Clear All Students</button>
     <div style="flex: 1;"></div>
+    {% if user_role == 'technology_staff' %}
+    <button class="btn btn-warning" onclick="lockAuditSession('{{ session.session_id }}');" id="lockSessionBtn">🔒 Lock Session</button>
+    {% endif %}
     <button class="btn btn-primary">+ Add Student</button>
 </div>
 
@@ -560,11 +569,12 @@
                     <th scope="col">Status</th>
                     <th scope="col">Device Info</th>
                     <th scope="col">Audit Date</th>
+                    <th scope="col">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for student in students %}
-                <tr>
+                <tr data-student-id="{{ student.id }}">
                     <td>{{ student.name }}</td>
                     <td>{{ student.grade }}</td>
                     <td>{{ student.advisor }}</td>
@@ -589,6 +599,11 @@
                         {% else %}
                             <span style="color: #9ca3af;">-</span>
                         {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn-icon" title="Verify Devices" onclick="openAuditModal({{ student.id }}, '{{ student.name }}')">
+                            <i class="bi bi-check2-square"></i> Verify Devices
+                        </button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -874,6 +889,34 @@ function filterStudentsClient() {
     }
 }
 
+// Lock audit session (admin only)
+async function lockAuditSession(sessionId) {
+    if (!confirm('Are you sure you want to lock this audit session? Teachers will no longer be able to make changes.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/devices/audit/api/lock-session/${sessionId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        if (response.ok) {
+            alert('Audit session has been locked successfully.');
+            location.reload();
+        } else {
+            const error = await response.json();
+            alert('Error locking session: ' + (error.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error locking session:', error);
+        alert('Error locking session: ' + error.message);
+    }
+}
+
 // Add event listeners for search
 document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('search-input');
@@ -897,5 +940,280 @@ document.addEventListener('DOMContentLoaded', function() {
         advisorFilter.addEventListener('change', filterStudentsClient);
     }
 });
+
+// Device Audit Modal Functions
+let currentAuditStudent = null;
+let currentAuditDevices = [];
+const sessionId = '{{ session.session_id }}';
+
+function openAuditModal(studentId, studentName) {
+    currentAuditStudent = { id: studentId, name: studentName };
+    const modal = document.createElement('div');
+    modal.id = 'auditModal';
+    modal.className = 'modal fade';
+    modal.setAttribute('tabindex', '-1');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-labelledby', 'auditModalLabel');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="auditModalLabel">${studentName} - Device Verification</h5>
+                    <button type="button" class="btn-close" onclick="closeAuditModal()" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="auditDevicesContainer" style="min-height: 300px;">
+                        <div style="text-align: center; padding: 2rem;">
+                            <div class="spinner-border text-primary" style="width: 2rem; height: 2rem; margin: 1rem auto;"></div>
+                            <p>Loading devices...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeAuditModal()">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="saveAllDeviceAudits()">Save All Changes</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Show the modal using Bootstrap's Modal API
+    const bsModal = new bootstrap.Modal(modal, { keyboard: false, backdrop: 'static' });
+    bsModal.show();
+    
+    // Load devices for the student
+    loadStudentDevicesForAudit(studentId);
+}
+
+function closeAuditModal() {
+    const modal = document.getElementById('auditModal');
+    if (modal) {
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        if (bsModal) {
+            bsModal.hide();
+        }
+        // Remove the modal element after it's hidden
+        modal.addEventListener('hidden.bs.modal', function() {
+            modal.remove();
+        }, { once: true });
+    }
+    currentAuditStudent = null;
+    currentAuditDevices = [];
+}
+
+function loadStudentDevicesForAudit(studentId) {
+    const separator = '='.repeat(80);
+    console.log(`\n${separator}`);
+    console.log(`[loadStudentDevicesForAudit] STARTED`);
+    console.log(`[1] Called with studentId: ${studentId}`);
+    
+    try {
+        const sessionId = '{{ session.session_id }}';
+        console.log(`[2] sessionId: ${sessionId}`);
+        
+        const url = `/devices/audit/api/student/${sessionId}/${studentId}/devices/`;
+        console.log(`[3] URL: ${url}`);
+        
+        console.log(`[4] Sending XMLHttpRequest...`);
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, false); // Synchronous request
+        xhr.send();
+        
+        console.log(`[5] Response received:`);
+        console.log(`    - status: ${xhr.status}`);
+        console.log(`    - statusText: ${xhr.statusText}`);
+        console.log(`    - responseText length: ${xhr.responseText.length}`);
+        
+        if (xhr.status !== 200) {
+            console.error(`[5] ✗ HTTP error! status: ${xhr.status}`);
+            throw new Error(`HTTP ${xhr.status}: ${xhr.statusText}`);
+        }
+        
+        console.log(`[6] ✓ Response OK, parsing JSON...`);
+        const data = JSON.parse(xhr.responseText);
+        
+        console.log(`[7] ✓ JSON parsed:`);
+        console.log(`    - data type: ${typeof data}`);
+        console.log(`    - keys: ${Object.keys(data).join(', ')}`);
+        console.log(`    - devices: ${data.devices ? (Array.isArray(data.devices) ? `array[${data.devices.length}]` : 'not array') : 'undefined'}`);
+        console.log(`    - error: ${data.error || 'none'}`);
+        
+        if (data.devices) {
+            console.log(`[8] Device details:`);
+            if (data.devices.length === 0) {
+                console.log(`     - NO DEVICES FOUND (empty array)`);
+            } else {
+                data.devices.forEach((device, idx) => {
+                    console.log(`     [${idx}]: id=${device.id}, name=${device.name}, model=${device.model}`);
+                });
+            }
+        } else {
+            console.warn(`[8] ✗ No 'devices' key in response!`);
+        }
+        
+        if (!data.devices || data.devices.length === 0) {
+            console.log(`[9] No devices to display, showing empty message`);
+            document.getElementById('auditDevicesContainer').innerHTML = `
+                <div style="padding: 2rem; text-align: center; background: #f9fafb; border-radius: 8px;">
+                    <p style="color: #6b7280;">No devices found for this student.</p>
+                </div>
+            `;
+            console.log(`${separator}\n`);
+            return;
+        }
+        
+        console.log(`[10] Storing devices in currentAuditDevices`);
+        currentAuditDevices = data.devices;
+        
+        console.log(`[11] Rendering devices...`);
+        renderDevicesForAudit(data.devices);
+        console.log(`[12] ✓ Devices rendered successfully`);
+        console.log(`${separator}\n`);
+    } catch (error) {
+        console.error(`[X] ✗ Error in loadStudentDevicesForAudit:`);
+        console.error(`    - type: ${error.constructor.name}`);
+        console.error(`    - message: ${error.message}`);
+        console.error(`    - stack: ${error.stack}`);
+        console.log(`[X] Closing modal due to error`);
+        closeAuditModal();
+        console.log(`${separator}\n`);
+    }
+}
+
+function renderDevicesForAudit(devices) {
+    let html = `
+        <div style="background: #f9fafb; border-radius: 8px; overflow: hidden;">
+            <table class="table" style="margin-bottom: 0;">
+                <thead style="background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
+                    <tr>
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: #374151;">Asset ID</th>
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: #374151;">Asset Name</th>
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: #374151;">Model</th>
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: #374151;">Status</th>
+                        <th style="padding: 1rem; text-align: left; font-weight: 600; color: #374151;">Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    devices.forEach((device, index) => {
+        const assetId = device.Name || device.asset_id || 'N/A';
+        const assetName = device.Description || device.asset_name || 'N/A';
+        const modelNumber = device.CustomFields?.[0]?.['Device Type'] || device.model_number || 'N/A';
+        
+        html += `
+            <tr style="border-bottom: 1px solid #e5e7eb;">
+                <td style="padding: 1rem; font-weight: 600; color: #1f2937;">${assetId}</td>
+                <td style="padding: 1rem; color: #4b5563;">${assetName}</td>
+                <td style="padding: 1rem; color: #4b5563; font-size: 0.875rem;">${modelNumber}</td>
+                <td style="padding: 1rem;">
+                    <select class="form-select" data-device-index="${index}" style="max-width: 150px;">
+                        <option value="pending">Pending</option>
+                        <option value="correct">Correct</option>
+                        <option value="extra">Extra Device</option>
+                        <option value="other">Other</option>
+                    </select>
+                </td>
+                <td style="padding: 1rem;">
+                    <input type="text" class="form-control" placeholder="Add notes..." data-device-notes="${index}" style="max-width: 200px; font-size: 0.875rem;">
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    document.getElementById('auditDevicesContainer').innerHTML = html;
+}
+
+async function saveAllDeviceAudits() {
+    if (!currentAuditStudent || currentAuditDevices.length === 0) {
+        alert('No devices to save');
+        return;
+    }
+    
+    try {
+        const statusSelects = document.querySelectorAll('select[data-device-index]');
+        const notesInputs = document.querySelectorAll('input[data-device-notes]');
+        
+        let saved = 0;
+        let errors = [];
+        const sessionId = '{{ session.session_id }}';
+        
+        for (let i = 0; i < currentAuditDevices.length; i++) {
+            const device = currentAuditDevices[i];
+            const status = statusSelects[i]?.value || 'pending';
+            const notes = notesInputs[i]?.value || '';
+            const deviceId = device.id || i;
+            
+            try {
+                const response = await fetch(`/devices/audit/api/device/${sessionId}/${currentAuditStudent.id}/${deviceId}/save/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        audit_status: status,
+                        notes: notes,
+                        device_name: device.Name || device.asset_name,
+                        device_model: device.CustomFields?.[0]?.['Device Type'] || 'Unknown'
+                    })
+                });
+                
+                if (response.ok) {
+                    saved++;
+                } else {
+                    const error = await response.json();
+                    errors.push(`Device ${device.Name}: ${error.error || 'Unknown error'}`);
+                }
+            } catch (deviceError) {
+                errors.push(`Device ${i}: ${deviceError.message}`);
+            }
+        }
+        
+        if (errors.length > 0) {
+            alert(`Saved ${saved}/${currentAuditDevices.length} devices.\nErrors:\n${errors.join('\n')}`);
+        } else {
+            // All devices saved successfully - now mark the student as completed
+            console.log(`[saveAllDeviceAudits] All ${saved} devices saved. Marking student as completed...`);
+            try {
+                const completionResponse = await fetch(`/devices/audit/api/student/${sessionId}/${currentAuditStudent.id}/complete/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+                
+                if (completionResponse.ok) {
+                    const completionData = await completionResponse.json();
+                    console.log(`[saveAllDeviceAudits] ✓ Student marked as completed:`, completionData);
+                } else {
+                    const completionError = await completionResponse.json();
+                    console.error(`[saveAllDeviceAudits] ✗ Failed to mark student as completed:`, completionError);
+                    alert(`Failed to mark student as completed: ${completionError.error}`);
+                }
+            } catch (completionError) {
+                console.error(`[saveAllDeviceAudits] ✗ Error calling completion endpoint:`, completionError);
+                alert(`Failed to mark student as completed: ${completionError.message}`);
+            }
+        }
+        
+        closeAuditModal();
+        location.reload();
+    } catch (error) {
+        console.error('Error saving audits:', error);
+        alert('Error saving device audits: ' + error.message);
+    }
+}
+
 </script>
 {% endblock %}
