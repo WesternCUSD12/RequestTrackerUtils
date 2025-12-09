@@ -736,8 +736,7 @@ def get_assets_by_owner(owner, exclude_id=None, config=None):
         list: List of assets owned by this owner
     """
     if config is None:
-        from flask import current_app
-        # Config will use get_config() helper for Flask/Django compatibility
+        config = {}  # Will use get_config() helper for Flask/Django compatibility
         
     try:
         # Log input parameters
@@ -821,30 +820,25 @@ def fetch_user_data(user_id, config=None):
     if not user_id:
         raise ValueError("User ID is missing or invalid")
     
-    # Prepare local application reference if using current_app
-    app = None
     try:
         if config is None:
-            from flask import current_app
-            app = current_app
-            config = app.config
-            app.logger.info(f"Fetching user data for ID: {user_id}")
+            config = {}  # Will use get_config() inside rt_api_request
             
+        logger.info(f"Fetching user data for ID: {user_id}")
         response = rt_api_request("GET", f"/user/{user_id}", config=config)
         
         # Validate response
         if not response:
             raise ValueError(f"Empty response from RT API for user ID: {user_id}")
             
+        logger.info(f"Successfully fetched user data for ID: {user_id}")
         return response
         
     except requests.exceptions.RequestException as e:
-        if app is not None:  # Only log if using current_app
-            app.logger.error(f"Error fetching user data: {e}")
+        logger.error(f"Error fetching user data for ID {user_id}: {e}")
         raise Exception(f"Failed to fetch user data from RT: {e}")
     except Exception as e:
-        if app is not None:
-            app.logger.error(f"Error processing user data for ID {user_id}: {str(e)}")
+        logger.error(f"Error processing user data for ID {user_id}: {str(e)}")
         raise Exception(f"Error processing user data: {str(e)}")
 
 def update_asset_owner(asset_id, owner_id, config=None):
