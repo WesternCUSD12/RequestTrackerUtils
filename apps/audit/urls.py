@@ -32,4 +32,11 @@ urlpatterns = [
     
     # T052: Export audit results to CSV
     path('session/<str:session_id>/export-csv/', views.export_session_csv, name='export_session_csv'),
+    
+    # Device audit endpoints
+    path('api/device/<str:session_id>/<int:student_id>/<int:device_id>/save/', views.save_device_audit, name='save_device_audit'),
+    path('api/student/<str:session_id>/<int:student_id>/complete/', views.mark_student_completed, name='mark_student_completed'),
+    path('api/student/<str:session_id>/<int:audit_student_id>/devices/', views.get_audit_student_devices, name='get_audit_student_devices'),
+    path('api/logs/<str:session_id>/', views.get_audit_logs, name='get_audit_logs'),
+    path('api/lock-session/<str:session_id>/', views.lock_audit_session, name='lock_audit_session'),
 ]
