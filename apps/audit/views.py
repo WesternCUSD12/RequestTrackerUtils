@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.conf import settings
 import logging
 import csv
-from apps.audit.models import AuditSession, AuditStudent
+from apps.audit.models import AuditSession, AuditStudent, AuditDeviceRecord, AuditChangeLog
 from apps.students.models import Student
 
 logger = logging.getLogger(__name__)
@@ -128,6 +128,7 @@ def create_session(request):
                 name=student.full_name,
                 grade=str(student.grade),
                 advisor=student.advisor or '',
+                username=student.username or '',
                 audited=False
             )
             for student in active_students
@@ -417,3 +418,316 @@ def export_session_csv(request, session_id):
         ])
     
     return response
+
+
+@require_http_methods(["POST"])
+@teacher_required
+def save_device_audit(request, session_id, student_id, device_id):
+    """Save device audit status and notes for a specific device"""
+    try:
+        session = get_object_or_404(AuditSession, session_id=session_id)
+        
+        # Check if session is locked
+        if session.is_closed:
+            return JsonResponse({'error': 'Session is locked. No further edits allowed.'}, status=403)
+        
+        audit_student = get_object_or_404(AuditStudent, id=student_id, session=session)
+        # device_id is the RT asset ID, not the Django PK - look up by asset_id
+        device_record = get_object_or_404(AuditDeviceRecord, asset_id=device_id, audit_student=audit_student)
+        
+        data = request.POST or {}
+        audit_status = data.get('audit_status', 'pending')
+        audit_notes = data.get('audit_notes', '')
+        user_name = request.session.get('username', 'Unknown')
+        
+        old_status = device_record.audit_status
+        old_notes = device_record.audit_notes
+        
+        device_record.audit_status = audit_status
+        device_record.audit_notes = audit_notes
+        device_record.verified = True
+        device_record.verification_timestamp = timezone.now()
+        device_record.verified_by = user_name
+        device_record.save()
+        
+        # Log the change
+        if old_status != audit_status:
+            AuditChangeLog.objects.create(
+                session=session,
+                audit_student=audit_student,
+                device_record=device_record,
+                user_name=user_name,
+                action='device_status_changed',
+                device_info=f"{device_record.asset_id} ({device_record.asset_tag})",
+                old_value=old_status,
+                new_value=audit_status,
+                notes=audit_notes
+            )
+        
+        if old_notes != audit_notes:
+            AuditChangeLog.objects.create(
+                session=session,
+                audit_student=audit_student,
+                device_record=device_record,
+                user_name=user_name,
+                action='device_notes_updated' if old_notes else 'device_notes_added',
+                device_info=f"{device_record.asset_id} ({device_record.asset_tag})",
+                old_value=old_notes,
+                new_value=audit_notes
+            )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Device audit saved successfully',
+            'device_id': device_id,
+            'audit_status': audit_status
+        })
+    
+    except Exception as e:
+        logger.error(f"Error saving device audit: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@require_http_methods(["POST"])
+@teacher_required
+def mark_student_completed(request, session_id, student_id):
+    """Mark an AuditStudent as completed (audited=True) after all devices are verified.
+    
+    POST /devices/audit/api/student/<session_id>/<student_id>/complete/
+    
+    Response: {
+        'success': True,
+        'message': 'Student marked as completed',
+        'student_id': <id>,
+        'audited': True,
+        'timestamp': '2025-12-05T14:30:00Z',
+        'auditor_name': 'jmartin'
+    }
+    """
+    try:
+        session = get_object_or_404(AuditSession, session_id=session_id)
+        audit_student = get_object_or_404(AuditStudent, id=student_id, session=session)
+        
+        # Check if session is locked
+        if session.is_closed:
+            return JsonResponse({'error': 'Session is locked. No further edits allowed.'}, status=403)
+        
+        user_name = request.session.get('username', 'Unknown')
+        
+        # Mark student as audited
+        audit_student.audited = True
+        audit_student.audit_timestamp = timezone.now()
+        audit_student.auditor_name = user_name
+        audit_student.save()
+        
+        logger.info(f"[Audit] {user_name} marked student {audit_student.name} (ID: {student_id}) as completed in session {session.session_id}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Student marked as completed',
+            'student_id': student_id,
+            'audited': True,
+            'timestamp': audit_student.audit_timestamp.isoformat(),
+            'auditor_name': user_name
+        })
+    
+    except Exception as e:
+        logger.error(f"Error marking student as completed: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@require_http_methods(["GET"])
+@teacher_required
+def get_audit_logs(request, session_id):
+    """Get audit change logs for a session - viewable by all users"""
+    try:
+        session = get_object_or_404(AuditSession, session_id=session_id)
+        
+        logs = AuditChangeLog.objects.filter(session=session).select_related(
+            'audit_student', 'device_record'
+        ).order_by('-timestamp')
+        
+        log_data = []
+        for log in logs:
+            log_data.append({
+                'id': log.id,
+                'timestamp': log.timestamp.isoformat(),
+                'user': log.user_name,
+                'student': log.audit_student.name if log.audit_student else 'N/A',
+                'device': log.device_info,
+                'action': log.get_action_display(),
+                'old_value': log.old_value,
+                'new_value': log.new_value,
+                'notes': log.notes
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'logs': log_data
+        })
+    
+    except Exception as e:
+        logger.error(f"Error fetching audit logs: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@require_http_methods(["POST"])
+@admin_required
+def lock_audit_session(request, session_id):
+    """Lock an audit session to prevent further edits - admin only"""
+    try:
+        session = get_object_or_404(AuditSession, session_id=session_id)
+        
+        if session.is_closed:
+            return JsonResponse({'error': 'Session is already locked'}, status=400)
+        
+        user_name = request.session.get('username', 'Unknown')
+        
+        session.status = 'closed'
+        session.closed_at = timezone.now()
+        session.save()
+        
+        # Log the session lock
+        AuditChangeLog.objects.create(
+            session=session,
+            user_name=user_name,
+            action='session_locked',
+            device_info='Session',
+            new_value='Closed'
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Audit session locked successfully',
+            'session_status': 'closed'
+        })
+    
+    except Exception as e:
+        logger.error(f"Error locking audit session: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@require_http_methods(["GET"])
+@teacher_required
+def get_audit_student_devices(request, session_id, audit_student_id):
+    """Fetch all devices for a specific audit student using their username"""
+    logger.info(f"\n{'='*80}")
+    logger.info(f"START: get_audit_student_devices called")
+    logger.info(f"  session_id={session_id}, audit_student_id={audit_student_id}")
+    logger.info(f"{'='*80}")
+    
+    try:
+        logger.info(f"[1] Looking up AuditSession with session_id={session_id}")
+        session = get_object_or_404(AuditSession, session_id=session_id)
+        logger.info(f"[2] ✓ Found session: {session.name}")
+        
+        logger.info(f"[3] Looking up AuditStudent with id={audit_student_id}")
+        audit_student = get_object_or_404(AuditStudent, id=audit_student_id, session=session)
+        logger.info(f"[4] ✓ Found audit_student: {audit_student.name}")
+        
+        # Get username - first try linked Student, then fallback to AuditStudent's own username
+        username = None
+        if audit_student.student:
+            username = audit_student.student.username
+            logger.info(f"[5] Using username from linked Student: {username}")
+        elif audit_student.username:
+            username = audit_student.username
+            logger.info(f"[5] Using username from AuditStudent: {username}")
+        else:
+            logger.warning(f"[5] ✗ NO USERNAME - audit_student.student={audit_student.student}, audit_student.username={audit_student.username}")
+        
+        if not username:
+            logger.warning(f"[6] ✗ NO USERNAME FOUND - returning empty devices")
+            return JsonResponse({'devices': [], 'error': 'Student has no username'})
+        
+        logger.info(f"[6] ✓ Username to use for RT lookup: {username}")
+        
+        # Use the common RT API to get devices - use username to look up RT ID
+        try:
+            from common.rt_api import get_assets_by_owner, fetch_user_data
+            logger.info(f"[7] ✓ RT API imported successfully")
+            
+            logger.info(f"[8] Calling fetch_user_data('{username}')")
+            
+            # Fetch user data using username to get numeric ID
+            try:
+                user_data = fetch_user_data(username)
+                logger.info(f"[9] ✓ fetch_user_data returned: {type(user_data).__name__}")
+                logger.info(f"    - keys: {list(user_data.keys()) if isinstance(user_data, dict) else 'N/A'}")
+                
+                numeric_id = None
+                hyperlinks = user_data.get('_hyperlinks', [])
+                logger.info(f"[10] Hyperlinks found: {len(hyperlinks)}")
+                
+                for idx, link in enumerate(hyperlinks):
+                    logger.info(f"     - hyperlink[{idx}]: ref={link.get('ref')}, type={link.get('type')}, id={link.get('id')}")
+                    if link.get('ref') == 'self' and link.get('type') == 'user':
+                        numeric_id = str(link.get('id'))
+                        logger.info(f"     ✓ MATCH! Using numeric_id={numeric_id}")
+                        break
+                
+                if numeric_id:
+                    logger.info(f"[11] Calling get_assets_by_owner('{numeric_id}')")
+                    assets = get_assets_by_owner(numeric_id)
+                    logger.info(f"[12] ✓ get_assets_by_owner returned {len(assets)} devices")
+                    for asset_idx, asset in enumerate(assets[:3]):  # Log first 3
+                        logger.info(f"     - asset[{asset_idx}]: {asset}")
+                    if len(assets) > 3:
+                        logger.info(f"     ... and {len(assets) - 3} more devices")
+                    
+                    # Create AuditDeviceRecord entries for each asset if they don't exist
+                    logger.info(f"[12a] Creating/updating AuditDeviceRecord entries")
+                    for asset in assets:
+                        asset_id = asset.get('id', '')
+                        asset_name = asset.get('Name', '')
+                        asset_tag = asset.get('Name', '')  # RT uses Name for asset tag
+                        
+                        # CustomFields is a list, extract Device Type if available
+                        device_type = 'Unknown'
+                        custom_fields = asset.get('CustomFields', [])
+                        if isinstance(custom_fields, list):
+                            for cf in custom_fields:
+                                if isinstance(cf, dict) and cf.get('name') == 'Device Type':
+                                    device_type = cf.get('value', 'Unknown')
+                                    break
+                        elif isinstance(custom_fields, dict):
+                            device_type = custom_fields.get('Device Type', 'Unknown')
+                        
+                        # Use get_or_create to avoid duplicates
+                        device_record, created = AuditDeviceRecord.objects.get_or_create(
+                            audit_student=audit_student,
+                            asset_id=asset_id,
+                            defaults={
+                                'asset_tag': asset_tag,
+                                'asset_name': asset_name,
+                                'device_type': device_type,
+                            }
+                        )
+                        if created:
+                            logger.info(f"     - Created AuditDeviceRecord for asset {asset_id}")
+                        else:
+                            logger.info(f"     - AuditDeviceRecord already exists for asset {asset_id}")
+                else:
+                    logger.warning(f"[11] ✗ Could not extract numeric ID from RT user {username}")
+                    logger.warning(f"     Available hyperlinks: {hyperlinks}")
+                    assets = []
+            except Exception as user_err:
+                logger.error(f"[9] ✗ Exception calling fetch_user_data: {type(user_err).__name__}: {user_err}", exc_info=True)
+                assets = []
+            
+            logger.info(f"[13] Returning JsonResponse with {len(assets)} devices")
+            return JsonResponse({
+                'student_id': audit_student.id,
+                'student_name': audit_student.name,
+                'devices': assets
+            })
+            
+        except ImportError as e:
+            logger.error(f"[7] ✗ Could not import RT API: {e}")
+            return JsonResponse({'devices': [], 'error': 'RT API import failed'})
+        
+    except Exception as e:
+        logger.error(f"[X] Exception in get_audit_student_devices: {type(e).__name__}: {e}", exc_info=True)
+        return JsonResponse({'devices': [], 'error': str(e)}, status=200)
+        return JsonResponse({'error': str(e)}, status=500)
+
