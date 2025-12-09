@@ -77,6 +77,13 @@ class AuditStudent(models.Model):
 class AuditDeviceRecord(models.Model):
     """Device record found during audit verification."""
 
+    AUDIT_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('correct', 'Correct'),
+        ('extra', 'Extra Device'),
+        ('other', 'Other'),
+    ]
+
     audit_student = models.ForeignKey(
         AuditStudent,
         on_delete=models.CASCADE,
@@ -84,16 +91,21 @@ class AuditDeviceRecord(models.Model):
     )
     asset_id = models.CharField(max_length=50)
     asset_tag = models.CharField(max_length=50)
+    asset_name = models.CharField(max_length=255, blank=True)
     device_type = models.CharField(max_length=100)
+    model_number = models.CharField(max_length=100, blank=True)
     serial_number = models.CharField(max_length=100, blank=True)
+    audit_status = models.CharField(max_length=20, choices=AUDIT_STATUS_CHOICES, default='pending')
+    audit_notes = models.TextField(blank=True, help_text="Notes about device condition or discrepancies")
     verified = models.BooleanField(default=False)
     verification_timestamp = models.DateTimeField(null=True, blank=True)
+    verified_by = models.CharField(max_length=255, blank=True)
 
     class Meta:
         db_table = 'audit_device_records'
 
     def __str__(self):
-        return f"{self.asset_tag} - {'Verified' if self.verified else 'Unverified'}"
+        return f"{self.asset_tag} - {self.audit_status}"
 
 
 class AuditNote(models.Model):
@@ -122,4 +134,56 @@ class AuditNote(models.Model):
 
     def __str__(self):
         return f"Note by {self.creator_name} ({self.created_at})"
+
+
+class AuditChangeLog(models.Model):
+    """Track all changes made during audit sessions for compliance and transparency."""
+
+    ACTION_CHOICES = [
+        ('device_status_changed', 'Device Status Changed'),
+        ('device_notes_added', 'Device Notes Added'),
+        ('device_notes_updated', 'Device Notes Updated'),
+        ('student_audit_completed', 'Student Audit Completed'),
+        ('session_locked', 'Session Locked'),
+        ('session_unlocked', 'Session Unlocked'),
+    ]
+
+    session = models.ForeignKey(
+        AuditSession,
+        on_delete=models.CASCADE,
+        related_name='change_logs',
+        to_field='session_id'
+    )
+    audit_student = models.ForeignKey(
+        AuditStudent,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='change_logs'
+    )
+    device_record = models.ForeignKey(
+        AuditDeviceRecord,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='change_logs'
+    )
+    user_name = models.CharField(max_length=255, help_text="Teacher or admin who made the change")
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    device_info = models.CharField(max_length=255, blank=True, help_text="Device asset ID/tag for quick reference")
+    old_value = models.TextField(blank=True, help_text="Previous value")
+    new_value = models.TextField(blank=True, help_text="New value")
+    notes = models.TextField(blank=True, help_text="Additional context about the change")
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'audit_change_logs'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['session', '-timestamp']),
+            models.Index(fields=['audit_student', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.action} by {self.user_name} ({self.timestamp})"
 
