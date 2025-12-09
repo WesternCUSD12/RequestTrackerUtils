@@ -15,7 +15,10 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = import nixpkgs { 
+          inherit system;
+          config.allowBroken = true;
+        };
         lib = pkgs.lib;
       in
       {
@@ -123,12 +126,15 @@
                     # Create necessary directories
                     mkdir -p ${config.services.requestTrackerUtils.workingDirectory}/{static,media,logs}
                     
+                    # Set PYTHONPATH to include the installed package location
+                    export PYTHONPATH=${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
+                    
                     # Run Django migrations
-                    cd ${self.packages.${system}.default}/lib/python*/site-packages
-                    ${self.packages.${system}.default}/bin/python manage.py migrate --noinput
+                    cd ${config.services.requestTrackerUtils.workingDirectory}
+                    ${self.packages.${system}.default}/bin/python ${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages/manage.py migrate --noinput
                     
                     # Collect static files
-                    ${self.packages.${system}.default}/bin/python manage.py collectstatic --noinput --clear
+                    ${self.packages.${system}.default}/bin/python ${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages/manage.py collectstatic --noinput --clear
                     
                     # Set proper permissions
                     chown -R ${config.services.requestTrackerUtils.user}:${config.services.requestTrackerUtils.group} ${config.services.requestTrackerUtils.workingDirectory}
@@ -206,10 +212,16 @@
 
             src = ./.;
 
+            nativeBuildInputs = with pkgs.python3Packages; [
+              setuptools
+              wheel
+            ];
+
             propagatedBuildInputs = with pkgs.python3Packages; [
               # Django and WSGI server
               django
               gunicorn
+              django-extensions
               
               # Core dependencies
               pandas
@@ -218,6 +230,11 @@
               qrcode
               python-barcode
               pillow
+              python-dotenv
+              click
+              
+              # LDAP authentication
+              ldap3
               
               # Google Admin SDK
               google-api-python-client
@@ -227,30 +244,50 @@
             ];
 
             postInstall = ''
-              # Copy Django project files
-              mkdir -p $out/lib/python*/site-packages/rtutils
-              cp -r rtutils/* $out/lib/python*/site-packages/rtutils/
-              cp manage.py $out/lib/python*/site-packages/
+              SITE_PACKAGES=$out/lib/${pkgs.python3.libPrefix}/site-packages
               
-              # Copy templates and static files
-              mkdir -p $out/lib/python*/site-packages/templates
-              cp -r templates/* $out/lib/python*/site-packages/templates/
+              # Copy Django project settings
+              mkdir -p $SITE_PACKAGES/rtutils
+              cp -r rtutils/* $SITE_PACKAGES/rtutils/
               
-              # Copy app templates
-              for app in apps/*/templates; do
+              # Copy all Django apps
+              mkdir -p $SITE_PACKAGES/apps
+              cp -r apps/* $SITE_PACKAGES/apps/
+              
+              # Copy common utilities
+              mkdir -p $SITE_PACKAGES/common
+              cp -r common/* $SITE_PACKAGES/common/
+              
+              # Copy manage.py
+              cp manage.py $SITE_PACKAGES/
+              
+              # Copy all templates (project-level and app-level)
+              mkdir -p $SITE_PACKAGES/templates
+              if [ -d templates ]; then
+                cp -r templates/* $SITE_PACKAGES/templates/
+              fi
+              
+              # Copy all static files
+              mkdir -p $SITE_PACKAGES/static
+              if [ -d static ]; then
+                cp -r static/* $SITE_PACKAGES/static/
+              fi
+              
+              # Copy app-specific static files
+              for app in apps/*/static; do
                 if [ -d "$app" ]; then
-                  cp -r "$app"/* $out/lib/python*/site-packages/templates/
+                  cp -r "$app"/* $SITE_PACKAGES/static/
                 fi
               done
               
               # Set proper permissions
-              chmod -R +r $out/lib/python*/site-packages
+              chmod -R +r $SITE_PACKAGES
             '';
 
             meta = with pkgs.lib; {
               description = "Django application for Request Tracker asset management";
               license = lib.licenses.mit;
-              maintainers = [ lib.maintainers.jmartinWestern ];
+              maintainers = [ ];
             };
           };
         };
