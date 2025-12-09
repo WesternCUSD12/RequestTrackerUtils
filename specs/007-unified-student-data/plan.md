@@ -21,17 +21,18 @@ Consolidate student device check-in and audit workflows into a unified Django St
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
-| Principle | Status | Evidence |
-|-----------|--------|----------|
-| I. Documentation-First | ✅ PASS | Spec completed with 4 user stories, edge cases resolved, clarifications recorded |
-| II. Modular Routing | ✅ PASS | Uses existing `apps/students/` and `apps/audit/` Django apps |
-| III. Specification-Driven Testing | ✅ PASS | Each user story has independent acceptance scenarios |
-| IV. RT API Integration | ✅ PASS | Device check-in integration uses `common/rt_api.py` |
-| V. Configuration Management | ✅ PASS | No new environment variables required |
+| Principle                         | Status  | Evidence                                                                         |
+| --------------------------------- | ------- | -------------------------------------------------------------------------------- |
+| I. Documentation-First            | ✅ PASS | Spec completed with 4 user stories, edge cases resolved, clarifications recorded |
+| II. Modular Routing               | ✅ PASS | Uses existing `apps/students/` and `apps/audit/` Django apps                     |
+| III. Specification-Driven Testing | ✅ PASS | Each user story has independent acceptance scenarios                             |
+| IV. RT API Integration            | ✅ PASS | Device check-in integration uses `common/rt_api.py`                              |
+| V. Configuration Management       | ✅ PASS | No new environment variables required                                            |
 
-**Authentication Requirement**: 
+**Authentication Requirement**:
+
 - TEACHERS: Access to `/audit/*` routes only (per ROLE_ACCESS_RULES)
 - tech-team: Full access including `/devices/*`, `/admin/*`, `/students/*`
 
@@ -93,6 +94,7 @@ common/
 **Context**: Staff scanning devices with barcode scanners or manual entry
 
 **Page Layout**:
+
 - **Header**: "Device Check-In" title with brief description
 - **Input Section**: Asset tag/name input field (for barcode scanner or manual entry)
 - **Device Lookup**: Display device details from RT after lookup
@@ -101,13 +103,15 @@ common/
 - **Check-In Log**: Optional summary of today's check-ins (TBD in Phase 4)
 
 **Key Features** (based on user clarification):
+
 - Fail-safe: If RT API fails, show error and don't update student
 - Re-check-in: Warn if device already checked in, require confirmation to override (FR-018)
 - Confirmation message showing which student was updated
 - Status indicator: Show device_checked_in status for scanned device
 
 **Technical Details**:
-- Form POST to `/devices/api/check-in` 
+
+- Form POST to `/devices/api/check-in`
 - Response includes: device info, student name (if found), check_in status
 - No pagination needed (small deployment, <500 students)
 
@@ -122,13 +126,14 @@ common/
 **Context**: Manager viewing overall check-in progress and identifying missing devices
 
 **Page Layout**:
+
 - **Header**: "Device Check-In Status" title
 - **Summary Cards** at top:
   - Total students
   - Checked in (count + percentage)
   - Not yet checked in (count + percentage)
   - Last check-in timestamp
-- **Filters**: 
+- **Filters**:
   - Grade filter dropdown (all grades)
   - Student search box (by name/ID)
   - Apply filters button
@@ -140,6 +145,7 @@ common/
   - Export to CSV button (downloads current filtered list)
 
 **Performance** (FR-016):
+
 - Optimized for <500 students, no pagination
 - <2 second load time target
 - Filters applied client-side or server-side with caching
@@ -155,6 +161,7 @@ common/
 **Context**: Teachers viewing active audit sessions and starting new ones
 
 **Page Layout**:
+
 - **Header**: "Device Audits" title with description
 - **Summary Cards** for current active session (if exists):
   - Students in session
@@ -172,6 +179,7 @@ common/
   - "Start New Audit Session" button (creates new session, admin approves before teacher uses)
 
 **Role Enforcement**:
+
 - Teachers see only their own advisor students (filtered automatically)
 - Only admins can close sessions
 
@@ -186,6 +194,7 @@ common/
 **Context**: Teacher verifying student device possession and marking complete
 
 **Page Layout**:
+
 - **Header**: "Audit Session [Date]" with status indicator
 - **Summary Cards** at top:
   - Total students in this session
@@ -210,6 +219,7 @@ common/
   - "Download Report" button → CSV with audit results
 
 **Key Features** (based on user clarification):
+
 - Session is global/shared - multiple teachers see same session
 - Filters are persistent within session (for teacher's context)
 - Auto-save on checkbox: no "Save" button needed, updates immediately
@@ -217,6 +227,7 @@ common/
 - Show which teacher audited each student (auditor_name field)
 
 **Admin Close Flow** (separate admin interface):
+
 - Only admins can close audit session
 - Closing records final_count, marks status=complete
 - Closed sessions remain visible for historical reference (FR-019)
@@ -230,20 +241,21 @@ common/
 ### Base Template (`templates/base.html`)
 
 **Role-Aware Navigation**:
+
 ```html
 <!-- For Tech-Team users -->
 <nav>
-  - Device Check-In (/devices/check-in)
-  - Check-In Status (/students/check-in-status)
-  - Django Admin (/admin)
+  - Device Check-In (/devices/check-in) - Check-In Status
+  (/students/check-in-status) - Django Admin (/admin)
 
-<!-- For Teachers -->
-<nav>
-  - Device Audits (/audit)
+  <!-- For Teachers -->
+  <nav>
+    - Device Audits (/audit)
 
-<!-- For Both -->
-  - Home
-  - Help
+    <!-- For Both -->
+    - Home - Help
+  </nav>
+</nav>
 ```
 
 ### ROLE_ACCESS_RULES Integration
@@ -285,34 +297,32 @@ AuditSession (global, admin-created)
      └─ grade/advisor: cached from Student at time of audit
 ```
 
-
-
 ## Complexity Tracking
 
 > **No violations detected** - All constitution principles satisfied.
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| N/A | N/A | N/A |
+| --------- | ---------- | ------------------------------------ |
+| N/A       | N/A        | N/A                                  |
 
 ## Risk Register
 
-| Risk | Probability | Impact | Mitigation |
-|------|-------------|--------|------------|
-| CSV column mismatch | Medium | High | Validate columns before import, clear error messages |
-| FK integrity on Student deletion | Low | High | Use PROTECT/SET_NULL for audit records |
-| Import performance with large CSVs | Low | Medium | Batch processing in django-import-export |
-| Teacher accessing check-in routes | Low | Medium | ROLE_ACCESS_RULES already restricts to `/audit/*` only |
+| Risk                               | Probability | Impact | Mitigation                                             |
+| ---------------------------------- | ----------- | ------ | ------------------------------------------------------ |
+| CSV column mismatch                | Medium      | High   | Validate columns before import, clear error messages   |
+| FK integrity on Student deletion   | Low         | High   | Use PROTECT/SET_NULL for audit records                 |
+| Import performance with large CSVs | Low         | Medium | Batch processing in django-import-export               |
+| Teacher accessing check-in routes  | Low         | Medium | ROLE_ACCESS_RULES already restricts to `/audit/*` only |
 
 ## Artifacts Generated
 
-| Artifact | Path | Status |
-|----------|------|--------|
-| Research | [research.md](./research.md) | ✅ Complete |
-| Data Model | [data-model.md](./data-model.md) | ✅ Complete |
-| API Contracts | [contracts/api.md](./contracts/api.md) | ✅ Complete |
-| Quickstart | [quickstart.md](./quickstart.md) | ✅ Complete |
-| Task Breakdown | [tasks.md](./tasks.md) | ✅ Complete |
+| Artifact       | Path                                   | Status      |
+| -------------- | -------------------------------------- | ----------- |
+| Research       | [research.md](./research.md)           | ✅ Complete |
+| Data Model     | [data-model.md](./data-model.md)       | ✅ Complete |
+| API Contracts  | [contracts/api.md](./contracts/api.md) | ✅ Complete |
+| Quickstart     | [quickstart.md](./quickstart.md)       | ✅ Complete |
+| Task Breakdown | [tasks.md](./tasks.md)                 | ✅ Complete |
 
 ## Next Steps
 
@@ -326,4 +336,4 @@ AuditSession (global, admin-created)
 
 ---
 
-*Plan generated by speckit.plan | Ready for speckit.tasks*
+_Plan generated by speckit.plan | Ready for speckit.tasks_

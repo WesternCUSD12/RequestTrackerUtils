@@ -5,7 +5,7 @@
 **Status**: Draft  
 **Input**: User description: "RTUtils should use ldap (active directory) for user authentication. The system should pull two groups, TEACHERS and tech-team. tech-team has access to all features. TEACHERS only has access to the student device audit feature"
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Tech Team Full Access Login (Priority: P1)
 
@@ -62,7 +62,7 @@ A user who has valid AD credentials but is not a member of either "tech-team" or
 - How does system handle AD accounts that are disabled or locked? Authentication fails with appropriate error message
 - What happens when user explicitly logs out? Session is terminated and user must re-authenticate to access the system
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -93,7 +93,7 @@ A user who has valid AD credentials but is not a member of either "tech-team" or
 - **User Role**: Derived from AD group membership; either "technology_staff" (from tech-team) or "teacher" (from TEACHERS); determines feature access
 - **Authentication Event**: Audit log entry; includes timestamp, username, event type (login/logout/failure), IP address, failure reason (if applicable)
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

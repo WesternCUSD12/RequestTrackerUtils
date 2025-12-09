@@ -19,16 +19,16 @@
 
 **Purpose**: Django project initialization and basic structure
 
-- [X] T001 Update pyproject.toml with Django 4.2 LTS dependencies
-- [X] T002 Update devenv.nix to include Django packages
-- [X] T003 Create Django project structure with `django-admin startproject rtutils .`
-- [X] T004 [P] Create apps directory structure at `apps/`
-- [X] T005 [P] Create Django app: `apps/labels/` (startapp labels apps/labels)
-- [X] T006 [P] Create Django app: `apps/devices/` (startapp devices apps/devices)
-- [X] T007 [P] Create Django app: `apps/students/` (startapp students apps/students)
-- [X] T008 [P] Create Django app: `apps/audit/` (startapp audit apps/audit)
-- [X] T009 [P] Create Django app: `apps/assets/` (startapp assets apps/assets)
-- [X] T010 [P] Create common utilities package at `common/__init__.py`
+- [x] T001 Update pyproject.toml with Django 4.2 LTS dependencies
+- [x] T002 Update devenv.nix to include Django packages
+- [x] T003 Create Django project structure with `django-admin startproject rtutils .`
+- [x] T004 [P] Create apps directory structure at `apps/`
+- [x] T005 [P] Create Django app: `apps/labels/` (startapp labels apps/labels)
+- [x] T006 [P] Create Django app: `apps/devices/` (startapp devices apps/devices)
+- [x] T007 [P] Create Django app: `apps/students/` (startapp students apps/students)
+- [x] T008 [P] Create Django app: `apps/audit/` (startapp audit apps/audit)
+- [x] T009 [P] Create Django app: `apps/assets/` (startapp assets apps/assets)
+- [x] T010 [P] Create common utilities package at `common/__init__.py`
 
 ---
 
@@ -40,40 +40,40 @@
 
 ### Configuration & Settings
 
-- [X] T011 Configure Django settings.py with environment variables (RT_TOKEN, AUTH_USERNAME, AUTH_PASSWORD, WORKING_DIR, DEBUG)
-- [X] T012 [P] Add INSTALLED_APPS configuration for all apps in rtutils/settings.py
-- [X] T013 [P] Configure DATABASES to create new SQLite at `{WORKING_DIR}/database.sqlite`
-- [X] T014 [P] Configure TEMPLATES with Django template backend and templates directory
-- [X] T015 [P] Configure STATIC_URL and STATICFILES_DIRS in settings.py
+- [x] T011 Configure Django settings.py with environment variables (RT_TOKEN, AUTH_USERNAME, AUTH_PASSWORD, WORKING_DIR, DEBUG)
+- [x] T012 [P] Add INSTALLED_APPS configuration for all apps in rtutils/settings.py
+- [x] T013 [P] Configure DATABASES to create new SQLite at `{WORKING_DIR}/database.sqlite`
+- [x] T014 [P] Configure TEMPLATES with Django template backend and templates directory
+- [x] T015 [P] Configure STATIC_URL and STATICFILES_DIRS in settings.py
 
 ### Authentication Middleware
 
-- [X] T016 Implement SelectiveBasicAuthMiddleware in common/middleware.py (public /labels, protected others)
-- [X] T017 [P] Add PUBLIC_PATHS, AUTH_USERNAME, AUTH_PASSWORD settings
-- [X] T018 Add middleware to MIDDLEWARE list in settings.py
+- [x] T016 Implement SelectiveBasicAuthMiddleware in common/middleware.py (public /labels, protected others)
+- [x] T017 [P] Add PUBLIC_PATHS, AUTH_USERNAME, AUTH_PASSWORD settings
+- [x] T018 Add middleware to MIDDLEWARE list in settings.py
 
 ### Shared Utilities
 
-- [X] T019 Migrate rt_api.py from request_tracker_utils/utils/ to common/rt_api.py
-- [X] T020 [P] Migrate label_config.py to common/label_config.py
-- [X] T021 [P] Migrate text_utils.py to common/text_utils.py
+- [x] T019 Migrate rt_api.py from request_tracker_utils/utils/ to common/rt_api.py
+- [x] T020 [P] Migrate label_config.py to common/label_config.py
+- [x] T021 [P] Migrate text_utils.py to common/text_utils.py
 
 ### Database Models
 
-- [X] T022 Create Student model in apps/students/models.py per data-model.md
-- [X] T023 [P] Create DeviceInfo model in apps/devices/models.py per data-model.md
-- [X] T024 [P] Create DeviceLog model in apps/devices/models.py per data-model.md
-- [X] T025 Create AuditSession model in apps/audit/models.py per data-model.md
-- [X] T026 [P] Create AuditStudent model in apps/audit/models.py per data-model.md
-- [X] T027 [P] Create AuditDeviceRecord model in apps/audit/models.py per data-model.md
-- [X] T028 [P] Create AuditNote model in apps/audit/models.py per data-model.md
-- [X] T029 Run `python manage.py makemigrations` for all apps
-- [X] T030 Run `python manage.py migrate` to create fresh database schema
+- [x] T022 Create Student model in apps/students/models.py per data-model.md
+- [x] T023 [P] Create DeviceInfo model in apps/devices/models.py per data-model.md
+- [x] T024 [P] Create DeviceLog model in apps/devices/models.py per data-model.md
+- [x] T025 Create AuditSession model in apps/audit/models.py per data-model.md
+- [x] T026 [P] Create AuditStudent model in apps/audit/models.py per data-model.md
+- [x] T027 [P] Create AuditDeviceRecord model in apps/audit/models.py per data-model.md
+- [x] T028 [P] Create AuditNote model in apps/audit/models.py per data-model.md
+- [x] T029 Run `python manage.py makemigrations` for all apps
+- [x] T030 Run `python manage.py migrate` to create fresh database schema
 
 ### Root URLconf
 
-- [X] T031 Create root URLconf in rtutils/urls.py with all app includes per contracts/url_mappings.md
-- [X] T032 [P] Create homepage view in rtutils/views.py
+- [x] T031 Create root URLconf in rtutils/urls.py with all app includes per contracts/url_mappings.md
+- [x] T032 [P] Create homepage view in rtutils/views.py
 
 **Checkpoint**: Foundation ready - Django server should start and show homepage
 
@@ -87,74 +87,74 @@
 
 ### Labels App (PUBLIC - No Auth)
 
-- [X] T033 Create apps/labels/urls.py with all label routes per contracts/url_mappings.md
-- [X] T034 [P] [US1] Migrate label_home view to apps/labels/views.py
-- [X] T035 [P] [US1] Migrate print_label view to apps/labels/views.py
-- [X] T036 [P] [US1] Migrate batch_labels view to apps/labels/views.py
-- [X] T037 [P] [US1] Migrate search_assets_json view to apps/labels/views.py
-- [X] T038 [P] [US1] Migrate remaining label utility views (search, lookup, debug) to apps/labels/views.py
-- [X] T039 [US1] Migrate QR code and barcode generation to apps/labels/utils.py
-- [X] T040 [US1] Migrate label templates from request_tracker_utils/templates/ to templates/labels/
+- [x] T033 Create apps/labels/urls.py with all label routes per contracts/url_mappings.md
+- [x] T034 [P] [US1] Migrate label_home view to apps/labels/views.py
+- [x] T035 [P] [US1] Migrate print_label view to apps/labels/views.py
+- [x] T036 [P] [US1] Migrate batch_labels view to apps/labels/views.py
+- [x] T037 [P] [US1] Migrate search_assets_json view to apps/labels/views.py
+- [x] T038 [P] [US1] Migrate remaining label utility views (search, lookup, debug) to apps/labels/views.py
+- [x] T039 [US1] Migrate QR code and barcode generation to apps/labels/utils.py
+- [x] T040 [US1] Migrate label templates from request_tracker_utils/templates/ to templates/labels/
 
 ### Devices App (PROTECTED)
 
-- [X] T041 Create apps/devices/urls.py with device routes per contracts/url_mappings.md
-- [X] T042 [P] [US1] Migrate check_in_home view to apps/devices/views.py
-- [X] T043 [P] [US1] Migrate check_in_asset view to apps/devices/views.py
-- [X] T044 [P] [US1] Migrate process_check_in view to apps/devices/views.py
-- [X] T045 [P] [US1] Migrate check_out_home view to apps/devices/views.py
-- [X] T046 [P] [US1] Migrate check_in_logs view to apps/devices/views.py
-- [X] T047 [US1] Migrate device templates to templates/devices/
+- [x] T041 Create apps/devices/urls.py with device routes per contracts/url_mappings.md
+- [x] T042 [P] [US1] Migrate check_in_home view to apps/devices/views.py
+- [x] T043 [P] [US1] Migrate check_in_asset view to apps/devices/views.py
+- [x] T044 [P] [US1] Migrate process_check_in view to apps/devices/views.py
+- [x] T045 [P] [US1] Migrate check_out_home view to apps/devices/views.py
+- [x] T046 [P] [US1] Migrate check_in_logs view to apps/devices/views.py
+- [x] T047 [US1] Migrate device templates to templates/devices/
 
 ### Audit App (PROTECTED)
 
-- [X] T048 Create apps/audit/urls.py with audit routes per contracts/url_mappings.md
-- [X] T049 [P] [US1] Migrate audit_home view to apps/audit/views.py
-- [X] T050 [P] [US1] Migrate upload_csv view to apps/audit/views.py
-- [X] T051 [P] [US1] Migrate view_session view to apps/audit/views.py
-- [X] T052 [P] [US1] Migrate session_students view to apps/audit/views.py
-- [X] T053 [P] [US1] Migrate student_detail view to apps/audit/views.py
-- [X] T054 [P] [US1] Migrate student_devices view to apps/audit/views.py
-- [X] T055 [P] [US1] Migrate verify_student view to apps/audit/views.py
-- [X] T056 [P] [US1] Migrate re_audit_student view to apps/audit/views.py
-- [X] T057 [P] [US1] Migrate completed_students view to apps/audit/views.py
-- [X] T058 [P] [US1] Migrate audit_notes view to apps/audit/views.py
-- [X] T059 [P] [US1] Migrate export_notes view to apps/audit/views.py
-- [X] T060 [P] [US1] Migrate clear_audit view to apps/audit/views.py
-- [X] T061 [US1] Migrate audit_tracker.py to apps/audit/tracker.py
-- [X] T062 [US1] Migrate csv_validator.py to apps/audit/validators.py
-- [X] T063 [US1] Migrate audit templates to templates/audit/
+- [x] T048 Create apps/audit/urls.py with audit routes per contracts/url_mappings.md
+- [x] T049 [P] [US1] Migrate audit_home view to apps/audit/views.py
+- [x] T050 [P] [US1] Migrate upload_csv view to apps/audit/views.py
+- [x] T051 [P] [US1] Migrate view_session view to apps/audit/views.py
+- [x] T052 [P] [US1] Migrate session_students view to apps/audit/views.py
+- [x] T053 [P] [US1] Migrate student_detail view to apps/audit/views.py
+- [x] T054 [P] [US1] Migrate student_devices view to apps/audit/views.py
+- [x] T055 [P] [US1] Migrate verify_student view to apps/audit/views.py
+- [x] T056 [P] [US1] Migrate re_audit_student view to apps/audit/views.py
+- [x] T057 [P] [US1] Migrate completed_students view to apps/audit/views.py
+- [x] T058 [P] [US1] Migrate audit_notes view to apps/audit/views.py
+- [x] T059 [P] [US1] Migrate export_notes view to apps/audit/views.py
+- [x] T060 [P] [US1] Migrate clear_audit view to apps/audit/views.py
+- [x] T061 [US1] Migrate audit_tracker.py to apps/audit/tracker.py
+- [x] T062 [US1] Migrate csv_validator.py to apps/audit/validators.py
+- [x] T063 [US1] Migrate audit templates to templates/audit/
 
 ### Students App (PROTECTED)
 
-- [X] T064 Create apps/students/urls.py with student routes per contracts/url_mappings.md
-- [X] T065 [P] [US1] Migrate student_devices view to apps/students/views.py
-- [X] T066 [P] [US1] Migrate import_students view to apps/students/views.py
-- [X] T067 [US1] Migrate student templates to templates/students/
+- [x] T064 Create apps/students/urls.py with student routes per contracts/url_mappings.md
+- [x] T065 [P] [US1] Migrate student_devices view to apps/students/views.py
+- [x] T066 [P] [US1] Migrate import_students view to apps/students/views.py
+- [x] T067 [US1] Migrate student templates to templates/students/
 
 ### Assets App (PROTECTED)
 
-- [X] T068 Create apps/assets/urls.py with asset routes per contracts/url_mappings.md
-- [X] T069 [P] [US1] Migrate create_asset view to apps/assets/views.py
-- [X] T070 [P] [US1] Migrate next_tag view to apps/assets/views.py
-- [X] T071 [P] [US1] Migrate confirm_tag view to apps/assets/views.py
-- [X] T072 [P] [US1] Migrate reset_tag view to apps/assets/views.py
-- [X] T073 [P] [US1] Migrate update_name view to apps/assets/views.py
-- [X] T074 [P] [US1] Migrate webhook_created view to apps/assets/views.py
-- [X] T075 [P] [US1] Migrate tag_admin view to apps/assets/views.py
-- [X] T076 [US1] Migrate asset templates to templates/assets/
+- [x] T068 Create apps/assets/urls.py with asset routes per contracts/url_mappings.md
+- [x] T069 [P] [US1] Migrate create_asset view to apps/assets/views.py
+- [x] T070 [P] [US1] Migrate next_tag view to apps/assets/views.py
+- [x] T071 [P] [US1] Migrate confirm_tag view to apps/assets/views.py
+- [x] T072 [P] [US1] Migrate reset_tag view to apps/assets/views.py
+- [x] T073 [P] [US1] Migrate update_name view to apps/assets/views.py
+- [x] T074 [P] [US1] Migrate webhook_created view to apps/assets/views.py
+- [x] T075 [P] [US1] Migrate tag_admin view to apps/assets/views.py
+- [x] T076 [US1] Migrate asset templates to templates/assets/
 
 ### Template Migration (Jinja2 → Django)
 
-- [X] T077 [US1] Migrate base.html template with url_for → {% url %} conversion
-- [X] T078 [P] [US1] Update all templates: {{ url_for('x') }} → {% url 'x' %}
-- [X] T079 [P] [US1] Update all templates: {{ url_for('static', filename='x') }} → {% static 'x' %}
-- [X] T080 [US1] Copy static files to static/ directory
+- [x] T077 [US1] Migrate base.html template with url_for → {% url %} conversion
+- [x] T078 [P] [US1] Update all templates: {{ url_for('x') }} → {% url 'x' %}
+- [x] T079 [P] [US1] Update all templates: {{ url_for('static', filename='x') }} → {% static 'x' %}
+- [x] T080 [US1] Copy static files to static/ directory
 
 ### Homepage & Root Views
 
-- [X] T081 [US1] Migrate homepage view with route documentation to rtutils/views.py
-- [X] T082 [US1] Add root-level asset tag routes to rtutils/urls.py
+- [x] T081 [US1] Migrate homepage view with route documentation to rtutils/views.py
+- [x] T082 [US1] Add root-level asset tag routes to rtutils/urls.py
 
 **Checkpoint**: User Story 1 complete - All Flask routes should work identically in Django
 
@@ -168,27 +168,27 @@
 
 ### Django Admin Configuration
 
-- [X] T083 [US2] Create superuser with `python manage.py createsuperuser`
-- [X] T084 [P] [US2] Register Student model in apps/students/admin.py per data-model.md
-- [X] T085 [P] [US2] Register DeviceInfo model in apps/devices/admin.py per data-model.md
-- [X] T086 [P] [US2] Register DeviceLog model in apps/devices/admin.py per data-model.md
-- [X] T087 [P] [US2] Register AuditSession model in apps/audit/admin.py per data-model.md
-- [X] T088 [P] [US2] Register AuditStudent model in apps/audit/admin.py per data-model.md
-- [X] T089 [P] [US2] Register AuditDeviceRecord model in apps/audit/admin.py per data-model.md
-- [X] T090 [P] [US2] Register AuditNote model in apps/audit/admin.py per data-model.md
+- [x] T083 [US2] Create superuser with `python manage.py createsuperuser`
+- [x] T084 [P] [US2] Register Student model in apps/students/admin.py per data-model.md
+- [x] T085 [P] [US2] Register DeviceInfo model in apps/devices/admin.py per data-model.md
+- [x] T086 [P] [US2] Register DeviceLog model in apps/devices/admin.py per data-model.md
+- [x] T087 [P] [US2] Register AuditSession model in apps/audit/admin.py per data-model.md
+- [x] T088 [P] [US2] Register AuditStudent model in apps/audit/admin.py per data-model.md
+- [x] T089 [P] [US2] Register AuditDeviceRecord model in apps/audit/admin.py per data-model.md
+- [x] T090 [P] [US2] Register AuditNote model in apps/audit/admin.py per data-model.md
 
 ### ORM Refactoring
 
-- [X] T091 [US2] Refactor apps/students/views.py to use Django ORM instead of raw SQL
-- [X] T092 [P] [US2] Refactor apps/devices/views.py to use Django ORM
-- [X] T093 [P] [US2] Refactor apps/audit/views.py to use Django ORM
-- [X] T094 [P] [US2] Refactor apps/audit/tracker.py to use Django ORM
-- [X] T095 [US2] Remove db.py raw SQL utilities (replaced by ORM)
+- [x] T091 [US2] Refactor apps/students/views.py to use Django ORM instead of raw SQL
+- [x] T092 [P] [US2] Refactor apps/devices/views.py to use Django ORM
+- [x] T093 [P] [US2] Refactor apps/audit/views.py to use Django ORM
+- [x] T094 [P] [US2] Refactor apps/audit/tracker.py to use Django ORM
+- [x] T095 [US2] Remove db.py raw SQL utilities (replaced by ORM)
 
 ### Management Commands
 
-- [X] T096 [P] [US2] Create sync_rt_users management command in apps/students/management/commands/
-- [X] T097 [P] [US2] Create sync_chromebooks management command in apps/devices/management/commands/
+- [x] T096 [P] [US2] Create sync_rt_users management command in apps/students/management/commands/
+- [x] T097 [P] [US2] Create sync_chromebooks management command in apps/devices/management/commands/
 
 **Checkpoint**: User Story 2 complete - Django admin works, ORM queries functional
 
@@ -202,21 +202,21 @@
 
 ### Settings Refactoring
 
-- [X] T098 [US3] Create rtutils/settings/base.py with common settings
-- [X] T099 [P] [US3] Create rtutils/settings/development.py with DEBUG=True settings
-- [X] T100 [P] [US3] Create rtutils/settings/production.py with DEBUG=False, security settings
-- [X] T101 [US3] Update rtutils/settings/__init__.py to select settings based on DJANGO_SETTINGS_MODULE
-- [X] T102 [US3] Add fail-fast validation for required environment variables (RT_TOKEN)
+- [x] T098 [US3] Create rtutils/settings/base.py with common settings
+- [x] T099 [P] [US3] Create rtutils/settings/development.py with DEBUG=True settings
+- [x] T100 [P] [US3] Create rtutils/settings/production.py with DEBUG=False, security settings
+- [x] T101 [US3] Update rtutils/settings/**init**.py to select settings based on DJANGO_SETTINGS_MODULE
+- [x] T102 [US3] Add fail-fast validation for required environment variables (RT_TOKEN)
 
 ### WSGI Configuration
 
-- [X] T103 [P] [US3] Update rtutils/wsgi.py to use correct settings module
-- [X] T104 [P] [US3] Create rtutils/asgi.py for future async support
+- [x] T103 [P] [US3] Update rtutils/wsgi.py to use correct settings module
+- [x] T104 [P] [US3] Create rtutils/asgi.py for future async support
 
 ### Static Files (Production)
 
-- [X] T105 [US3] Add STATIC_ROOT setting for collectstatic
-- [X] T106 [US3] Configure WhiteNoise or similar for production static serving
+- [x] T105 [US3] Add STATIC_ROOT setting for collectstatic
+- [x] T106 [US3] Configure WhiteNoise or similar for production static serving
 
 **Checkpoint**: User Story 3 complete - Environment-specific configuration works
 
@@ -228,28 +228,28 @@
 
 ### Testing Integration
 
-- [X] T107 [P] Configure pytest.ini with DJANGO_SETTINGS_MODULE
-- [X] T108 [P] Install pytest-django and update requirements
-- [X] T109 Run existing test suite: `pytest tests/`
+- [x] T107 [P] Configure pytest.ini with DJANGO_SETTINGS_MODULE
+- [x] T108 [P] Install pytest-django and update requirements
+- [x] T109 Run existing test suite: `pytest tests/`
 
 ### Documentation
 
-- [X] T110 [P] Update README.md with Django setup instructions
-- [X] T111 [P] Update docs/architecture/ subsystem docs for Django structure
-- [X] T112 Run quickstart.md validation checklist
+- [x] T110 [P] Update README.md with Django setup instructions
+- [x] T111 [P] Update docs/architecture/ subsystem docs for Django structure
+- [x] T112 Run quickstart.md validation checklist
 
 ### Cleanup
 
-- [X] T113 [P] Remove old Flask app code from request_tracker_utils/ (after verification)
-- [X] T114 [P] Update run.py to use Django development server
-- [X] T115 Update NixOS deployment configuration for Django
+- [x] T113 [P] Remove old Flask app code from request_tracker_utils/ (after verification)
+- [x] T114 [P] Update run.py to use Django development server
+- [x] T115 Update NixOS deployment configuration for Django
 
 ### Verification
 
-- [X] T116 Verify all routes respond identically to Flask version
-- [X] T117 Verify /labels routes work without authentication
-- [X] T118 Verify all other routes require HTTP Basic Auth
-- [X] T119 Verify Django admin CRUD operations work
+- [x] T116 Verify all routes respond identically to Flask version
+- [x] T117 Verify /labels routes work without authentication
+- [x] T118 Verify all other routes require HTTP Basic Auth
+- [x] T119 Verify Django admin CRUD operations work
 
 ---
 

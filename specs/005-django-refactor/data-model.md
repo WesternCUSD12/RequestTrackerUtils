@@ -207,8 +207,9 @@ class AuditNote(models.Model):
 ### Step 1: Create Models in App-Specific Files
 
 Create models in each app's `models.py` as defined above:
+
 - `apps/students/models.py` - Student
-- `apps/devices/models.py` - DeviceInfo, DeviceLog  
+- `apps/devices/models.py` - DeviceInfo, DeviceLog
 - `apps/audit/models.py` - AuditSession, AuditStudent, AuditDeviceRecord, AuditNote
 
 ### Step 2: Generate Migrations

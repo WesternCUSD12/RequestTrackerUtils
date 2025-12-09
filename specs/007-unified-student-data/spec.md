@@ -5,7 +5,7 @@
 **Status**: Draft  
 **Input**: User description: "student device checkin and student device audit should be more unified. They should use a shared student table to collate all necessary data with a management interface (can be in django admin) to load data from a csv exported from my SIS and edit data if needed"
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Import Student Data from SIS CSV (Priority: P1)
 
@@ -89,7 +89,7 @@ Technology staff need to manually correct student information (name spelling, gr
 - How does system handle students who transfer mid-year (removed from SIS export)? → Students not in new CSV import are marked as "inactive" status, preserving historical records
 - What if audit session CSV contains students not in the main student database?
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -131,7 +131,7 @@ Technology staff need to manually correct student information (name spelling, gr
 - **AuditStudent**: Student record within an audit session. References main Student table for core data, adds audit-specific fields (audited status, audit_timestamp, auditor_name). Has many-to-one relationship with AuditSession
 - **AuditDeviceRecord**: Device verification records found during audit. Has many-to-one relationship with AuditStudent
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 
@@ -149,9 +149,11 @@ Technology staff need to manually correct student information (name spelling, gr
 ## Interface Architecture
 
 ### Admin Interface (Django Admin - `/admin/`)
+
 **Access**: Technology staff only (via LDAP group Tech-Team)
 **Purpose**: Student data management and configuration
 **Features**:
+
 - CSV import/export at `/admin/students/student/`
 - Manual student record editing
 - View associated DeviceInfo records
@@ -159,10 +161,12 @@ Technology staff need to manually correct student information (name spelling, gr
 - Bulk actions: mark active/inactive, clear check-in status
 
 ### End-User Interface (Django Templates)
+
 **Access**: Based on user role (LDAP groups)
 **Purpose**: Operational workflows (not administration)
 
 #### Device Check-In Interface (`/devices/check-in`)
+
 - **Access**: Technology staff (LDAP: Tech-Team)
 - **Purpose**: Quick device return scanning and student status updates
 - **Features**:
@@ -175,6 +179,7 @@ Technology staff need to manually correct student information (name spelling, gr
   - Organized similarly to old Flask `/devices/check-in` UI
 
 #### Audit Session Interface (`/audit/`)
+
 - **Access**: Teachers (LDAP: TEACHERS)
 - **Purpose**: Device possession verification for advisory classes
 - **Features**:
@@ -186,6 +191,7 @@ Technology staff need to manually correct student information (name spelling, gr
   - Organized similarly to old Flask `/devices/audit/` UI
 
 #### Check-In Status Interface (`/students/check-in-status`)
+
 - **Access**: Technology staff (LDAP: Tech-Team)
 - **Purpose**: View overall device check-in progress
 - **Features**:

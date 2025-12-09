@@ -21,16 +21,16 @@ Replace HTTP Basic Auth with LDAP/Active Directory authentication for RTUtils. T
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
-| Principle | Status | Evidence |
-|-----------|--------|----------|
-| I. Documentation-First | ✅ PASS | spec.md created with user stories, acceptance criteria, success metrics |
-| II. Modular Routing Architecture | ✅ PASS | Will modify existing `apps/authentication` app (already registered) |
-| III. Specification-Driven Testing | ✅ PASS | Three independently testable user stories (P1: tech-team, P2: teacher, P3: unauthorized) |
-| IV. Request Tracker API Integration | N/A | No RT API changes required |
-| V. Configuration & Environment Management | ✅ PASS | LDAP settings via environment variables (FR-012) |
-| Authentication Requirements | ✅ PASS | `/labels/*` remains public, other routes protected per constitution |
+| Principle                                 | Status  | Evidence                                                                                 |
+| ----------------------------------------- | ------- | ---------------------------------------------------------------------------------------- |
+| I. Documentation-First                    | ✅ PASS | spec.md created with user stories, acceptance criteria, success metrics                  |
+| II. Modular Routing Architecture          | ✅ PASS | Will modify existing `apps/authentication` app (already registered)                      |
+| III. Specification-Driven Testing         | ✅ PASS | Three independently testable user stories (P1: tech-team, P2: teacher, P3: unauthorized) |
+| IV. Request Tracker API Integration       | N/A     | No RT API changes required                                                               |
+| V. Configuration & Environment Management | ✅ PASS | LDAP settings via environment variables (FR-012)                                         |
+| Authentication Requirements               | ✅ PASS | `/labels/*` remains public, other routes protected per constitution                      |
 
 **Pre-Design Gate**: ✅ PASS - Proceed to Phase 0
 
