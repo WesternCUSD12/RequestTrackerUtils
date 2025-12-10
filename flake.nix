@@ -122,7 +122,6 @@
           };
         };
       in
-      in
       {
         # Expose the NixOS module at the top level
         nixosModules = {
