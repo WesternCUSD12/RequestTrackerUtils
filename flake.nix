@@ -129,21 +129,15 @@
                     # Create necessary directories
                     mkdir -p ${config.services.requestTrackerUtils.workingDirectory}/{static,media,logs}
 
-                    # Set PYTHONPATH to include the installed package location
-                    export PYTHONPATH=${
-                      self.packages.${system}.default
-                    }/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
+                    # Compose PYTHONPATH to include the packaged site-packages and common dependency site-packages
+                    export PYTHONPATH=${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
 
-                    # Run Django migrations
+                    # Run Django migrations using the system python but with PYTHONPATH pointing to package and deps
                     cd ${config.services.requestTrackerUtils.workingDirectory}
-                    ${pkgs.python3}/bin/python ${
-                      self.packages.${system}.default
-                    }/lib/${pkgs.python3.libPrefix}/site-packages/manage.py migrate --noinput
+                    ${self.packages.${system}.default}/bin/rtutils-python ${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages/manage.py migrate --noinput
 
                     # Collect static files
-                    ${pkgs.python3}/bin/python ${
-                      self.packages.${system}.default
-                    }/lib/${pkgs.python3.libPrefix}/site-packages/manage.py collectstatic --noinput --clear
+                    ${self.packages.${system}.default}/bin/rtutils-python ${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages/manage.py collectstatic --noinput --clear
 
                     # Set proper permissions
                     chown -R ${config.services.requestTrackerUtils.user}:${config.services.requestTrackerUtils.group} ${config.services.requestTrackerUtils.workingDirectory}
@@ -175,6 +169,8 @@
                       "ALLOWED_HOSTS=${lib.concatStringsSep "," config.services.requestTrackerUtils.allowedHosts}"
                       "STATIC_ROOT=${config.services.requestTrackerUtils.workingDirectory}/static"
                       "MEDIA_ROOT=${config.services.requestTrackerUtils.workingDirectory}/media"
+                      # Ensure Gunicorn and Django see the packaged modules
+                      "PYTHONPATH=${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages"
                     ];
                     EnvironmentFile = config.services.requestTrackerUtils.secretsFile;
                     Restart = "always";
@@ -290,6 +286,19 @@
                   cp -r "$app"/* $SITE_PACKAGES/static/
                 fi
               done
+
+              # Create a small runtime wrapper that sets PYTHONPATH to include
+              # the packaged site-packages and common dependency site-packages,
+              # then execs the system python. This ensures `manage.py` runs
+              # with access to Django and other deps at runtime.
+              mkdir -p $out/bin
+              cat > $out/bin/rtutils-python <<'RTPY'
+#!/bin/sh
+PYTHONPATH="$SITE_PACKAGES:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH"
+export PYTHONPATH
+exec ${pkgs.python3}/bin/python "$@"
+RTPY
+              chmod +x $out/bin/rtutils-python
 
               # Set proper permissions
               chmod -R +r $SITE_PACKAGES
