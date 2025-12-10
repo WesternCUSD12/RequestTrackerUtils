@@ -130,7 +130,7 @@
                     mkdir -p ${config.services.requestTrackerUtils.workingDirectory}/{static,media,logs}
 
                     # Compose PYTHONPATH to include the packaged site-packages and common dependency site-packages
-                    export PYTHONPATH=${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
+                    export PYTHONPATH=${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
 
                     # Run Django migrations using the system python but with PYTHONPATH pointing to package and deps
                     cd ${config.services.requestTrackerUtils.workingDirectory}
@@ -170,7 +170,7 @@
                       "STATIC_ROOT=${config.services.requestTrackerUtils.workingDirectory}/static"
                       "MEDIA_ROOT=${config.services.requestTrackerUtils.workingDirectory}/media"
                       # Ensure Gunicorn and Django see the packaged modules
-                      "PYTHONPATH=${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages"
+                      "PYTHONPATH=${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages"
                     ];
                     EnvironmentFile = config.services.requestTrackerUtils.secretsFile;
                     Restart = "always";
@@ -242,6 +242,7 @@
 
               # LDAP authentication
               ldap3
+              asgiref
 
               # Google Admin SDK
               google-api-python-client
@@ -294,7 +295,7 @@
               mkdir -p $out/bin
               cat > $out/bin/rtutils-python <<'RTPY'
 #!/bin/sh
-PYTHONPATH="$SITE_PACKAGES:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH"
+PYTHONPATH="$SITE_PACKAGES:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH"
 export PYTHONPATH
 exec ${pkgs.python3}/bin/python "$@"
 RTPY
