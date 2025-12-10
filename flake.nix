@@ -231,6 +231,8 @@
               django
               gunicorn
               django-extensions
+              django-import-export
+              whitenoise
 
               # Core dependencies
               pandas
