@@ -250,3 +250,5 @@ asset_tag_sequence.txt
 syncthing-folder*
 
 google-credentials.json
+.gemini/
+gha-creds-*.json

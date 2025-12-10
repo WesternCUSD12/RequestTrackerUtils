@@ -130,14 +130,20 @@
                     mkdir -p ${config.services.requestTrackerUtils.workingDirectory}/{static,media,logs}
 
                     # Compose PYTHONPATH to include the packaged site-packages and common dependency site-packages
-                    export PYTHONPATH=${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
+                    export PYTHONPATH=${
+                      self.packages.${system}.default
+                    }/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
 
                     # Run Django migrations using the system python but with PYTHONPATH pointing to package and deps
                     cd ${config.services.requestTrackerUtils.workingDirectory}
-                    ${self.packages.${system}.default}/bin/rtutils-python ${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages/manage.py migrate --noinput
+                    ${self.packages.${system}.default}/bin/rtutils-python ${
+                      self.packages.${system}.default
+                    }/lib/${pkgs.python3.libPrefix}/site-packages/manage.py migrate --noinput
 
                     # Collect static files
-                    ${self.packages.${system}.default}/bin/rtutils-python ${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages/manage.py collectstatic --noinput --clear
+                    ${self.packages.${system}.default}/bin/rtutils-python ${
+                      self.packages.${system}.default
+                    }/lib/${pkgs.python3.libPrefix}/site-packages/manage.py collectstatic --noinput --clear
 
                     # Set proper permissions
                     chown -R ${config.services.requestTrackerUtils.user}:${config.services.requestTrackerUtils.group} ${config.services.requestTrackerUtils.workingDirectory}
@@ -170,7 +176,9 @@
                       "STATIC_ROOT=${config.services.requestTrackerUtils.workingDirectory}/static"
                       "MEDIA_ROOT=${config.services.requestTrackerUtils.workingDirectory}/media"
                       # Ensure Gunicorn and Django see the packaged modules
-                      "PYTHONPATH=${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages"
+                      "PYTHONPATH=${
+                        self.packages.${system}.default
+                      }/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages"
                     ];
                     EnvironmentFile = config.services.requestTrackerUtils.secretsFile;
                     Restart = "always";
@@ -252,57 +260,57 @@
             ];
 
             postInstall = ''
-              SITE_PACKAGES=$out/lib/${pkgs.python3.libPrefix}/site-packages
+                            SITE_PACKAGES=$out/lib/${pkgs.python3.libPrefix}/site-packages
 
-              # Copy Django project settings
-              mkdir -p $SITE_PACKAGES/rtutils
-              cp -r rtutils/* $SITE_PACKAGES/rtutils/
+                            # Copy Django project settings
+                            mkdir -p $SITE_PACKAGES/rtutils
+                            cp -r rtutils/* $SITE_PACKAGES/rtutils/
 
-              # Copy all Django apps
-              mkdir -p $SITE_PACKAGES/apps
-              cp -r apps/* $SITE_PACKAGES/apps/
+                            # Copy all Django apps
+                            mkdir -p $SITE_PACKAGES/apps
+                            cp -r apps/* $SITE_PACKAGES/apps/
 
-              # Copy common utilities
-              mkdir -p $SITE_PACKAGES/common
-              cp -r common/* $SITE_PACKAGES/common/
+                            # Copy common utilities
+                            mkdir -p $SITE_PACKAGES/common
+                            cp -r common/* $SITE_PACKAGES/common/
 
-              # Copy manage.py
-              cp manage.py $SITE_PACKAGES/
+                            # Copy manage.py
+                            cp manage.py $SITE_PACKAGES/
 
-              # Copy all templates (project-level and app-level)
-              mkdir -p $SITE_PACKAGES/templates
-              if [ -d templates ]; then
-                cp -r templates/* $SITE_PACKAGES/templates/
-              fi
+                            # Copy all templates (project-level and app-level)
+                            mkdir -p $SITE_PACKAGES/templates
+                            if [ -d templates ]; then
+                              cp -r templates/* $SITE_PACKAGES/templates/
+                            fi
 
-              # Copy all static files
-              mkdir -p $SITE_PACKAGES/static
-              if [ -d static ]; then
-                cp -r static/* $SITE_PACKAGES/static/
-              fi
+                            # Copy all static files
+                            mkdir -p $SITE_PACKAGES/static
+                            if [ -d static ]; then
+                              cp -r static/* $SITE_PACKAGES/static/
+                            fi
 
-              # Copy app-specific static files
-              for app in apps/*/static; do
-                if [ -d "$app" ]; then
-                  cp -r "$app"/* $SITE_PACKAGES/static/
-                fi
-              done
+                            # Copy app-specific static files
+                            for app in apps/*/static; do
+                              if [ -d "$app" ]; then
+                                cp -r "$app"/* $SITE_PACKAGES/static/
+                              fi
+                            done
 
-              # Create a small runtime wrapper that sets PYTHONPATH to include
-              # the packaged site-packages and common dependency site-packages,
-              # then execs the system python. This ensures `manage.py` runs
-              # with access to Django and other deps at runtime.
-              mkdir -p $out/bin
-              cat > $out/bin/rtutils-python <<'RTPY'
-#!/bin/sh
-PYTHONPATH="$SITE_PACKAGES:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH"
-export PYTHONPATH
-exec ${pkgs.python3}/bin/python "$@"
-RTPY
-              chmod +x $out/bin/rtutils-python
+                            # Create a small runtime wrapper that sets PYTHONPATH to include
+                            # the packaged site-packages and common dependency site-packages,
+                            # then execs the system python. This ensures `manage.py` runs
+                            # with access to Django and other deps at runtime.
+                            mkdir -p $out/bin
+                            cat > $out/bin/rtutils-python <<'RTPY'
+              #!/bin/sh
+              PYTHONPATH="$SITE_PACKAGES:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH"
+              export PYTHONPATH
+              exec ${pkgs.python3}/bin/python "$@"
+              RTPY
+                            chmod +x $out/bin/rtutils-python
 
-              # Set proper permissions
-              chmod -R +r $SITE_PACKAGES
+                            # Set proper permissions
+                            chmod -R +r $SITE_PACKAGES
             '';
 
             meta = with pkgs.lib; {
