@@ -132,7 +132,7 @@
                     # Compose PYTHONPATH to include the packaged site-packages and common dependency site-packages
                     export PYTHONPATH=${
                       self.packages.${system}.default
-                    }/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
+                    }/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
 
                     # Run Django migrations using the system python but with PYTHONPATH pointing to package and deps
                     cd ${config.services.requestTrackerUtils.workingDirectory}
@@ -178,7 +178,7 @@
                       # Ensure Gunicorn and Django see the packaged modules
                       "PYTHONPATH=${
                         self.packages.${system}.default
-                      }/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages"
+                      }/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages"
                     ];
                     EnvironmentFile = config.services.requestTrackerUtils.secretsFile;
                     Restart = "always";
@@ -303,7 +303,7 @@
                             mkdir -p $out/bin
                             cat > $out/bin/rtutils-python <<'RTPY'
               #!/bin/sh
-              PYTHONPATH="$SITE_PACKAGES:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH"
+              PYTHONPATH="$SITE_PACKAGES:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH"
               export PYTHONPATH
               exec ${pkgs.python3}/bin/python "$@"
               RTPY
