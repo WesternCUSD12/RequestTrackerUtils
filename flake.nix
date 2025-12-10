@@ -129,12 +129,12 @@
                     # Create necessary directories
                     mkdir -p ${config.services.requestTrackerUtils.workingDirectory}/{static,media,logs}
 
-                    # Compose PYTHONPATH to include the packaged site-packages and common dependency site-packages
+                    # Compose PYTHONPATH to include the packaged site-packages and all dependency site-packages
                     export PYTHONPATH=${
                       self.packages.${system}.default
-                    }/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
+                    }/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.gunicorn}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-import-export}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pandas}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.requests}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.reportlab}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.qrcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-barcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pillow}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-dotenv}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.click}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-api-python-client}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-httplib2}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-oauthlib}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
 
-                    # Run Django migrations using the system python but with PYTHONPATH pointing to package and deps
+                    # Run Django migrations using rtutils-python (which has full PYTHONPATH)
                     cd ${config.services.requestTrackerUtils.workingDirectory}
                     ${self.packages.${system}.default}/bin/rtutils-python ${
                       self.packages.${system}.default
@@ -175,10 +175,10 @@
                       "ALLOWED_HOSTS=${lib.concatStringsSep "," config.services.requestTrackerUtils.allowedHosts}"
                       "STATIC_ROOT=${config.services.requestTrackerUtils.workingDirectory}/static"
                       "MEDIA_ROOT=${config.services.requestTrackerUtils.workingDirectory}/media"
-                      # Ensure Gunicorn and Django see the packaged modules
+                      # Ensure Gunicorn and Django see all packaged modules and their dependencies
                       "PYTHONPATH=${
                         self.packages.${system}.default
-                      }/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages"
+                      }/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.gunicorn}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django-import-export}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.pandas}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.requests}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.reportlab}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.qrcode}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.python-barcode}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.pillow}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.python-dotenv}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.click}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.google-api-python-client}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.google-auth}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.google-auth-httplib2}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.google-auth-oauthlib}/lib/${pkgs.python3.libPrefix}/site-packages"
                     ];
                     EnvironmentFile = config.services.requestTrackerUtils.secretsFile;
                     Restart = "always";
@@ -296,14 +296,12 @@
                               fi
                             done
 
-                            # Create a small runtime wrapper that sets PYTHONPATH to include
-                            # the packaged site-packages and common dependency site-packages,
-                            # then execs the system python. This ensures `manage.py` runs
-                            # with access to Django and other deps at runtime.
+                            # Create a runtime wrapper that sets PYTHONPATH to include all dependencies
+                            # This ensures manage.py and gunicorn can import all required modules.
                             mkdir -p $out/bin
                             cat > $out/bin/rtutils-python <<'RTPY'
               #!/bin/sh
-              PYTHONPATH="$SITE_PACKAGES:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH"
+              PYTHONPATH="${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.gunicorn}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-import-export}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pandas}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.requests}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.reportlab}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.qrcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-barcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pillow}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-dotenv}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.click}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-api-python-client}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-httplib2}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-oauthlib}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH"
               export PYTHONPATH
               exec ${pkgs.python3}/bin/python "$@"
               RTPY
