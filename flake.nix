@@ -20,6 +20,108 @@
           config.allowBroken = true;
         };
         lib = pkgs.lib;
+        
+        # Define the package here so it's available to the module
+        requestTrackerPackage = pkgs.python3Packages.buildPythonApplication {
+          pname = "request-tracker-utils";
+          version = "0.4.0";
+          pyproject = true;
+
+          src = ./.;
+
+          nativeBuildInputs = with pkgs.python3Packages; [
+            setuptools
+            wheel
+          ];
+
+          propagatedBuildInputs = with pkgs.python3Packages; [
+            # Django and WSGI server
+            django
+            gunicorn
+            django-extensions
+            django-import-export
+            whitenoise
+
+            # Core dependencies
+            pandas
+            requests
+            reportlab
+            qrcode
+            python-barcode
+            pillow
+            python-dotenv
+            click
+
+            # LDAP authentication
+            ldap3
+            asgiref
+
+            # Google Admin SDK
+            google-api-python-client
+            google-auth
+            google-auth-httplib2
+            google-auth-oauthlib
+          ];
+
+          postInstall = ''
+                          SITE_PACKAGES=$out/lib/${pkgs.python3.libPrefix}/site-packages
+
+                          # Copy Django project settings
+                          mkdir -p $SITE_PACKAGES/rtutils
+                          cp -r rtutils/* $SITE_PACKAGES/rtutils/
+
+                          # Copy all Django apps
+                          mkdir -p $SITE_PACKAGES/apps
+                          cp -r apps/* $SITE_PACKAGES/apps/
+
+                          # Copy common utilities
+                          mkdir -p $SITE_PACKAGES/common
+                          cp -r common/* $SITE_PACKAGES/common/
+
+                          # Copy manage.py
+                          cp manage.py $SITE_PACKAGES/
+
+                          # Copy all templates (project-level and app-level)
+                          mkdir -p $SITE_PACKAGES/templates
+                          if [ -d templates ]; then
+                            cp -r templates/* $SITE_PACKAGES/templates/
+                          fi
+
+                          # Copy all static files
+                          mkdir -p $SITE_PACKAGES/static
+                          if [ -d static ]; then
+                            cp -r static/* $SITE_PACKAGES/static/
+                          fi
+
+                          # Copy app-specific static files
+                          for app in apps/*/static; do
+                            if [ -d "$app" ]; then
+                              cp -r "$app"/* $SITE_PACKAGES/static/
+                            fi
+                          done
+
+                          # Create a runtime wrapper that sets PYTHONPATH to include all dependencies
+                          # This ensures manage.py and gunicorn can import all required modules.
+                          mkdir -p $out/bin
+                          cat > $out/bin/rtutils-python <<'RTPY'
+              #!/bin/sh
+              PYTHONPATH="$SITE_PACKAGES:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.gunicorn}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-import-export}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pandas}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.requests}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.reportlab}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.qrcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-barcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pillow}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-dotenv}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.click}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-api-python-client}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-httplib2}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-oauthlib}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH"
+              export PYTHONPATH
+              exec ${pkgs.python3}/bin/python "$@"
+              RTPY
+                          chmod +x $out/bin/rtutils-python
+
+                          # Set proper permissions
+                          chmod -R +r $SITE_PACKAGES
+          '';
+
+          meta = with pkgs.lib; {
+            description = "Django application for Request Tracker asset management";
+            license = lib.licenses.mit;
+            maintainers = [ ];
+          };
+        };
+      in
       in
       {
         # Expose the NixOS module at the top level
@@ -129,21 +231,125 @@
                     # Create necessary directories
                     mkdir -p ${config.services.requestTrackerUtils.workingDirectory}/{static,media,logs}
 
-                    # Compose PYTHONPATH to include the packaged site-packages and all dependency site-packages
-                    export PYTHONPATH=${
-                      self.packages.${system}.default
-                    }/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.gunicorn}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-import-export}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pandas}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.requests}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.reportlab}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.qrcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-barcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pillow}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-dotenv}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.click}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-api-python-client}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-httplib2}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-oauthlib}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
-
-                    # Run Django migrations using rtutils-python (which has full PYTHONPATH)
+                    # Run Django migrations
                     cd ${config.services.requestTrackerUtils.workingDirectory}
-                    ${self.packages.${system}.default}/bin/rtutils-python ${
-                      self.packages.${system}.default
-                    }/lib/${pkgs.python3.libPrefix}/site-packages/manage.py migrate --noinput
+                    ${pkgs.python3}/bin/python -m manage migrate --noinput
 
                     # Collect static files
-                    ${self.packages.${system}.default}/bin/rtutils-python ${
-                      self.packages.${system}.default
-                    }/lib/${pkgs.python3.libPrefix}/site-packages/manage.py collectstatic --noinput --clear
+                    ${pkgs.python3}/bin/python -m manage collectstatic --noinput --clear      in
+      {
+        # Expose the NixOS module at the top level
+        nixosModules = {
+          requestTrackerUtils = { config, lib, pkgs, ... }:
+            {
+              options.services.requestTrackerUtils = {
+                enable = lib.mkOption {
+                  type = lib.types.bool;
+                  default = false;
+                  description = "Enable the Django Request Tracker Utils service.";
+                };
+                host = lib.mkOption {
+                  type = lib.types.str;
+                  default = "127.0.0.1";
+                  description = "Host address for the Django app (Gunicorn binding).";
+                };
+                port = lib.mkOption {
+                  type = lib.types.int;
+                  default = 8000;
+                  description = "Port for the Django app (Gunicorn binding).";
+                };
+                workers = lib.mkOption {
+                  type = lib.types.int;
+                  default = 4;
+                  description = "Number of Gunicorn worker processes.";
+                };
+                secretsFile = lib.mkOption {
+                  type = lib.types.path;
+                  default = "/etc/request-tracker-utils/secrets.env";
+                  description = "Path to the secrets environment file (must contain SECRET_KEY, RT_USERNAME, RT_PASSWORD).";
+                };
+                workingDirectory = lib.mkOption {
+                  type = lib.types.str;
+                  default = "/var/lib/request-tracker-utils";
+                  description = "Working directory for the Django app service (contains database and media files).";
+                };
+                user = lib.mkOption {
+                  type = lib.types.str;
+                  default = "rtutils";
+                  description = "User to run the Django app service as.";
+                };
+                group = lib.mkOption {
+                  type = lib.types.str;
+                  default = "rtutils";
+                  description = "Group to run the Django app service as.";
+                };
+                labelWidthMm = lib.mkOption {
+                  type = lib.types.int;
+                  default = 100;
+                  description = "Width of the label in millimeters.";
+                };
+                labelHeightMm = lib.mkOption {
+                  type = lib.types.int;
+                  default = 62;
+                  description = "Height of the label in millimeters.";
+                };
+                rtUrl = lib.mkOption {
+                  type = lib.types.str;
+                  default = "https://tickets.wc-12.com";
+                  description = "Request Tracker URL.";
+                };
+                apiEndpoint = lib.mkOption {
+                  type = lib.types.str;
+                  default = "/REST/2.0";
+                  description = "API endpoint for Request Tracker.";
+                };
+                prefix = lib.mkOption {
+                  type = lib.types.str;
+                  default = "W12-";
+                  description = "Prefix for asset tags.";
+                };
+                padding = lib.mkOption {
+                  type = lib.types.int;
+                  default = 4;
+                  description = "Padding for labels.";
+                };
+                debug = lib.mkOption {
+                  type = lib.types.bool;
+                  default = false;
+                  description = "Enable Django DEBUG mode (should be false in production).";
+                };
+                allowedHosts = lib.mkOption {
+                  type = lib.types.listOf lib.types.str;
+                  default = [
+                    "localhost"
+                    "127.0.0.1"
+                  ];
+                  description = "Django ALLOWED_HOSTS setting.";
+                };
+              };
+
+              config = lib.mkIf config.services.requestTrackerUtils.enable {
+                # Systemd service definition
+                systemd.services.request-tracker-utils = {
+                  description = "Django Request Tracker Utils service (Gunicorn)";
+                  after = [ "network.target" ];
+                  wantedBy = [ "multi-user.target" ];
+
+                  environment.PATH = lib.mkForce "${pkgs.lib.makeBinPath [ requestTrackerPackage pkgs.python3 ]}";
+
+                  preStart = ''
+                    # Create necessary directories
+                    mkdir -p ${config.services.requestTrackerUtils.workingDirectory}/{static,media,logs}
+
+                    # Set PYTHONPATH to include the package and all dependencies
+                    export PYTHONPATH="${requestTrackerPackage}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.gunicorn}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-import-export}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pandas}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.requests}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.reportlab}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.qrcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-barcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pillow}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-dotenv}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.click}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-api-python-client}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-httplib2}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-oauthlib}/lib/${pkgs.python3.libPrefix}/site-packages"
+
+                    # Run Django migrations
+                    cd ${config.services.requestTrackerUtils.workingDirectory}
+                    python -m manage migrate --noinput
+
+                    # Collect static files
+                    python -m manage collectstatic --noinput --clear
 
                     # Set proper permissions
                     chown -R ${config.services.requestTrackerUtils.user}:${config.services.requestTrackerUtils.group} ${config.services.requestTrackerUtils.workingDirectory}
@@ -175,10 +381,7 @@
                       "ALLOWED_HOSTS=${lib.concatStringsSep "," config.services.requestTrackerUtils.allowedHosts}"
                       "STATIC_ROOT=${config.services.requestTrackerUtils.workingDirectory}/static"
                       "MEDIA_ROOT=${config.services.requestTrackerUtils.workingDirectory}/media"
-                      # Ensure Gunicorn and Django see all packaged modules and their dependencies
-                      "PYTHONPATH=${
-                        self.packages.${system}.default
-                      }/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.gunicorn}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.django-import-export}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.pandas}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.requests}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.reportlab}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.qrcode}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.python-barcode}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.pillow}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.python-dotenv}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.click}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.google-api-python-client}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.google-auth}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.google-auth-httplib2}/lib/${pkgs.python3.libPrefix}/site-packages,${pkgs.python3Packages.google-auth-oauthlib}/lib/${pkgs.python3.libPrefix}/site-packages"
+                      "PYTHONPATH=${requestTrackerPackage}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.gunicorn}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-import-export}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pandas}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.requests}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.reportlab}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.qrcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-barcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pillow}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-dotenv}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.click}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-api-python-client}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-httplib2}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-oauthlib}/lib/${pkgs.python3.libPrefix}/site-packages"
                     ];
                     EnvironmentFile = config.services.requestTrackerUtils.secretsFile;
                     Restart = "always";
@@ -218,105 +421,7 @@
 
         # Package definition for the Django app
         packages = {
-          default = pkgs.python3Packages.buildPythonApplication {
-            pname = "request-tracker-utils";
-            version = "0.4.0";
-            pyproject = true;
-
-            src = ./.;
-
-            nativeBuildInputs = with pkgs.python3Packages; [
-              setuptools
-              wheel
-            ];
-
-            propagatedBuildInputs = with pkgs.python3Packages; [
-              # Django and WSGI server
-              django
-              gunicorn
-              django-extensions
-              django-import-export
-              whitenoise
-
-              # Core dependencies
-              pandas
-              requests
-              reportlab
-              qrcode
-              python-barcode
-              pillow
-              python-dotenv
-              click
-
-              # LDAP authentication
-              ldap3
-              asgiref
-
-              # Google Admin SDK
-              google-api-python-client
-              google-auth
-              google-auth-httplib2
-              google-auth-oauthlib
-            ];
-
-            postInstall = ''
-                            SITE_PACKAGES=$out/lib/${pkgs.python3.libPrefix}/site-packages
-
-                            # Copy Django project settings
-                            mkdir -p $SITE_PACKAGES/rtutils
-                            cp -r rtutils/* $SITE_PACKAGES/rtutils/
-
-                            # Copy all Django apps
-                            mkdir -p $SITE_PACKAGES/apps
-                            cp -r apps/* $SITE_PACKAGES/apps/
-
-                            # Copy common utilities
-                            mkdir -p $SITE_PACKAGES/common
-                            cp -r common/* $SITE_PACKAGES/common/
-
-                            # Copy manage.py
-                            cp manage.py $SITE_PACKAGES/
-
-                            # Copy all templates (project-level and app-level)
-                            mkdir -p $SITE_PACKAGES/templates
-                            if [ -d templates ]; then
-                              cp -r templates/* $SITE_PACKAGES/templates/
-                            fi
-
-                            # Copy all static files
-                            mkdir -p $SITE_PACKAGES/static
-                            if [ -d static ]; then
-                              cp -r static/* $SITE_PACKAGES/static/
-                            fi
-
-                            # Copy app-specific static files
-                            for app in apps/*/static; do
-                              if [ -d "$app" ]; then
-                                cp -r "$app"/* $SITE_PACKAGES/static/
-                              fi
-                            done
-
-                            # Create a runtime wrapper that sets PYTHONPATH to include all dependencies
-                            # This ensures manage.py and gunicorn can import all required modules.
-                            mkdir -p $out/bin
-                            cat > $out/bin/rtutils-python <<'RTPY'
-              #!/bin/sh
-              PYTHONPATH="${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.gunicorn}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-extensions}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.django-import-export}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.whitenoise}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pandas}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.requests}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.reportlab}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.qrcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-barcode}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.pillow}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.python-dotenv}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.click}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.ldap3}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.asgiref}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-api-python-client}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-httplib2}/lib/${pkgs.python3.libPrefix}/site-packages:${pkgs.python3Packages.google-auth-oauthlib}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH"
-              export PYTHONPATH
-              exec ${pkgs.python3}/bin/python "$@"
-              RTPY
-                            chmod +x $out/bin/rtutils-python
-
-                            # Set proper permissions
-                            chmod -R +r $SITE_PACKAGES
-            '';
-
-            meta = with pkgs.lib; {
-              description = "Django application for Request Tracker asset management";
-              license = lib.licenses.mit;
-              maintainers = [ ];
-            };
-          };
+          default = requestTrackerPackage;
         };
       }
     );
