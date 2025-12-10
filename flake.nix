@@ -15,7 +15,7 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        pkgs = import nixpkgs { 
+        pkgs = import nixpkgs {
           inherit system;
           config.allowBroken = true;
         };
@@ -110,7 +110,10 @@
                 };
                 allowedHosts = lib.mkOption {
                   type = lib.types.listOf lib.types.str;
-                  default = [ "localhost" "127.0.0.1" ];
+                  default = [
+                    "localhost"
+                    "127.0.0.1"
+                  ];
                   description = "Django ALLOWED_HOSTS setting.";
                 };
               };
@@ -121,25 +124,31 @@
                   description = "Django Request Tracker Utils service (Gunicorn)";
                   after = [ "network.target" ];
                   wantedBy = [ "multi-user.target" ];
-                  
+
                   preStart = ''
                     # Create necessary directories
                     mkdir -p ${config.services.requestTrackerUtils.workingDirectory}/{static,media,logs}
-                    
+
                     # Set PYTHONPATH to include the installed package location
-                    export PYTHONPATH=${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
-                    
+                    export PYTHONPATH=${
+                      self.packages.${system}.default
+                    }/lib/${pkgs.python3.libPrefix}/site-packages:$PYTHONPATH
+
                     # Run Django migrations
                     cd ${config.services.requestTrackerUtils.workingDirectory}
-                    ${self.packages.${system}.default}/bin/python ${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages/manage.py migrate --noinput
-                    
+                    ${self.packages.${system}.default}/bin/python ${
+                      self.packages.${system}.default
+                    }/lib/${pkgs.python3.libPrefix}/site-packages/manage.py migrate --noinput
+
                     # Collect static files
-                    ${self.packages.${system}.default}/bin/python ${self.packages.${system}.default}/lib/${pkgs.python3.libPrefix}/site-packages/manage.py collectstatic --noinput --clear
-                    
+                    ${self.packages.${system}.default}/bin/python ${
+                      self.packages.${system}.default
+                    }/lib/${pkgs.python3.libPrefix}/site-packages/manage.py collectstatic --noinput --clear
+
                     # Set proper permissions
                     chown -R ${config.services.requestTrackerUtils.user}:${config.services.requestTrackerUtils.group} ${config.services.requestTrackerUtils.workingDirectory}
                   '';
-                  
+
                   serviceConfig = {
                     ExecStart = ''
                       ${self.packages.${system}.default}/bin/gunicorn \
@@ -151,7 +160,7 @@
                         --log-level info \
                         rtutils.wsgi:application
                     '';
-                    
+
                     WorkingDirectory = config.services.requestTrackerUtils.workingDirectory;
                     Environment = [
                       "DJANGO_SETTINGS_MODULE=rtutils.settings"
@@ -172,7 +181,7 @@
                     RestartSec = "10s";
                     User = config.services.requestTrackerUtils.user;
                     Group = config.services.requestTrackerUtils.group;
-                    
+
                     # Security hardening
                     NoNewPrivileges = true;
                     PrivateTmp = true;
@@ -222,7 +231,7 @@
               django
               gunicorn
               django-extensions
-              
+
               # Core dependencies
               pandas
               requests
@@ -232,10 +241,10 @@
               pillow
               python-dotenv
               click
-              
+
               # LDAP authentication
               ldap3
-              
+
               # Google Admin SDK
               google-api-python-client
               google-auth
@@ -245,41 +254,41 @@
 
             postInstall = ''
               SITE_PACKAGES=$out/lib/${pkgs.python3.libPrefix}/site-packages
-              
+
               # Copy Django project settings
               mkdir -p $SITE_PACKAGES/rtutils
               cp -r rtutils/* $SITE_PACKAGES/rtutils/
-              
+
               # Copy all Django apps
               mkdir -p $SITE_PACKAGES/apps
               cp -r apps/* $SITE_PACKAGES/apps/
-              
+
               # Copy common utilities
               mkdir -p $SITE_PACKAGES/common
               cp -r common/* $SITE_PACKAGES/common/
-              
+
               # Copy manage.py
               cp manage.py $SITE_PACKAGES/
-              
+
               # Copy all templates (project-level and app-level)
               mkdir -p $SITE_PACKAGES/templates
               if [ -d templates ]; then
                 cp -r templates/* $SITE_PACKAGES/templates/
               fi
-              
+
               # Copy all static files
               mkdir -p $SITE_PACKAGES/static
               if [ -d static ]; then
                 cp -r static/* $SITE_PACKAGES/static/
               fi
-              
+
               # Copy app-specific static files
               for app in apps/*/static; do
                 if [ -d "$app" ]; then
                   cp -r "$app"/* $SITE_PACKAGES/static/
                 fi
               done
-              
+
               # Set proper permissions
               chmod -R +r $SITE_PACKAGES
             '';
