@@ -136,12 +136,12 @@
 
                     # Run Django migrations
                     cd ${config.services.requestTrackerUtils.workingDirectory}
-                    ${self.packages.${system}.default}/bin/python ${
+                    ${pkgs.python3}/bin/python ${
                       self.packages.${system}.default
                     }/lib/${pkgs.python3.libPrefix}/site-packages/manage.py migrate --noinput
 
                     # Collect static files
-                    ${self.packages.${system}.default}/bin/python ${
+                    ${pkgs.python3}/bin/python ${
                       self.packages.${system}.default
                     }/lib/${pkgs.python3.libPrefix}/site-packages/manage.py collectstatic --noinput --clear
 
@@ -151,7 +151,7 @@
 
                   serviceConfig = {
                     ExecStart = ''
-                      ${self.packages.${system}.default}/bin/gunicorn \
+                      ${pkgs.python3Packages.gunicorn}/bin/gunicorn \
                         --bind ${config.services.requestTrackerUtils.host}:${toString config.services.requestTrackerUtils.port} \
                         --workers ${toString config.services.requestTrackerUtils.workers} \
                         --timeout 120 \
