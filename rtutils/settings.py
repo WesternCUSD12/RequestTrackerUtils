@@ -197,7 +197,15 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+STATIC_ROOT = Path(os.environ.get('STATIC_ROOT', Path(WORKING_DIR) / 'static'))
+_maybe_static_dir = BASE_DIR / 'static'
+if _maybe_static_dir.exists() and _maybe_static_dir.resolve() != STATIC_ROOT.resolve():
+    STATICFILES_DIRS = [_maybe_static_dir]
+else:
+    STATICFILES_DIRS = []
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', Path(WORKING_DIR) / 'media'))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
