@@ -21,21 +21,12 @@ load_dotenv()
 from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN  # noqa: E402
 
 # Create a Flask app context for testing
-from flask import Flask  # noqa: E402
-app = Flask(__name__)
-app.config.update({
-    'RT_URL': RT_URL,
-    'API_ENDPOINT': API_ENDPOINT,
-    'RT_TOKEN': RT_TOKEN,
-    'INSTANCE_PATH': os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'instance')
-})
-
-# Set up the app context
-ctx = app.app_context()
-ctx.push()
-
-# Now import the sync function that needs Flask context
-from scripts.update_rt_user_custom_fields import sync_student_data_to_rt  # noqa: E402
+"""
+This scheduled sync script previously created a Flask app context.
+Flask has been removed from the project. If you still need to run
+scheduled syncs outside Django, convert this to use `django.setup()`
+and call the appropriate management commands.
+"""
 
 # Configure logging to file
 log_dir = Path(os.environ.get('LOG_DIR') or (Path.home() / '.rtutils' / 'logs'))

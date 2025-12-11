@@ -14,16 +14,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN
 from request_tracker_utils.utils.rt_api import search_assets, fetch_asset_data
 
-# Create Flask app context for RT utils
-from flask import Flask
-app = Flask(__name__)
-app.config.update({
-    'RT_URL': os.environ.get('RT_URL') or RT_URL,
-    'API_ENDPOINT': os.environ.get('API_ENDPOINT') or API_ENDPOINT,
-    'RT_TOKEN': os.environ.get('RT_TOKEN') or RT_TOKEN
-})
-ctx = app.app_context()
-ctx.push()
+"""
+This utility previously used Flask for context. Flask was removed; convert
+to `django.setup()` if this script is still required.
+"""
 
 def inspect_asset():
     """Inspect asset custom fields."""

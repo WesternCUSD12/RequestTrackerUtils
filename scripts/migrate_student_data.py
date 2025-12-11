@@ -6,16 +6,16 @@ This script imports data from JSON files in both the standard and instance paths
 
 import os
 import sys
+import os
+import sys
 import json
 import glob
 import logging
 from pathlib import Path
-from flask import Flask
-
-# Add parent directory to path so we can import request_tracker_utils modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from request_tracker_utils.utils.db import get_db_connection, init_db
-from request_tracker_utils.config import WORKING_DIR
+# Remove Flask import and usage
+# Flask has been removed from the project. Replace this with a Django
+# management command or call through `django.setup()` when needed.
 
 # Configure logging
 logging.basicConfig(
@@ -88,9 +88,8 @@ def import_student_json_file(file_path):
                         # Insert new student
                         cursor.execute("""
                             INSERT INTO students (
-                                id, first_name, last_name, grade, rt_user_id,
-                                device_checked_in, check_in_date
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                                # Ensure database is initialized
+                                init_db()
                         """, (
                             student_id,
                             student_data.get('first_name'),

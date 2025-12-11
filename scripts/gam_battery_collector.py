@@ -17,16 +17,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN
 from request_tracker_utils.utils.rt_api import search_assets, update_asset_custom_field
 
-# Create Flask app context for RT utils
-from flask import Flask
-app = Flask(__name__)
-app.config.update({
-    'RT_URL': os.environ.get('RT_URL') or RT_URL,
-    'API_ENDPOINT': os.environ.get('API_ENDPOINT') or API_ENDPOINT,
-    'RT_TOKEN': os.environ.get('RT_TOKEN') or RT_TOKEN
-})
-ctx = app.app_context()
-ctx.push()
+# This script previously created a Flask app context for RT utils.
+# Flask was removed from the project; convert this script to use
+# Django (`django.setup()`) and the Django settings if you need similar
+# functionality.
 
 def collect_battery_data(gam_path='gam', gam_cmd=None):
     """

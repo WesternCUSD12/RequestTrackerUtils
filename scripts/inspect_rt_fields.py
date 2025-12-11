@@ -15,15 +15,11 @@ from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN
 from request_tracker_utils.utils.rt_api import search_assets, rt_api_request
 
 # Create Flask app context for RT utils
-from flask import Flask
-app = Flask(__name__)
-app.config.update({
-    'RT_URL': os.environ.get('RT_URL') or RT_URL,
-    'API_ENDPOINT': os.environ.get('API_ENDPOINT') or API_ENDPOINT,
-    'RT_TOKEN': os.environ.get('RT_TOKEN') or RT_TOKEN
-})
-ctx = app.app_context()
-ctx.push()
+"""
+This tool previously used Flask to provide an app context for RT API helpers.
+Flask has been removed. Convert to `django.setup()` and call management
+commands or RT API helpers via Django settings where needed.
+"""
 
 def inspect_asset_fields():
     """Inspect what custom fields exist on an RT asset."""

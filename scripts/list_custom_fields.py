@@ -14,16 +14,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN
 from request_tracker_utils.utils.rt_api import rt_api_request
 
-# Create Flask app context for RT utils
-from flask import Flask
-app = Flask(__name__)
-app.config.update({
-    'RT_URL': os.environ.get('RT_URL') or RT_URL,
-    'API_ENDPOINT': os.environ.get('API_ENDPOINT') or API_ENDPOINT,
-    'RT_TOKEN': os.environ.get('RT_TOKEN') or RT_TOKEN
-})
-ctx = app.app_context()
-ctx.push()
+# Removed Flask dependency: use Django setup or `manage.py` commands instead
+# Flask has been removed from the project. If you need similar functionality,
+# convert this script into a Django management command or bootstrap Django
+# with `django.setup()` and call the RT helpers using Django settings.
 
 def list_custom_fields():
     """List all custom fields in RT."""

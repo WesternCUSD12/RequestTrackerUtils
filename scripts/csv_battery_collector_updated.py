@@ -6,10 +6,12 @@ Updated to filter for WHS-C prefix devices only (changed from W12-CH).
 """
 import csv
 import sys
-import logging
-import os
-import argparse
-from pathlib import Path
+
+"""
+CSV battery collector previously relied on a Flask app context. Flask has
+been removed; turn this into a Django management command or use
+`django.setup()` if you need to run it outside the web app.
+"""
 
 # Ensure RT utils are on the path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -18,16 +20,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN
 from request_tracker_utils.utils.rt_api import search_assets, update_asset_custom_field
 
-# Create Flask app context for RT utils
-from flask import Flask
-app = Flask(__name__)
-app.config.update({
-    'RT_URL': os.environ.get('RT_URL') or RT_URL,
-    'API_ENDPOINT': os.environ.get('API_ENDPOINT') or API_ENDPOINT,
-    'RT_TOKEN': os.environ.get('RT_TOKEN') or RT_TOKEN
-})
-ctx = app.app_context()
-ctx.push()
 
 def read_battery_data_from_csv(csv_path):
     """

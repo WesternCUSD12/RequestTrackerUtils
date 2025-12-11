@@ -23,21 +23,13 @@ load_dotenv()
 from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN  # noqa: E402
 from request_tracker_utils.utils.rt_api import fetch_user_data, update_user_custom_field  # noqa: E402
 
-# Create a Flask app context for testing
-from flask import Flask  # noqa: E402
-app = Flask(__name__)
-app.config.update({
-    'RT_URL': RT_URL,
-    'API_ENDPOINT': API_ENDPOINT,
-    'RT_TOKEN': RT_TOKEN,
-    'INSTANCE_PATH': os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'instance')
-})
+# Flask was removed from the project. This script previously created a Flask
+# application context to use request_tracker_utils helpers. Convert to use
+# Django (`django.setup()`) and call the appropriate utilities or create a
+# management command under the Django project if you still need this behavior.
 
-# Set up the app context
-ctx = app.app_context()
-ctx.push()
-
-# Now import components that need Flask context
+# Now import components that need application context (ensure they don't
+# require Flask at import time when running under Django)
 from request_tracker_utils.utils.student_check_tracker import StudentDeviceTracker  # noqa: E402
 
 # Configure logging

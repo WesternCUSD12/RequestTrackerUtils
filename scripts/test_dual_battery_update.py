@@ -15,15 +15,10 @@ from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN
 from request_tracker_utils.utils.rt_api import search_assets, update_asset_custom_field
 
 # Create Flask app context for RT utils
-from flask import Flask
-app = Flask(__name__)
-app.config.update({
-    'RT_URL': os.environ.get('RT_URL') or RT_URL,
-    'API_ENDPOINT': os.environ.get('API_ENDPOINT') or API_ENDPOINT,
-    'RT_TOKEN': os.environ.get('RT_TOKEN') or RT_TOKEN
-})
-ctx = app.app_context()
-ctx.push()
+"""
+Dual-battery update test script removed Flask dependency. Convert to
+Django initialization (`django.setup()`) if you still need to run it.
+"""
 
 def test_dual_battery_update():
     """Test updating both battery fields for a single device."""

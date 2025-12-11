@@ -9,7 +9,6 @@ import csv
 import glob
 import logging
 from pathlib import Path
-from flask import Flask
 
 # Add parent directory to path so we can import request_tracker_utils modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,8 +22,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Create a minimal Flask app for the database context
-app = Flask(__name__, instance_path=WORKING_DIR)
 
 def import_csv_file(file_path):
     """Import a single CSV file into the database"""
@@ -38,9 +35,8 @@ def import_csv_file(file_path):
         
     date_str = filename[9:-4]  # Remove "checkins_" prefix and ".csv" suffix
     
-    with app.app_context():
-        # Ensure database is initialized
-        init_db()
+    # Ensure database is initialized
+    init_db()
         
         conn = get_db_connection()
         try:
@@ -113,6 +109,12 @@ def import_csv_file(file_path):
         finally:
             conn.close()
 
+"""
+This script used Flask to provide an application context for migration.
+Flask was removed from the project; convert this script to use Django
+(`django.setup()`) if you still need to run migrations outside of
+`manage.py migrate`.
+"""
 def find_csv_files(directories):
     """Find all check-in CSV files in the specified directories"""
     log_files = []

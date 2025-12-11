@@ -34,21 +34,12 @@ from request_tracker_utils.utils.google_admin import (  # noqa: E402
 )
 
 # Create a Flask app context for testing
-from flask import Flask  # noqa: E402
-app = Flask(__name__)
-app.config.update({
-    'RT_URL': RT_URL,
-    'API_ENDPOINT': API_ENDPOINT,
-    'RT_TOKEN': RT_TOKEN,
-    'INSTANCE_PATH': os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'instance'),
-    'GOOGLE_ADMIN_DOMAIN': os.environ.get('GOOGLE_ADMIN_DOMAIN'),
-    'GOOGLE_ADMIN_SUBJECT': os.environ.get('GOOGLE_ADMIN_SUBJECT'),
-    'GOOGLE_CREDENTIALS_FILE': os.environ.get('GOOGLE_CREDENTIALS_FILE')
-})
 
-# Set up the app context
-ctx = app.app_context()
-ctx.push()
+"""
+This script previously created a Flask app context for RT utils. Flask has
+been removed — convert to `django.setup()` or a Django management command
+if you still need scheduled synchronization outside the Django app.
+"""
 
 # Configure logging
 logging.basicConfig(

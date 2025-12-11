@@ -14,16 +14,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from request_tracker_utils.config import RT_URL, API_ENDPOINT, RT_TOKEN
 from request_tracker_utils.utils.rt_api import search_assets, update_asset_custom_field
 
-# Create Flask app context for RT utils
-from flask import Flask
-app = Flask(__name__)
-app.config.update({
-    'RT_URL': os.environ.get('RT_URL') or RT_URL,
-    'API_ENDPOINT': os.environ.get('API_ENDPOINT') or API_ENDPOINT,
-    'RT_TOKEN': os.environ.get('RT_TOKEN') or RT_TOKEN
-})
-ctx = app.app_context()
-ctx.push()
+# This script previously created a Flask app context to initialize RT helpers.
+# Flask has been removed from the project; if this script is still needed
+# convert it to initialize Django with `django.setup()` and use Django
+# settings or management commands instead.
 
 def categorize_battery_health(health_percentage, health_status):
     """Categorize battery health percentage into RT custom field values."""
