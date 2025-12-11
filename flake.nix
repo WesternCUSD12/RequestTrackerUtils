@@ -102,10 +102,14 @@
 
             # Provide a helper for manage.py that uses the packaged interpreter
             mkdir -p $out/bin
-            cat > $out/bin/rtutils-manage <<RTMANAGE
+            cat > $out/bin/rtutils-manage <<'RTMANAGE'
             #!/bin/sh
             SITE_PACKAGES="$out/lib/${pkgs.python3.libPrefix}/site-packages"
-            export PYTHONPATH="$SITE_PACKAGES${"PYTHONPATH:+:$PYTHONPATH"}"
+            if [ -n "$PYTHONPATH" ]; then
+              export PYTHONPATH="$SITE_PACKAGES:$PYTHONPATH"
+            else
+              export PYTHONPATH="$SITE_PACKAGES"
+            fi
             exec ${pkgs.python3}/bin/python "$SITE_PACKAGES/manage.py" "$@"
             RTMANAGE
             chmod +x $out/bin/rtutils-manage
