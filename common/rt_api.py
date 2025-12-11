@@ -11,16 +11,40 @@ from pathlib import Path
 
 # Flask/Django compatibility layer
 try:
+    # Prefer Flask if available, but be resilient when not running inside an app context
     from flask import current_app
+
     def get_config(key, default=None):
-        return current_app.config.get(key, default)
+        try:
+            return current_app.config.get(key, default)
+        except RuntimeError:
+            # Not in a Flask app context; fall back to Django settings if present
+            try:
+                from django.conf import settings as django_settings
+                return getattr(django_settings, key, default)
+            except Exception:
+                return default
+
     def get_logger():
-        return current_app.logger
-except ImportError:
-    # Django compatibility
-    from django.conf import settings as django_settings
+        try:
+            return current_app.logger
+        except RuntimeError:
+            # No Flask app context; use Django or standard logging
+            try:
+                import logging as _logging
+                return _logging.getLogger(__name__)
+            except Exception:
+                return logging.getLogger(__name__)
+except Exception:
+    # Django compatibility (or when Flask isn't installed)
+    try:
+        from django.conf import settings as django_settings
+    except Exception:
+        django_settings = None
+
     def get_config(key, default=None):
-        return getattr(django_settings, key, default)
+        return getattr(django_settings, key, default) if django_settings is not None else default
+
     def get_logger():
         return logging.getLogger(__name__)
 
