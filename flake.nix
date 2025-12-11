@@ -295,20 +295,10 @@
                   );
                 in
                 {
-                  assertions = [
-                    {
-                      assertion = config.services.requestTrackerUtils.rtToken != "";
-                      message = "services.requestTrackerUtils.rtToken must be set";
-                    }
-                    {
-                      assertion = config.services.requestTrackerUtils.ldapServer != "";
-                      message = "services.requestTrackerUtils.ldapServer must be set";
-                    }
-                    {
-                      assertion = config.services.requestTrackerUtils.ldapBaseDn != "";
-                      message = "services.requestTrackerUtils.ldapBaseDn must be set";
-                    }
-                  ];
+                  # Secrets (RT token, LDAP credentials, etc.) are expected to
+                  # be provided via the runtime `secretsFile` (sops) and are
+                  # sourced in `preStart` and ExecStart. Do not require them
+                  # at Nix evaluation time so secrets can remain out-of-band.
 
                   systemd.services.request-tracker-utils = {
                     description = "Django Request Tracker Utils service (Gunicorn)";
@@ -397,18 +387,11 @@
                           "ALLOWED_HOSTS=${lib.concatStringsSep "," config.services.requestTrackerUtils.allowedHosts}"
                           "STATIC_ROOT=${config.services.requestTrackerUtils.workingDirectory}/static"
                           "MEDIA_ROOT=${config.services.requestTrackerUtils.workingDirectory}/media"
-                          "RT_TOKEN=${config.services.requestTrackerUtils.rtToken}"
-                          "LDAP_SERVER=${config.services.requestTrackerUtils.ldapServer}"
-                          "LDAP_BASE_DN=${config.services.requestTrackerUtils.ldapBaseDn}"
-                          "LDAP_UPN_SUFFIX=${
-                            lib.optionalString (
-                              config.services.requestTrackerUtils.ldapUpnSuffix != null
-                            ) config.services.requestTrackerUtils.ldapUpnSuffix
-                          }"
-                          "LDAP_TECH_GROUP=${config.services.requestTrackerUtils.ldapTechGroup}"
-                          "LDAP_TEACHER_GROUP=${config.services.requestTrackerUtils.ldapTeacherGroup}"
-                          "LDAP_VERIFY_CERT=${if config.services.requestTrackerUtils.ldapVerifyCert then "true" else "false"}"
-                          "LDAP_TIMEOUT=${toString config.services.requestTrackerUtils.ldapTimeout}"
+                          # RT_TOKEN and LDAP settings are intentionally NOT
+                          # injected here from Nix options so they can remain
+                          # in the external `secretsFile` (sops) and sourced at
+                          # runtime. The service `preStart` step already sources
+                          # `${secretEnvFile}` and the optional `secretsFile`.
                           "PYTHONPATH=${pythonPath}"
                         ]
                         ++ lib.optional (
