@@ -41,5 +41,16 @@ LABEL_WIDTH_MM = int(os.getenv("LABEL_WIDTH_MM", 100))  # Default label width
 LABEL_HEIGHT_MM = int(os.getenv("LABEL_HEIGHT_MM", 62))  # Default label height
 PREFIX = os.getenv("PREFIX", "W12-")  # Default prefix for asset tags
 PADDING = int(os.getenv("PADDING", 4))  # Default padding for labels
-PORT = int(os.getenv("PORT", 8080))  # Default port for the Flask app
+def _get_env_int(name, default):
+    val = os.getenv(name)
+    if val is None:
+        return default
+    try:
+        # Strip quotes and whitespace that might be present when values are passed
+        cleaned = val.strip().strip('\"').strip("\'")
+        return int(cleaned)
+    except Exception:
+        return default
+
+PORT = _get_env_int('PORT', 8080)  # Default port for the Flask app
 RT_CATALOG = os.getenv("RT_CATALOG", "General assets")  # Default RT catalog for assets
