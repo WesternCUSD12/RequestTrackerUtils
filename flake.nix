@@ -264,23 +264,7 @@
                 };
               };
 
-              config = lib.mkIf config.services.requestTrackerUtils.enable {
-                assertions = [
-                  {
-                    assertion = config.services.requestTrackerUtils.rtToken != "";
-                    message = "services.requestTrackerUtils.rtToken must be set";
-                  }
-                  {
-                    assertion = config.services.requestTrackerUtils.ldapServer != "";
-                    message = "services.requestTrackerUtils.ldapServer must be set";
-                  }
-                  {
-                    assertion = config.services.requestTrackerUtils.ldapBaseDn != "";
-                    message = "services.requestTrackerUtils.ldapBaseDn must be set";
-                  }
-                ];
-
-                let
+              config = lib.mkIf config.services.requestTrackerUtils.enable (let
                   sitePkgs = "${requestTrackerPackage}/lib/${pkgs.python3.libPrefix}/site-packages";
                   manageBin = "${requestTrackerPackage}/bin/rtutils-manage";
                   secretEnvFile = "${config.services.requestTrackerUtils.workingDirectory}/secret.env";
@@ -308,7 +292,22 @@
                       google-auth-oauthlib
                     ])
                   );
-                in
+                in {
+                assertions = [
+                  {
+                    assertion = config.services.requestTrackerUtils.rtToken != "";
+                    message = "services.requestTrackerUtils.rtToken must be set";
+                  }
+                  {
+                    assertion = config.services.requestTrackerUtils.ldapServer != "";
+                    message = "services.requestTrackerUtils.ldapServer must be set";
+                  }
+                  {
+                    assertion = config.services.requestTrackerUtils.ldapBaseDn != "";
+                    message = "services.requestTrackerUtils.ldapBaseDn must be set";
+                  }
+                ];
+
                 systemd.services.request-tracker-utils = {
                   description = "Django Request Tracker Utils service (Gunicorn)";
                   after = [ "network.target" ];
