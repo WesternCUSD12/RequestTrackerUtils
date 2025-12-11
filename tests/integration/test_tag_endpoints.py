@@ -13,6 +13,9 @@ def app_with_temp_workdir(tmp_path, monkeypatch):
     # Override working dir in config
     app.config["WORKING_DIR"] = str(workdir)
 
+    # Enable testing mode so auth hooks are skipped in tests
+    app.testing = True
+
     # Monkeypatch RT API calls so tests don't rely on external services
     # Monkeypatch RT API calls so tests don't rely on external services
     try:
