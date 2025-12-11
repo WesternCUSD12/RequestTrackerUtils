@@ -346,8 +346,12 @@
                         ]
                         ++ secretLines
                         ++ [
-                          "chmod 640 ${secretEnvFile}"
-                          "chown ${user}:${group} ${secretEnvFile}"
+                          (lib.optionalString (config.services.requestTrackerUtils.secretsFile == null)
+                            "chmod 640 ${secretEnvFile}"
+                          )
+                          (lib.optionalString (config.services.requestTrackerUtils.secretsFile == null)
+                            "chown ${user}:${group} ${secretEnvFile}"
+                          )
                           "set -a"
                           "if [ -f ${secretEnvFile} ]; then . ${secretEnvFile}; fi"
                           "set +a"
