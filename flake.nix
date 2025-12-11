@@ -347,7 +347,7 @@
                         "chown ${user}:${group} ${secretEnvFile}"
                         "set -a"
                         ". ${secretEnvFile}"
-                        ${lib.optionalString (config.services.requestTrackerUtils.secretsFile != null) "if [ -f ${config.services.requestTrackerUtils.secretsFile} ]; then . ${config.services.requestTrackerUtils.secretsFile}; fi"}
+                        lib.optionalString (config.services.requestTrackerUtils.secretsFile != null) "if [ -f ${config.services.requestTrackerUtils.secretsFile} ]; then . ${config.services.requestTrackerUtils.secretsFile}; fi"
                         "set +a"
                         "export PYTHONPATH=${pythonPath}"
                         "cd ${workDir}"
