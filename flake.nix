@@ -323,7 +323,7 @@
                           if config.services.requestTrackerUtils.secretsFile != null then
                             [
                               # Decrypt and source the secrets using bash so process-substitution works.
-                              "${pkgs.bash}/bin/bash -c 'set -a; if ${pkgs.sops}/bin/sops -d ${config.services.requestTrackerUtils.secretsFile} >/dev/null 2>&1; then . <(${pkgs.sops}/bin/sops -d ${config.services.requestTrackerUtils.secretsFile}); else echo \"sops decryption failed\" >&2; fi; set +a'"
+                              "${pkgs.bash}/bin/bash -c 'set -a; \n                              if [ -f ${config.services.requestTrackerUtils.secretsFile} ]; then \n                                sed -E \"s/^[[:space:]]*([^=[:space:]]+)[[:space:]]*=[[:space:]]*(.*)$/\\1=\\2/; /^\\s*#/d\" ${config.services.requestTrackerUtils.secretsFile} | . /dev/stdin; \n                              elif ${pkgs.sops}/bin/sops -d ${config.services.requestTrackerUtils.secretsFile} >/dev/null 2>&1; then \n                                ${pkgs.sops}/bin/sops -d ${config.services.requestTrackerUtils.secretsFile} | sed -E \"s/^[[:space:]]*([^=[:space:]]+)[[:space:]]*=[[:space:]]*(.*)$/\\1=\\2/; /^\\s*#/d\" | . /dev/stdin; \n                              else \n                                echo \"sops decryption failed\" >&2; \n                              fi; set +a'"
                             ] else if providedSecret == null then
                             [
                               "${pkgs.python3}/bin/python - <<'PY' > ${secretEnvFile}"
