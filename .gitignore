@@ -252,3 +252,9 @@ syncthing-folder*
 google-credentials.json
 .gemini/
 gha-creds-*.json
+
+# Local test workdirs and outputs from `scripts/local_prestart.sh`
+.local-test-workdir*
+collect.out
+migrate.out
+secret.env

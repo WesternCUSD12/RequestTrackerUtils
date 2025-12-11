@@ -64,57 +64,53 @@
           ];
 
           postInstall = ''
-            SITE_PACKAGES=$out/lib/${pkgs.python3.libPrefix}/site-packages
+                        SITE_PACKAGES=$out/lib/${pkgs.python3.libPrefix}/site-packages
 
-            # Copy Django project settings
-            mkdir -p $SITE_PACKAGES/rtutils
-            cp -r rtutils/* $SITE_PACKAGES/rtutils/
+                        # Copy Django project settings
+                        mkdir -p $SITE_PACKAGES/rtutils
+                        cp -r rtutils/* $SITE_PACKAGES/rtutils/
 
-            # Copy all Django apps
-            mkdir -p $SITE_PACKAGES/apps
-            cp -r apps/* $SITE_PACKAGES/apps/
+                        # Copy all Django apps
+                        mkdir -p $SITE_PACKAGES/apps
+                        cp -r apps/* $SITE_PACKAGES/apps/
 
-            # Copy common utilities
-            mkdir -p $SITE_PACKAGES/common
-            cp -r common/* $SITE_PACKAGES/common/
+                        # Copy common utilities
+                        mkdir -p $SITE_PACKAGES/common
+                        cp -r common/* $SITE_PACKAGES/common/
 
-            # Copy manage.py
-            cp manage.py $SITE_PACKAGES/
+                        # Copy manage.py
+                        cp manage.py $SITE_PACKAGES/
 
-            # Copy all templates (project-level and app-level)
-            mkdir -p $SITE_PACKAGES/templates
-            if [ -d templates ]; then
-              cp -r templates/* $SITE_PACKAGES/templates/
-            fi
+                        # Copy all templates (project-level and app-level)
+                        mkdir -p $SITE_PACKAGES/templates
+                        if [ -d templates ]; then
+                          cp -r templates/* $SITE_PACKAGES/templates/
+                        fi
 
-            # Copy all static files
-            mkdir -p $SITE_PACKAGES/static
-            if [ -d static ]; then
-              cp -r static/* $SITE_PACKAGES/static/
-            fi
+                        # Copy all static files
+                        mkdir -p $SITE_PACKAGES/static
+                        if [ -d static ]; then
+                          cp -r static/* $SITE_PACKAGES/static/
+                        fi
 
-            # Copy app-specific static files
-            for app in apps/*/static; do
-              if [ -d "$app" ]; then
-                cp -r "$app"/* $SITE_PACKAGES/static/
-              fi
-            done
+                        # Copy app-specific static files
+                        for app in apps/*/static; do
+                          if [ -d "$app" ]; then
+                            cp -r "$app"/* $SITE_PACKAGES/static/
+                          fi
+                        done
 
-            # Provide a helper for manage.py that uses the packaged interpreter
-            mkdir -p $out/bin
-            cat > $out/bin/rtutils-manage <<'RTMANAGE'
-            #!/bin/sh
-            SITE_PACKAGES="$out/lib/${pkgs.python3.libPrefix}/site-packages"
-            if [ -n "$PYTHONPATH" ]; then
-              export PYTHONPATH="$SITE_PACKAGES:$PYTHONPATH"
-            else
-              export PYTHONPATH="$SITE_PACKAGES"
-            fi
-            exec ${pkgs.python3}/bin/python "$SITE_PACKAGES/manage.py" "$@"
-            RTMANAGE
-            chmod +x $out/bin/rtutils-manage
+                        # Provide a helper for manage.py that uses the packaged interpreter
+                        mkdir -p $out/bin
+                        # Render the wrapper from the template in the source tree.
+                        mkdir -p $out/bin
+                        sed \
+                          -e "s|@SITE_PACKAGES@|$out/lib/${pkgs.python3.libPrefix}/site-packages|g" \
+                          -e "s|@PYTHON_BIN@|${pkgs.python3}/bin/python|g" \
+                          ${./scripts/rtutils-manage.template} > $out/bin/rtutils-manage
+                        chmod +x $out/bin/rtutils-manage
 
-            chmod -R +r $SITE_PACKAGES
+                        chmod -R +r $SITE_PACKAGES
           '';
 
           meta = with pkgs.lib; {
@@ -312,6 +308,8 @@
                     environment.PATH = lib.mkForce "${pkgs.lib.makeBinPath [
                       requestTrackerPackage
                       pkgs.python3
+                      pkgs.coreutils
+                      pkgs.bash
                     ]}";
 
                     preStart =
@@ -348,7 +346,8 @@
                           "set -a"
                           ". ${secretEnvFile}"
                           (lib.optionalString (config.services.requestTrackerUtils.secretsFile != null)
-                            "if [ -f ${config.services.requestTrackerUtils.secretsFile} ]; then . ${config.services.requestTrackerUtils.secretsFile}; fi")
+                            "if [ -f ${config.services.requestTrackerUtils.secretsFile} ]; then . ${config.services.requestTrackerUtils.secretsFile}; fi"
+                          )
                           "set +a"
                           "export PYTHONPATH=${pythonPath}"
                           "cd ${workDir}"
