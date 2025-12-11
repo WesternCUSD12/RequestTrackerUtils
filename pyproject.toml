@@ -8,7 +8,6 @@ requires-python = ">=3.11"
 dependencies = [
     "pandas>=1.5.0",
     "requests>=2.28.0",
-    "Flask>=2.2",
     "django>=4.2,<5.0",
     "django-extensions>=3.2",
     "django-import-export>=3.3.0",
@@ -31,13 +30,13 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
-request-tracker-utils = "request_tracker_utils:main"
+
 
 [tool.setuptools.packages.find]
-include = ["request_tracker_utils"]
+include = ["rtutils", "apps", "common"]
 
 [tool.setuptools.package-data]
-"request_tracker_utils" = ["data/*.csv"]
+"rtutils" = ["templates/*", "static/*"]
 
 [tool.pyright]
 reportUnknownParameterType = "none"
