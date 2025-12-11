@@ -1,0 +1,8 @@
+#!/bin/sh
+SITE_PACKAGES="@SITE_PACKAGES@"
+if [ -n "$PYTHONPATH" ]; then
+  export PYTHONPATH="$SITE_PACKAGES:$PYTHONPATH"
+else
+  export PYTHONPATH="$SITE_PACKAGES"
+fi
+exec @PYTHON_BIN@ "$SITE_PACKAGES/manage.py" "$@"
