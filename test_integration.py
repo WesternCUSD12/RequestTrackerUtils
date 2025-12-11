@@ -17,44 +17,12 @@ def test_integration():
     """Test the integration between device check-in and student tracking"""
     
     # Create a test Flask app context
-    app = Flask(__name__)
-    
-    with app.app_context():
-        try:
-            # Create a temporary directory for testing
-            with tempfile.TemporaryDirectory() as temp_dir:
-                app.config['INSTANCE_PATH'] = temp_dir
-                
-                # Initialize the tracker
-                tracker = StudentDeviceTracker(data_dir=temp_dir)
-                
-                print("✓ StudentDeviceTracker initialized successfully")
-                
-                # Test getting student from asset (this will return None for non-existent asset)
-                student = tracker.get_student_from_asset("TEST-ASSET-123")
-                if student is None:
-                    print("✓ get_student_from_asset correctly returns None for non-existent asset")
-                else:
-                    print(f"✓ Found student: {student}")
-                
-                # Test that the methods exist and are callable
-                if hasattr(tracker, 'get_student_from_asset'):
-                    print("✓ get_student_from_asset method exists")
-                
-                if hasattr(tracker, 'mark_device_checked_in'):
-                    print("✓ mark_device_checked_in method exists")
-                
-                print("\n✅ Integration test completed successfully!")
-                print("The device check-in process will now automatically:")
-                print("1. Look up students by asset ID when devices are checked in")
-                print("2. Mark those students as checked in with device details")
-                print("3. Provide feedback in the UI about student updates")
-                
-        except Exception as e:
-            print(f"❌ Integration test failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
+    """
+    Integration tests that depended on Flask were removed when this repository
+    was transitioned to a Django-only project. If you need similar integration
+    tests, convert them to use Django's test client (`django.test.Client`) or
+    pytest-django fixtures.
+    """
     
     return True
 
