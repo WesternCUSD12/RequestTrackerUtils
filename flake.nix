@@ -105,7 +105,7 @@
             cat > $out/bin/rtutils-manage <<RTMANAGE
             #!/bin/sh
             SITE_PACKAGES="$out/lib/${pkgs.python3.libPrefix}/site-packages"
-            export PYTHONPATH="$SITE_PACKAGES${PYTHONPATH:+:$PYTHONPATH}"
+            export PYTHONPATH="$SITE_PACKAGES${"PYTHONPATH:+:$PYTHONPATH"}"
             exec ${pkgs.python3}/bin/python "$SITE_PACKAGES/manage.py" "$@"
             RTMANAGE
             chmod +x $out/bin/rtutils-manage
@@ -264,7 +264,8 @@
                 };
               };
 
-              config = lib.mkIf config.services.requestTrackerUtils.enable (let
+              config = lib.mkIf config.services.requestTrackerUtils.enable (
+                let
                   sitePkgs = "${requestTrackerPackage}/lib/${pkgs.python3.libPrefix}/site-packages";
                   manageBin = "${requestTrackerPackage}/bin/rtutils-manage";
                   secretEnvFile = "${config.services.requestTrackerUtils.workingDirectory}/secret.env";
@@ -292,140 +293,157 @@
                       google-auth-oauthlib
                     ])
                   );
-                in {
-                assertions = [
-                  {
-                    assertion = config.services.requestTrackerUtils.rtToken != "";
-                    message = "services.requestTrackerUtils.rtToken must be set";
-                  }
-                  {
-                    assertion = config.services.requestTrackerUtils.ldapServer != "";
-                    message = "services.requestTrackerUtils.ldapServer must be set";
-                  }
-                  {
-                    assertion = config.services.requestTrackerUtils.ldapBaseDn != "";
-                    message = "services.requestTrackerUtils.ldapBaseDn must be set";
-                  }
-                ];
-
-                systemd.services.request-tracker-utils = {
-                  description = "Django Request Tracker Utils service (Gunicorn)";
-                  after = [ "network.target" ];
-                  wantedBy = [ "multi-user.target" ];
-
-                  environment.PATH = lib.mkForce "${pkgs.lib.makeBinPath [
-                    requestTrackerPackage
-                    pkgs.python3
-                  ]}";
-
-                  preStart =
-                    let
-                      workDir = config.services.requestTrackerUtils.workingDirectory;
-                      user = config.services.requestTrackerUtils.user;
-                      group = config.services.requestTrackerUtils.group;
-                      providedSecret = config.services.requestTrackerUtils.secretKey;
-                      secretLines = if providedSecret == null then [
-                        "${pkgs.python3}/bin/python - <<'PY' > ${secretEnvFile}"
-                        "import secrets, string"
-                        "alphabet = string.ascii_letters + string.digits + '!@#$%^&*(-_=+)'"
-                        "key = ''.join(secrets.choice(alphabet) for _ in range(50))"
-                        "print(f'DJANGO_SECRET_KEY={key}')"
-                        "PY"
-                      ] else [
-                        "printf 'DJANGO_SECRET_KEY=%s\\n' '${providedSecret}' > ${secretEnvFile}"
-                      ];
-                    in
-                    (lib.concatStringsSep "\n" (
-                      [
-                        "mkdir -p ${workDir}/static"
-                        "mkdir -p ${workDir}/media"
-                        "mkdir -p ${workDir}/logs"
-                      ]
-                      ++ secretLines
-                      ++ [
-                        "chmod 640 ${secretEnvFile}"
-                        "chown ${user}:${group} ${secretEnvFile}"
-                        "set -a"
-                        ". ${secretEnvFile}"
-                        lib.optionalString (config.services.requestTrackerUtils.secretsFile != null) "if [ -f ${config.services.requestTrackerUtils.secretsFile} ]; then . ${config.services.requestTrackerUtils.secretsFile}; fi"
-                        "set +a"
-                        "export PYTHONPATH=${pythonPath}"
-                        "cd ${workDir}"
-                        "${manageBin} migrate --noinput"
-                        "${manageBin} collectstatic --noinput --clear"
-                        "chown -R ${user}:${group} ${workDir}"
-                      ]
-                    ))
-                    + "\n";
-
-                  serviceConfig =
-                    let
-                      gunicornBin = "${pkgs.python3Packages.gunicorn}/bin/gunicorn";
-                      host = config.services.requestTrackerUtils.host;
-                      port = toString config.services.requestTrackerUtils.port;
-                      workers = toString config.services.requestTrackerUtils.workers;
-                      workDir = config.services.requestTrackerUtils.workingDirectory;
-                      envSources = lib.concatStringsSep " " (
-                        [ "[ -f ${secretEnvFile} ] && . ${secretEnvFile}" ]
-                        ++ lib.optional (config.services.requestTrackerUtils.secretsFile != null) "[ -f ${config.services.requestTrackerUtils.secretsFile} ] && . ${config.services.requestTrackerUtils.secretsFile}"
-                      );
-                    in
+                in
+                {
+                  assertions = [
                     {
-                      ExecStart = "${pkgs.bash}/bin/bash -c 'set -a; ${envSources}; set +a; exec ${gunicornBin} --bind ${host}:${port} --workers ${workers} --timeout 120 --access-logfile ${workDir}/logs/access.log --error-logfile ${workDir}/logs/error.log --log-level info rtutils.wsgi:application'";
+                      assertion = config.services.requestTrackerUtils.rtToken != "";
+                      message = "services.requestTrackerUtils.rtToken must be set";
+                    }
+                    {
+                      assertion = config.services.requestTrackerUtils.ldapServer != "";
+                      message = "services.requestTrackerUtils.ldapServer must be set";
+                    }
+                    {
+                      assertion = config.services.requestTrackerUtils.ldapBaseDn != "";
+                      message = "services.requestTrackerUtils.ldapBaseDn must be set";
+                    }
+                  ];
 
-                      WorkingDirectory = config.services.requestTrackerUtils.workingDirectory;
-                      Environment = [
-                        "DJANGO_SETTINGS_MODULE=rtutils.settings"
-                        "WORKING_DIR=${config.services.requestTrackerUtils.workingDirectory}"
-                        "LABEL_WIDTH_MM=${toString config.services.requestTrackerUtils.labelWidthMm}"
-                        "LABEL_HEIGHT_MM=${toString config.services.requestTrackerUtils.labelHeightMm}"
-                        "RT_URL=${config.services.requestTrackerUtils.rtUrl}"
-                        "API_ENDPOINT=${config.services.requestTrackerUtils.apiEndpoint}"
-                        "PREFIX=${config.services.requestTrackerUtils.prefix}"
-                        "PADDING=${toString config.services.requestTrackerUtils.padding}"
-                        "DEBUG=${if config.services.requestTrackerUtils.debug then "True" else "False"}"
-                        "ALLOWED_HOSTS=${lib.concatStringsSep "," config.services.requestTrackerUtils.allowedHosts}"
-                        "STATIC_ROOT=${config.services.requestTrackerUtils.workingDirectory}/static"
-                        "MEDIA_ROOT=${config.services.requestTrackerUtils.workingDirectory}/media"
-                        "RT_TOKEN=${config.services.requestTrackerUtils.rtToken}"
-                        "LDAP_SERVER=${config.services.requestTrackerUtils.ldapServer}"
-                        "LDAP_BASE_DN=${config.services.requestTrackerUtils.ldapBaseDn}"
-                        "LDAP_UPN_SUFFIX=${lib.optionalString (config.services.requestTrackerUtils.ldapUpnSuffix != null) config.services.requestTrackerUtils.ldapUpnSuffix}"
-                        "LDAP_TECH_GROUP=${config.services.requestTrackerUtils.ldapTechGroup}"
-                        "LDAP_TEACHER_GROUP=${config.services.requestTrackerUtils.ldapTeacherGroup}"
-                        "LDAP_VERIFY_CERT=${if config.services.requestTrackerUtils.ldapVerifyCert then "true" else "false"}"
-                        "LDAP_TIMEOUT=${toString config.services.requestTrackerUtils.ldapTimeout}"
-                        "PYTHONPATH=${pythonPath}"
-                      ] ++ lib.optional (config.services.requestTrackerUtils.ldapCaCertFile != null) "LDAP_CA_CERT_FILE=${config.services.requestTrackerUtils.ldapCaCertFile}";
-                      Restart = "always";
-                      RestartSec = "10s";
-                      User = config.services.requestTrackerUtils.user;
-                      Group = config.services.requestTrackerUtils.group;
+                  systemd.services.request-tracker-utils = {
+                    description = "Django Request Tracker Utils service (Gunicorn)";
+                    after = [ "network.target" ];
+                    wantedBy = [ "multi-user.target" ];
 
-                      NoNewPrivileges = true;
-                      PrivateTmp = true;
-                      ProtectSystem = "strict";
-                      ProtectHome = true;
-                      ReadWritePaths = [ config.services.requestTrackerUtils.workingDirectory ];
-                    };
-                };
+                    environment.PATH = lib.mkForce "${pkgs.lib.makeBinPath [
+                      requestTrackerPackage
+                      pkgs.python3
+                    ]}";
 
-                users.users.${config.services.requestTrackerUtils.user} = {
-                  isSystemUser = true;
-                  group = config.services.requestTrackerUtils.group;
-                  home = config.services.requestTrackerUtils.workingDirectory;
-                  createHome = true;
-                };
+                    preStart =
+                      let
+                        workDir = config.services.requestTrackerUtils.workingDirectory;
+                        user = config.services.requestTrackerUtils.user;
+                        group = config.services.requestTrackerUtils.group;
+                        providedSecret = config.services.requestTrackerUtils.secretKey;
+                        secretLines =
+                          if providedSecret == null then
+                            [
+                              "${pkgs.python3}/bin/python - <<'PY' > ${secretEnvFile}"
+                              "import secrets, string"
+                              "alphabet = string.ascii_letters + string.digits + '!@#$%^&*(-_=+)'"
+                              "key = ''.join(secrets.choice(alphabet) for _ in range(50))"
+                              "print(f'DJANGO_SECRET_KEY={key}')"
+                              "PY"
+                            ]
+                          else
+                            [
+                              "printf 'DJANGO_SECRET_KEY=%s\\n' '${providedSecret}' > ${secretEnvFile}"
+                            ];
+                      in
+                      (lib.concatStringsSep "\n" (
+                        [
+                          "mkdir -p ${workDir}/static"
+                          "mkdir -p ${workDir}/media"
+                          "mkdir -p ${workDir}/logs"
+                        ]
+                        ++ secretLines
+                        ++ [
+                          "chmod 640 ${secretEnvFile}"
+                          "chown ${user}:${group} ${secretEnvFile}"
+                          "set -a"
+                          ". ${secretEnvFile}"
+                          lib.optionalString
+                          (config.services.requestTrackerUtils.secretsFile != null)
+                          "if [ -f ${config.services.requestTrackerUtils.secretsFile} ]; then . ${config.services.requestTrackerUtils.secretsFile}; fi"
+                          "set +a"
+                          "export PYTHONPATH=${pythonPath}"
+                          "cd ${workDir}"
+                          "${manageBin} migrate --noinput"
+                          "${manageBin} collectstatic --noinput --clear"
+                          "chown -R ${user}:${group} ${workDir}"
+                        ]
+                      ))
+                      + "\n";
 
-                users.groups.${config.services.requestTrackerUtils.group} = { };
+                    serviceConfig =
+                      let
+                        gunicornBin = "${pkgs.python3Packages.gunicorn}/bin/gunicorn";
+                        host = config.services.requestTrackerUtils.host;
+                        port = toString config.services.requestTrackerUtils.port;
+                        workers = toString config.services.requestTrackerUtils.workers;
+                        workDir = config.services.requestTrackerUtils.workingDirectory;
+                        envSources = lib.concatStringsSep " " (
+                          [ "[ -f ${secretEnvFile} ] && . ${secretEnvFile}" ]
+                          ++
+                            lib.optional (config.services.requestTrackerUtils.secretsFile != null)
+                              "[ -f ${config.services.requestTrackerUtils.secretsFile} ] && . ${config.services.requestTrackerUtils.secretsFile}"
+                        );
+                      in
+                      {
+                        ExecStart = "${pkgs.bash}/bin/bash -c 'set -a; ${envSources}; set +a; exec ${gunicornBin} --bind ${host}:${port} --workers ${workers} --timeout 120 --access-logfile ${workDir}/logs/access.log --error-logfile ${workDir}/logs/error.log --log-level info rtutils.wsgi:application'";
 
-                systemd.tmpfiles.rules = [
-                  "d ${config.services.requestTrackerUtils.workingDirectory} 0750 ${config.services.requestTrackerUtils.user} ${config.services.requestTrackerUtils.group} -"
-                  "d ${config.services.requestTrackerUtils.workingDirectory}/static 0755 ${config.services.requestTrackerUtils.user} ${config.services.requestTrackerUtils.group} -"
-                  "d ${config.services.requestTrackerUtils.workingDirectory}/media 0750 ${config.services.requestTrackerUtils.user} ${config.services.requestTrackerUtils.group} -"
-                  "d ${config.services.requestTrackerUtils.workingDirectory}/logs 0750 ${config.services.requestTrackerUtils.user} ${config.services.requestTrackerUtils.group} -"
-                ];
-              };
+                        WorkingDirectory = config.services.requestTrackerUtils.workingDirectory;
+                        Environment = [
+                          "DJANGO_SETTINGS_MODULE=rtutils.settings"
+                          "WORKING_DIR=${config.services.requestTrackerUtils.workingDirectory}"
+                          "LABEL_WIDTH_MM=${toString config.services.requestTrackerUtils.labelWidthMm}"
+                          "LABEL_HEIGHT_MM=${toString config.services.requestTrackerUtils.labelHeightMm}"
+                          "RT_URL=${config.services.requestTrackerUtils.rtUrl}"
+                          "API_ENDPOINT=${config.services.requestTrackerUtils.apiEndpoint}"
+                          "PREFIX=${config.services.requestTrackerUtils.prefix}"
+                          "PADDING=${toString config.services.requestTrackerUtils.padding}"
+                          "DEBUG=${if config.services.requestTrackerUtils.debug then "True" else "False"}"
+                          "ALLOWED_HOSTS=${lib.concatStringsSep "," config.services.requestTrackerUtils.allowedHosts}"
+                          "STATIC_ROOT=${config.services.requestTrackerUtils.workingDirectory}/static"
+                          "MEDIA_ROOT=${config.services.requestTrackerUtils.workingDirectory}/media"
+                          "RT_TOKEN=${config.services.requestTrackerUtils.rtToken}"
+                          "LDAP_SERVER=${config.services.requestTrackerUtils.ldapServer}"
+                          "LDAP_BASE_DN=${config.services.requestTrackerUtils.ldapBaseDn}"
+                          "LDAP_UPN_SUFFIX=${
+                            lib.optionalString (
+                              config.services.requestTrackerUtils.ldapUpnSuffix != null
+                            ) config.services.requestTrackerUtils.ldapUpnSuffix
+                          }"
+                          "LDAP_TECH_GROUP=${config.services.requestTrackerUtils.ldapTechGroup}"
+                          "LDAP_TEACHER_GROUP=${config.services.requestTrackerUtils.ldapTeacherGroup}"
+                          "LDAP_VERIFY_CERT=${if config.services.requestTrackerUtils.ldapVerifyCert then "true" else "false"}"
+                          "LDAP_TIMEOUT=${toString config.services.requestTrackerUtils.ldapTimeout}"
+                          "PYTHONPATH=${pythonPath}"
+                        ]
+                        ++ lib.optional (
+                          config.services.requestTrackerUtils.ldapCaCertFile != null
+                        ) "LDAP_CA_CERT_FILE=${config.services.requestTrackerUtils.ldapCaCertFile}";
+                        Restart = "always";
+                        RestartSec = "10s";
+                        User = config.services.requestTrackerUtils.user;
+                        Group = config.services.requestTrackerUtils.group;
+
+                        NoNewPrivileges = true;
+                        PrivateTmp = true;
+                        ProtectSystem = "strict";
+                        ProtectHome = true;
+                        ReadWritePaths = [ config.services.requestTrackerUtils.workingDirectory ];
+                      };
+                  };
+
+                  users.users.${config.services.requestTrackerUtils.user} = {
+                    isSystemUser = true;
+                    group = config.services.requestTrackerUtils.group;
+                    home = config.services.requestTrackerUtils.workingDirectory;
+                    createHome = true;
+                  };
+
+                  users.groups.${config.services.requestTrackerUtils.group} = { };
+
+                  systemd.tmpfiles.rules = [
+                    "d ${config.services.requestTrackerUtils.workingDirectory} 0750 ${config.services.requestTrackerUtils.user} ${config.services.requestTrackerUtils.group} -"
+                    "d ${config.services.requestTrackerUtils.workingDirectory}/static 0755 ${config.services.requestTrackerUtils.user} ${config.services.requestTrackerUtils.group} -"
+                    "d ${config.services.requestTrackerUtils.workingDirectory}/media 0750 ${config.services.requestTrackerUtils.user} ${config.services.requestTrackerUtils.group} -"
+                    "d ${config.services.requestTrackerUtils.workingDirectory}/logs 0750 ${config.services.requestTrackerUtils.user} ${config.services.requestTrackerUtils.group} -"
+                  ];
+                }
+              );
             };
         };
 
