@@ -310,6 +310,7 @@
                       pkgs.python3
                       pkgs.coreutils
                       pkgs.bash
+                      pkgs.sops
                     ]}";
 
                     preStart =
@@ -319,7 +320,14 @@
                         group = config.services.requestTrackerUtils.group;
                         providedSecret = config.services.requestTrackerUtils.secretKey;
                         secretLines =
-                          if providedSecret == null then
+                          if config.services.requestTrackerUtils.secretsFile != null then
+                            [
+                              # Do NOT move or copy the secrets file. Decrypt in-place and source
+                              # its output so secrets remain at their original path in the Nix store.
+                              "set -a"
+                              "if ${pkgs.sops}/bin/sops -d ${config.services.requestTrackerUtils.secretsFile} >/dev/null 2>&1; then . <(${pkgs.sops}/bin/sops -d ${config.services.requestTrackerUtils.secretsFile}); else echo 'sops decryption failed' >&2; fi"
+                              "set +a"
+                            ] else if providedSecret == null then
                             [
                               "${pkgs.python3}/bin/python - <<'PY' > ${secretEnvFile}"
                               "import secrets, string"
@@ -345,9 +353,7 @@
                           "chown ${user}:${group} ${secretEnvFile}"
                           "set -a"
                           ". ${secretEnvFile}"
-                          (lib.optionalString (config.services.requestTrackerUtils.secretsFile != null)
-                            "if [ -f ${config.services.requestTrackerUtils.secretsFile} ]; then . ${config.services.requestTrackerUtils.secretsFile}; fi"
-                          )
+                          # secretsFile is handled above (decrypted into ${secretEnvFile} when provided)
                           "set +a"
                           "export PYTHONPATH=${pythonPath}"
                           "cd ${workDir}"
