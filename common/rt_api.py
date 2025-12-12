@@ -53,8 +53,18 @@ class PersistentAssetCache:
         self.ttl = ttl
         self.lock = threading.RLock()
 
-        # Always use the fixed Nix/NixOS-compatible cache directory
-        cache_dir = Path("/var/lib/request_tracker_utils/cache")
+        # Use NixOS StateDirectory or XDG_STATE_HOME if available, else fallback
+        import os
+
+        state_dir = os.environ.get("STATE_DIRECTORY") or os.environ.get(
+            "XDG_STATE_HOME"
+        )
+        if state_dir:
+            cache_dir = Path(state_dir) / "cache"
+            logger.info(f"Using state directory for cache: {cache_dir}")
+        else:
+            cache_dir = Path("/var/lib/request-tracker-utils/cache")
+            logger.info(f"Using fallback cache directory: {cache_dir}")
         self.cache_file = cache_dir / "asset_cache.json"
 
         # Ensure cache directory exists
