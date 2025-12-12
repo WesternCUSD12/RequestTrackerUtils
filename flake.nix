@@ -32,7 +32,7 @@
           nativeBuildInputs = with pkgs.python3Packages; [
             setuptools
             wheel
-          ] ++ [ pkgs.make-wrapper ];
+          ] ++ [ pkgs.makeWrapper ];
 
           propagatedBuildInputs = with pkgs.python3Packages; [
             # Django and WSGI server
@@ -40,6 +40,7 @@
             gunicorn
             django-extensions
             django-import-export
+            tablib
             whitenoise
 
             # Core dependencies
@@ -51,6 +52,7 @@
             pillow
             python-dotenv
             click
+            sqlparse
 
             # LDAP authentication
             ldap3
@@ -104,7 +106,7 @@
                         mkdir -p $out/bin
                         makeWrapper ${pkgs.python3}/bin/python $out/bin/rtutils-manage \
                           --add-flags "$SITE_PACKAGES/manage.py" \
-                          --set PYTHONPATH "$SITE_PACKAGES"
+                          --prefix PYTHONPATH : "$SITE_PACKAGES"
 
 
                         chmod -R +r $SITE_PACKAGES
@@ -273,6 +275,7 @@
                       gunicorn
                       django-extensions
                       django-import-export
+                      tablib
                       whitenoise
                       pandas
                       requests
@@ -282,6 +285,7 @@
                       pillow
                       python-dotenv
                       click
+                      sqlparse
                       ldap3
                       asgiref
                       google-api-python-client
@@ -290,6 +294,19 @@
                       google-auth-oauthlib
                     ])
                   );
+
+                  generateSecretKeyScript = pkgs.writeScript "generate-secret-key" ''
+                    #!${pkgs.bash}/bin/bash
+                    set -e
+                    TEMP_ENV_FILE="$1"
+                    PYTHON_BIN="$2"
+
+                    if ! grep -q "^DJANGO_SECRET_KEY=" "$TEMP_ENV_FILE"; then
+                      echo "DJANGO_SECRET_KEY not found, generating a new one."
+                      GENERATED_KEY=$("$PYTHON_BIN" -c 'import secrets; print(secrets.token_urlsafe(40))')
+                      printf "DJANGO_SECRET_KEY=%s\n" "$GENERATED_KEY" >> "$TEMP_ENV_FILE"
+                    fi
+                  '';
                 in
                 {
                   # Secrets (RT token, LDAP credentials, etc.) are expected to
@@ -308,6 +325,8 @@
                       pkgs.coreutils
                       pkgs.bash
                       pkgs.sops
+                      pkgs.gnugrep
+                      pkgs.gnused
                     ]}";
 
                     preStart =
@@ -318,14 +337,12 @@
                         group = cfg.group;
                         envFile = "/run/${user}/secrets.env"; # The single source of truth for secrets
                       in
-                      lib.hermetic ''
+                      ''
                         set -e
                         echo "--- rtutils pre-start ---"
 
                         # 1. Prepare directories
-                        mkdir -p "${workDir}/static" "${workDir}/media" "${workDir}/logs" "/run/${user}"
-                        chown ''${user}:''${group} "/run/${user}"
-                        chmod 0700 "/run/${user}"
+                        mkdir -p "${workDir}/static" "${workDir}/media" "${workDir}/logs"
 
                         # 2. Prepare environment file
                         echo "Preparing environment file at ${envFile}"
@@ -343,12 +360,7 @@
                         ''}
 
                         # 3. Ensure DJANGO_SECRET_KEY exists, generating if needed.
-                        if ! grep -q "^DJANGO_SECRET_KEY=" "$tempEnvFile"; then
-                          echo "DJANGO_SECRET_KEY not found, generating a new one."
-                          # The key is safely quoted for shell sourcing.
-                          GENERATED_KEY=$(${pkgs.python3}/bin/python -c 'import secrets; print(secrets.token_urlsafe(40)')
-                          echo "DJANGO_SECRET_KEY=''$GENERATED_KEY''" >> "$tempEnvFile"
-                        fi
+                        "${generateSecretKeyScript}" "$tempEnvFile" "${pkgs.python3}/bin/python"
 
                         # 4. Finalize the environment file
                         mv "$tempEnvFile" "${envFile}"
@@ -356,8 +368,9 @@
                         chown ''${user}:''${group} "${envFile}"
 
                         # 5. Source the environment for pre-start tasks
+                        # Sanitize and source the environment file to handle .env formats
                         set -a
-                        source "${envFile}"
+                        source <(grep -v '^#' "${envFile}" | sed 's/[[:space:]]*=[[:space:]]*/=/g')
                         set +a
 
                         # 6. Run Django management commands
@@ -393,6 +406,7 @@
                         ExecStart = "${gunicornBin} --bind ${host}:${port} --workers ${workers} --timeout 120 --access-logfile ${workDir}/logs/access.log --error-logfile ${workDir}/logs/error.log --log-level info rtutils.wsgi:application";
 
                         WorkingDirectory = cfg.workingDirectory;
+                        RuntimeDirectory = "rtutils";
                         Environment = [
                           "DJANGO_SETTINGS_MODULE=rtutils.settings"
                           "WORKING_DIR=${cfg.workingDirectory}"
