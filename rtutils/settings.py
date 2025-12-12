@@ -21,68 +21,81 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-0t1_9rmkdza06+7y=om(9hdr7^oauo)+xqgywrfce!8lj9=7-i')
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-0t1_9rmkdza06+7y=om(9hdr7^oauo)+xqgywrfce!8lj9=7-i",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
+DEBUG = os.environ.get("DEBUG", "True").lower() in ("true", "1", "yes")
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost,0.0.0.0').split(',')
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost,0.0.0.0").split(
+    ","
+)
 
 # Working directory for database and other files
-WORKING_DIR = os.environ.get('WORKING_DIR', str(BASE_DIR))
+# Use NixOS-provided WORKING_DIR, or default to /var/lib/request-tracker-utils in production
+WORKING_DIR = os.environ.get(
+    "WORKING_DIR",
+    "/var/lib/request-tracker-utils"
+    if not os.environ.get("DEBUG", "True").lower() in ("true", "1", "yes")
+    else str(BASE_DIR),
+)
 
 # Request Tracker API Configuration
-RT_TOKEN = os.environ.get('RT_TOKEN')
+RT_TOKEN = os.environ.get("RT_TOKEN")
 if not RT_TOKEN:
     raise ValueError("RT_TOKEN environment variable is required")
 
-RT_URL = os.environ.get('RT_URL', 'https://tickets.wc-12.com')
-API_ENDPOINT = os.environ.get('API_ENDPOINT', '/REST/2.0')
+RT_URL = os.environ.get("RT_URL", "https://tickets.wc-12.com")
+API_ENDPOINT = os.environ.get("API_ENDPOINT", "/REST/2.0")
 
 # Label configuration
 LABEL_WIDTH_MM = 100
 LABEL_HEIGHT_MM = 62
-SMALL_LABEL_ASSET_TYPES = ['Charger', 'Power Adapter', 'Cable']
+SMALL_LABEL_ASSET_TYPES = ["Charger", "Power Adapter", "Cable"]
 
 # LDAP/Active Directory Configuration (Feature 006-ldap-auth)
-LDAP_SERVER = os.environ.get('LDAP_SERVER')  # Required: ldaps://dc.domain.com:636
-LDAP_BASE_DN = os.environ.get('LDAP_BASE_DN')  # Required: DC=domain,DC=com
-LDAP_UPN_SUFFIX = os.environ.get('LDAP_UPN_SUFFIX')  # Optional: UPN suffix (e.g., westerncusd12.org)
-LDAP_TECH_GROUP = os.environ.get('LDAP_TECH_GROUP', 'tech-team')
-LDAP_TEACHER_GROUP = os.environ.get('LDAP_TEACHER_GROUP', 'TEACHERS')
+LDAP_SERVER = os.environ.get("LDAP_SERVER")  # Required: ldaps://dc.domain.com:636
+LDAP_BASE_DN = os.environ.get("LDAP_BASE_DN")  # Required: DC=domain,DC=com
+LDAP_UPN_SUFFIX = os.environ.get(
+    "LDAP_UPN_SUFFIX"
+)  # Optional: UPN suffix (e.g., westerncusd12.org)
+LDAP_TECH_GROUP = os.environ.get("LDAP_TECH_GROUP", "tech-team")
+LDAP_TEACHER_GROUP = os.environ.get("LDAP_TEACHER_GROUP", "TEACHERS")
 
 # Optional LDAP Settings
-LDAP_VERIFY_CERT = os.environ.get('LDAP_VERIFY_CERT', 'true').lower() == 'true'
-LDAP_CA_CERT_FILE = os.environ.get('LDAP_CA_CERT_FILE')  # None = system default
-LDAP_TIMEOUT = int(os.environ.get('LDAP_TIMEOUT', '10'))
+LDAP_VERIFY_CERT = os.environ.get("LDAP_VERIFY_CERT", "true").lower() == "true"
+LDAP_CA_CERT_FILE = os.environ.get("LDAP_CA_CERT_FILE")  # None = system default
+LDAP_TIMEOUT = int(os.environ.get("LDAP_TIMEOUT", "10"))
 
 # Fail-fast validation for LDAP configuration
 if not LDAP_SERVER or not LDAP_BASE_DN:
     raise ValueError("LDAP_SERVER and LDAP_BASE_DN environment variables are required")
 
 # Authentication URLs
-LOGIN_URL = '/auth/login'
-LOGIN_REDIRECT_URL = '/'
-LOGOUT_REDIRECT_URL = '/auth/login'
+LOGIN_URL = "/auth/login"
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/auth/login"
 
 # Public paths (no authentication required)
 PUBLIC_PATHS = [
-    '/auth/login',
-    '/auth/logout',
-    '/labels/',
-    '/static/',
-    '/media/',
-    '/admin/login/',
+    "/auth/login",
+    "/auth/logout",
+    "/labels/",
+    "/static/",
+    "/media/",
+    "/admin/login/",
 ]
 
 # Role-based access control rules (Feature 006-ldap-auth)
 ROLE_ACCESS_RULES = {
-    'technology_staff': ['*'],  # Full access to all pages (includes /admin/*)
-    'teacher': [
-        '/audit/',  # Student device audit
-        '/auth/logout/',
-        '/static/',
-        '/media/',
+    "technology_staff": ["*"],  # Full access to all pages (includes /admin/*)
+    "teacher": [
+        "/audit/",  # Student device audit
+        "/auth/logout/",
+        "/static/",
+        "/media/",
     ],
 }
 
@@ -90,74 +103,74 @@ ROLE_ACCESS_RULES = {
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
     # Third-party apps
-    'django_extensions',
-    'import_export',
+    "django_extensions",
+    "import_export",
     # Project apps
-    'apps.authentication',  # OAuth2 authentication (Feature 006-google-auth)
-    'apps.labels',
-    'apps.devices',
-    'apps.students',
-    'apps.audit',
-    'apps.assets',
+    "apps.authentication",  # OAuth2 authentication (Feature 006-google-auth)
+    "apps.labels",
+    "apps.devices",
+    "apps.students",
+    "apps.audit",
+    "apps.assets",
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'apps.authentication.middleware.LDAPAuthenticationMiddleware',  # Feature 006-ldap-auth (T022)
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.authentication.middleware.LDAPAuthenticationMiddleware",  # Feature 006-ldap-auth (T022)
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = 'rtutils.urls'
+ROOT_URLCONF = "rtutils.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates', BASE_DIR / 'request_tracker_utils' / 'templates'],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "request_tracker_utils" / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'rtutils.wsgi.application'
+WSGI_APPLICATION = "rtutils.wsgi.application"
 
 
 # Session configuration (Feature 006-ldap-auth)
 # Infinite sessions for internal tool - no automatic expiration
-SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Database-backed sessions
+SESSION_ENGINE = "django.contrib.sessions.backends.db"  # Database-backed sessions
 SESSION_COOKIE_AGE = 31536000 * 10  # 10 years (effectively infinite)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Session persists across browser sessions
 SESSION_SAVE_EVERY_REQUEST = True  # Update session on every request
 SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access
 SESSION_COOKIE_SECURE = not DEBUG  # HTTPS only in production
-SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
+SESSION_COOKIE_SAMESITE = "Lax"  # CSRF protection
 
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': Path(WORKING_DIR) / 'database.sqlite',
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": Path(WORKING_DIR) / "database.sqlite",
     }
 }
 
@@ -167,16 +180,16 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -184,9 +197,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -196,56 +209,56 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = '/static/'
-STATIC_ROOT = Path(os.environ.get('STATIC_ROOT', Path(WORKING_DIR) / 'static'))
-_maybe_static_dir = BASE_DIR / 'static'
+STATIC_URL = "/static/"
+STATIC_ROOT = Path(os.environ.get("STATIC_ROOT", Path(WORKING_DIR) / "static"))
+_maybe_static_dir = BASE_DIR / "static"
 if _maybe_static_dir.exists() and _maybe_static_dir.resolve() != STATIC_ROOT.resolve():
     STATICFILES_DIRS = [_maybe_static_dir]
 else:
     STATICFILES_DIRS = []
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', Path(WORKING_DIR) / 'media'))
+MEDIA_URL = "/media/"
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", Path(WORKING_DIR) / "media"))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Logging Configuration (Feature 006-google-auth T026)
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
-            'style': '{',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{",
         },
-        'simple': {
-            'format': '{levelname} {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-        },
-        'auth_file': {
-            'class': 'logging.FileHandler',
-            'filename': os.path.join(WORKING_DIR, 'auth.log'),
-            'formatter': 'verbose',
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
         },
     },
-    'loggers': {
-        'auth': {
-            'handlers': ['console', 'auth_file'],
-            'level': 'INFO',
-            'propagate': False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
         },
-        'django': {
-            'handlers': ['console'],
-            'level': 'INFO',
+        "auth_file": {
+            "class": "logging.FileHandler",
+            "filename": os.path.join(WORKING_DIR, "auth.log"),
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "auth": {
+            "handlers": ["console", "auth_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
         },
     },
 }

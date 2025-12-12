@@ -42,7 +42,6 @@ packages = ["rtutils", "rtutils.management", "apps", "common", "request_tracker_
 "apps" = ["*/migrations/*.py", "*/templates/**/*", "*/static/**/*"]
 "common" = ["*.py", "templates/**/*", "static/**/*"]
 "request_tracker_utils" = ["templates/**/*", "static/**/*", "data/*"]
-"" = ["templates/**/*"]
 
 [tool.pyright]
 reportUnknownParameterType = "none"
