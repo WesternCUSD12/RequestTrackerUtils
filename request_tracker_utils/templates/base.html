@@ -10,10 +10,23 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
     {% block styles %}
     <style>
+        :root {
+            --primary-bg-color: #f5f5f5;
+            --label-border-color: #000;
+            --label-bg-color: #fff;
+            --text-font-family: Arial, sans-serif;
+            --qr-width: 26mm;       /* Increased for better space usage */
+            --qr-height: 26mm;      /* Increased for better space usage */
+            --text-margin-left: 30mm; /* Adjusted for larger QR */
+            --heading-font-size: 16px; /* Larger font */
+            --text-font-size: 13px;    /* Larger font */
+            --barcode-height: 20px;    /* Smaller barcode */
+        }
+
         body {
             margin: 0;
             padding: 0;
-            background-color: #f5f5f5;
+            background-color: var(--primary-bg-color);
         }
         
         .container {
@@ -48,21 +61,181 @@
             font-size: 12px;
             margin-right: 10px;
         }
+
+        .label {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-start;
+            width: {{ label_width }}mm; /* Dynamically set width */
+            height: {{ label_height }}mm; /* Dynamically set height */
+            border: 1px solid var(--label-border-color);
+            padding: 10px;
+            box-sizing: border-box;
+            font-family: var(--text-font-family);
+            position: relative;
+            background-color: var(--label-bg-color);
+        }
+
+        @media print {
+            /* Reset all print margins */
+            @page {
+                size: 100mm 62mm; /* Force exact label size */
+                margin: 0;
+                padding: 0;
+            }
+            
+            body, html {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100mm !important;
+                height: 62mm !important;
+                overflow: hidden !important;
+            }
+            
+            .container {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100mm !important;
+                height: 62mm !important;
+                max-width: 100mm !important;
+                overflow: hidden !important;
+            }
+            
+            .label {
+                border: none;
+                width: 100mm !important;
+                height: 62mm !important;
+                padding: 2mm !important; /* Smaller padding */
+                margin: 0 !important;
+                overflow: hidden !important;
+                box-sizing: border-box !important;
+                page-break-inside: avoid !important;
+            }
+            
+            /* Larger QR code for print */
+            .qr-code {
+                width: 24mm !important;
+                height: 24mm !important;
+                top: 3mm !important;
+                left: 3mm !important;
+            }
+            
+            /* Adjust text positioning */
+            .text-content {
+                margin-left: 28mm !important;
+                margin-top: 3mm !important;
+            }
+            
+            /* Ensure heading stays prominent when printed */
+            .text-content h1 {
+                font-size: 16px !important;
+                font-weight: 700 !important;
+                margin: 0 0 3px 0 !important;
+                text-transform: uppercase !important;
+            }
+            
+            /* Make details text more prominent when printed */
+            .text-content p {
+                font-size: 13px !important;
+                margin: 3px 0 !important;
+                line-height: 1.3 !important;
+                font-weight: 500 !important;
+            }
+            
+            /* Move barcode up */
+            .barcode {
+                bottom: 3mm !important;
+                width: 90% !important;
+            }
+            
+            /* Smaller barcode height */
+            .barcode img {
+                height: 15px !important;
+            }
+        }
+
+        .qr-code {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: var(--qr-width);
+            height: var(--qr-height);
+        }
+
+        .qr-code img {
+            width: 100%;
+            height: 100%;
+        }
+
+        .text-content {
+            margin-left: var(--text-margin-left);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: flex-start;
+        }
+
+        .text-content h1 {
+            font-size: 16px; /* Larger than the default heading font size */
+            font-weight: 700; /* Extra bold */
+            margin: 0 0 3px 0; /* Added bottom margin */
+            text-transform: uppercase; /* All caps for emphasis */
+        }
+
+        .text-content p {
+            font-size: var(--text-font-size);
+            margin: 3px 0;
+            line-height: 1.2;
+            font-weight: 500; /* Slightly bolder than normal */
+        }
+
+        .school-name {
+            padding: 0;
+            margin-bottom: 0;
+        }
+
+        .barcode {
+            position: absolute;
+            bottom: 10px;
+            width: 95%;
+            text-align: center;
+        }
+
+        .barcode img {
+            width: 95%;
+            height: auto;
+            max-height: 25px;
+            image-rendering: -webkit-optimize-contrast;  /* Improves rendering in Chrome/Safari */
+            image-rendering: crisp-edges;                /* Modern browsers */
+        }
     </style>
     {% endblock %}
     {% block extra_head %}{% endblock %}
 </head>
 <body>
-    <!-- Navigation Bar (Feature 006-google-auth T023 + T062: Role-aware navigation) -->
-    {% if user.is_authenticated %}
+    <!-- Navigation Bar (Feature 006-ldap-auth T025) -->
+    {% if request.session.ldap_user %}
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/">RequestTracker Utils</a>
+            <a class="navbar-brand" href="/">RTUtils</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link" href="/devices/check-in">Device Check-in</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/devices/audit">Audit Sessions</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/admin">Admin Panel</a></li>
+                    <li class="nav-item">
+                        <span class="navbar-text text-light me-3">
+                            <i class="bi bi-person-circle"></i>
+                            {{ request.session.display_name|default:request.session.ldap_user }}
+                            <span class="badge bg-secondary ms-2">{{ request.session.user_role|title }}</span>
+                        </span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'authentication:logout' %}">
+                            <i class="bi bi-box-arrow-right"></i> Sign Out
+                        </a>
+                    </li>
                 </ul>
             </div>
         </div>
