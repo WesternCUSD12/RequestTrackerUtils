@@ -395,15 +395,12 @@ def fetch_asset_data(asset_id, config=None, use_cache=False):
 
         return response
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching asset data: {e}")
-            raise Exception(f"Failed to fetch asset data from RT: {e}")
-        except Exception as e:
-            logger.error(
-                f"Error processing asset data for ID {asset_id}: {str(e)}"
-            )
-            raise Exception(f"Error processing asset data: {str(e)}")
-
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching asset data: {e}")
+        raise Exception(f"Failed to fetch asset data from RT: {e}")
+    except Exception as e:
+        logger.error(f"Error processing asset data for ID {asset_id}: {str(e)}")
+        raise Exception(f"Error processing asset data: {str(e)}")
 
 
 def search_assets(query, config=None, try_post_fallback=True, use_cache=False):
@@ -586,12 +583,8 @@ def find_asset_by_name(asset_name, config=None):
     ]
 
     if matching_assets:
-        logger.info(
-            f"Found {len(matching_assets)} exact matches after filtering"
-        )
-        logger.info(
-            f"First match ID: {matching_assets[0].get('id')}"
-        )
+        logger.info(f"Found {len(matching_assets)} exact matches after filtering")
+        logger.info(f"First match ID: {matching_assets[0].get('id')}")
         return matching_assets[0]
 
     # If no exact match, try a fuzzy match (contains)
@@ -626,9 +619,7 @@ def find_asset_by_name(asset_name, config=None):
         query_assets = search_assets(query, config)
 
         if query_assets:
-            logger.info(
-                f"Fallback found {len(query_assets)} assets"
-            )
+            logger.info(f"Fallback found {len(query_assets)} assets")
             logger.info(
                 f"First result: {query_assets[0].get('Name')} (ID: {query_assets[0].get('id')})"
             )
@@ -637,13 +628,6 @@ def find_asset_by_name(asset_name, config=None):
     # If we get here, no assets were found
     logger.info("No assets found with any method")
     return None
-
-    except Exception as e:
-        if config is None:  # Only log if using current_app
-            from flask import current_app
-
-            current_app.logger.error(f"Error finding asset by name: {e}")
-        raise Exception(f"Failed to find asset by name in RT: {e}")
 
 
 def update_asset_custom_field(asset_id, field_name, field_value, config=None):
@@ -667,10 +651,7 @@ def update_asset_custom_field(asset_id, field_name, field_value, config=None):
     try:
         return rt_api_request("PUT", f"/asset/{asset_id}", data=data, config=config)
     except requests.exceptions.RequestException as e:
-        if config is None:  # Only log if using current_app
-            current_app.logger.error(
-                f"Error updating asset {asset_id} custom field: {e}"
-            )
+        logger.error(f"Error updating asset {asset_id} custom field: {e}")
         raise Exception(f"Failed to update asset custom field in RT: {e}")
 
 
@@ -696,8 +677,7 @@ def update_user_custom_field(user_id, field_name, field_value, config=None):
     try:
         return rt_api_request("PUT", f"/user/{user_id}", data=data, config=config)
     except requests.exceptions.RequestException as e:
-        if config is None:  # Only log if using current_app
-            current_app.logger.error(f"Error updating user {user_id} custom field: {e}")
+        logger.error(f"Error updating user {user_id} custom field: {e}")
         raise Exception(f"Failed to update user custom field in RT: {e}")
 
 
@@ -713,8 +693,6 @@ def get_assets_by_owner(owner, exclude_id=None, config=None):
     Returns:
         list: List of assets owned by this owner
     """
-    if config is None:
-        config = {}  # Will use get_config() helper for Flask/Django compatibility
 
     try:
         # Log input parameters
@@ -842,10 +820,6 @@ def update_asset_owner(asset_id, owner_id, config=None):
     try:
         logger.info(f"Updating owner of asset {asset_id} to {owner_id}")
 
-        if config is None:
-            from flask import current_app
-            # Config will use get_config() helper for Flask/Django compatibility
-
         # Prepare the data for the API request
         data = {"Owner": owner_id}
 
@@ -903,11 +877,7 @@ def create_ticket(
         Exception: If there's an error creating the ticket
     """
     try:
-        if config is None:
-            from flask import current_app
-
-            # Config will use get_config() helper for Flask/Django compatibility
-            logger.info(f"Creating new ticket: {subject}")
+        logger.info(f"Creating new ticket: {subject}")
 
         # Use the default queue from configuration or fallback to 'General'
         if queue is None:
