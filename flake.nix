@@ -65,47 +65,7 @@
             google-auth-oauthlib
           ];
 
-          postInstall = ''
-                        SITE_PACKAGES=$out/lib/${pkgs.python3.libPrefix}/site-packages
 
-                        # Copy Django project settings
-                        mkdir -p $SITE_PACKAGES/rtutils
-                        cp -r rtutils/* $SITE_PACKAGES/rtutils/
-
-                        # Copy all Django apps
-                        mkdir -p $SITE_PACKAGES/apps
-                        cp -r apps/* $SITE_PACKAGES/apps/
-
-                        # Copy common utilities
-                        mkdir -p $SITE_PACKAGES/common
-                        cp -r common/* $SITE_PACKAGES/common/
-
-# Copy manage.py to output root
-                         cp manage.py $out/
-
-                        # Copy all templates (project-level and app-level)
-                        mkdir -p $SITE_PACKAGES/templates
-                        if [ -d templates ]; then
-                          cp -r templates/* $SITE_PACKAGES/templates/
-                        fi
-
-                        # Copy all static files
-                        mkdir -p $SITE_PACKAGES/static
-                        if [ -d static ]; then
-                          cp -r static/* $SITE_PACKAGES/static/
-                        fi
-
-                        # Copy app-specific static files
-                        for app in apps/*/static; do
-                          if [ -d "$app" ]; then
-                            cp -r "$app"/* $SITE_PACKAGES/static/
-                          fi
-                        done
-
-                        # (Removed broken makeWrapper for $out/bin/python)
-                        mkdir -p $out/bin
-                        chmod -R +r $SITE_PACKAGES
-          '';
 
           meta = with pkgs.lib; {
             description = "Django application for Request Tracker asset management";
