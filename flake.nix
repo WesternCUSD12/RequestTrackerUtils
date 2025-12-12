@@ -80,8 +80,8 @@
                         mkdir -p $SITE_PACKAGES/common
                         cp -r common/* $SITE_PACKAGES/common/
 
-                        # Copy manage.py
-                        cp manage.py $SITE_PACKAGES/
+# Copy manage.py to output root
+                         cp manage.py $out/
 
                         # Copy all templates (project-level and app-level)
                         mkdir -p $SITE_PACKAGES/templates
@@ -373,12 +373,17 @@
                         source <(grep -v '^#' "${envFile}" | sed 's/[[:space:]]*=[[:space:]]*/=/g')
                         set +a
 
-                        # 6. Run Django management commands
-                        cd "${workDir}"
-                        echo "Running Django migrations..."
-                        ${pythonEnv}/bin/python $SITE_PACKAGES/manage.py migrate --noinput
-                        echo "Collecting static files..."
-                        ${pythonEnv}/bin/python $SITE_PACKAGES/manage.py collectstatic --noinput --clear
+# 6. Run Django management commands
+                         SITE_PACKAGES=$(${pythonEnv}/bin/python -c "import site; print(site.getsitepackages()[0])")
+                         export PYTHONPATH="$SITE_PACKAGES"
+                         echo "PYTHONPATH is: $PYTHONPATH"
+                         echo "Contents of site-packages:"
+                         ls -l "$SITE_PACKAGES"
+                         cd "${workDir}"
+                         echo "Running Django migrations..."
+                         ${pythonEnv}/bin/python ${requestTrackerPackage}/manage.py migrate --noinput
+                         echo "Collecting static files..."
+                         ${pythonEnv}/bin/python ${requestTrackerPackage}/manage.py collectstatic --noinput --clear
 
                         # 7. Set final permissions
                         chown -R ''${user}:''${group} "${workDir}"
