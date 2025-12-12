@@ -360,7 +360,8 @@
                         EnvironmentFile = "-${envFile}";
 
                         # The ExecStart command now uses the gunicorn from our complete pythonEnv
-                        ExecStart = "${pythonEnv}/bin/gunicorn --bind ${cfg.host}:${toString cfg.port} --workers ${toString cfg.workers} --timeout 120 --access-logfile ${workDir}/logs/access.log --error-logfile ${workDir}/logs/error.log --log-level info rtutils.wsgi:application";
+                         ExecStart = "${requestTrackerPackage}/bin/rtutils-gunicorn";
+
 
                         WorkingDirectory = cfg.workingDirectory;
                         RuntimeDirectory = "rtutils";
