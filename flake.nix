@@ -102,12 +102,8 @@
                           fi
                         done
 
-                        # Use makeWrapper to create the rtutils-manage script
+                        # (Removed broken makeWrapper for $out/bin/python)
                         mkdir -p $out/bin
-                        makeWrapper $out/bin/python $out/bin/rtutils-manage \
-                          --add-flags "$SITE_PACKAGES/manage.py"
-
-
                         chmod -R +r $SITE_PACKAGES
           '';
 

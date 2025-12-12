@@ -32,8 +32,10 @@ build-backend = "setuptools.build_meta"
 [project.scripts]
 
 
+
 [tool.setuptools.packages.find]
-include = ["rtutils", "apps", "common"]
+where = ["rtutils", "apps", "common"]
+include = ["rtutils*", "apps*", "common*"]
 
 [tool.setuptools.package-data]
 "rtutils" = ["templates/*", "static/*"]
