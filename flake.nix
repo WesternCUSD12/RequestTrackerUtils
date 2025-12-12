@@ -364,23 +364,26 @@
 
                         WorkingDirectory = cfg.workingDirectory;
                         RuntimeDirectory = "rtutils";
-                        Environment = [
-                          "DJANGO_SETTINGS_MODULE=rtutils.settings"
-                          "WORKING_DIR=${cfg.workingDirectory}"
-                          "LABEL_WIDTH_MM=${toString cfg.labelWidthMm}"
-                          "LABEL_HEIGHT_MM=${toString cfg.labelHeightMm}"
-                          "RT_URL=${cfg.rtUrl}"
-                          "API_ENDPOINT=${cfg.apiEndpoint}"
-                          "PREFIX=${cfg.prefix}"
-                          "PADDING=${toString cfg.padding}"
-                          "DEBUG=${if cfg.debug then "True" else "False"}"
-                          "ALLOWED_HOSTS=${lib.concatStringsSep "," cfg.allowedHosts}"
-                          "STATIC_ROOT=${cfg.workingDirectory}/static"
-                          "MEDIA_ROOT=${cfg.workingDirectory}/media"
-                        ]
-                        ++ lib.optional (
-                          cfg.ldapCaCertFile != null
-                        ) "LDAP_CA_CERT_FILE=${cfg.ldapCaCertFile}";
+                         Environment = [
+                           "DJANGO_SETTINGS_MODULE=rtutils.settings"
+                           # Ensure Gunicorn can import rtutils from the Nix store
+                           "PYTHONPATH=$(${pythonEnv}/bin/python -c 'import site; print(site.getsitepackages()[0])')"
+                           "WORKING_DIR=${cfg.workingDirectory}"
+                           "LABEL_WIDTH_MM=${toString cfg.labelWidthMm}"
+                           "LABEL_HEIGHT_MM=${toString cfg.labelHeightMm}"
+                           "RT_URL=${cfg.rtUrl}"
+                           "API_ENDPOINT=${cfg.apiEndpoint}"
+                           "PREFIX=${cfg.prefix}"
+                           "PADDING=${toString cfg.padding}"
+                           "DEBUG=${if cfg.debug then "True" else "False"}"
+                           "ALLOWED_HOSTS=${lib.concatStringsSep "," cfg.allowedHosts}"
+                           "STATIC_ROOT=${cfg.workingDirectory}/static"
+                           "MEDIA_ROOT=${cfg.workingDirectory}/media"
+                         ]
+                         ++ lib.optional (
+                           cfg.ldapCaCertFile != null
+                         ) "LDAP_CA_CERT_FILE=${cfg.ldapCaCertFile}";
+
                         Restart = "always";
                         RestartSec = "10s";
                         User = cfg.user;
