@@ -104,9 +104,8 @@
 
                         # Use makeWrapper to create the rtutils-manage script
                         mkdir -p $out/bin
-                        makeWrapper ${pkgs.python3}/bin/python $out/bin/rtutils-manage \
-                          --add-flags "$SITE_PACKAGES/manage.py" \
-                          --prefix PYTHONPATH : "$SITE_PACKAGES"
+                        makeWrapper $out/bin/python $out/bin/rtutils-manage \
+                          --add-flags "$SITE_PACKAGES/manage.py"
 
 
                         chmod -R +r $SITE_PACKAGES
@@ -265,35 +264,42 @@
 
               config = lib.mkIf config.services.requestTrackerUtils.enable (
                 let
-                  sitePkgs = "${requestTrackerPackage}/lib/${pkgs.python3.libPrefix}/site-packages";
+                  cfg = config.services.requestTrackerUtils;
+
+                  # Single source of truth for all python dependencies
+                  pythonDependencies = with pkgs.python3Packages; [
+                    requestTrackerPackage # The application itself
+
+                    # Runtime dependencies
+                    gunicorn
+                    pandas
+                    requests
+                    django
+                    django-extensions
+                    django-import-export
+                    whitenoise
+                    click
+                    reportlab
+                    qrcode
+                    python-barcode
+                    pillow
+                    python-dotenv
+                    google-api-python-client
+                    google-auth
+                    google-auth-oauthlib
+                    google-auth-httplib2
+                    ldap3
+
+                    # Transitive dependencies that were causing issues
+                    tablib
+                    sqlparse
+                    asgiref
+                  ];
+
+                  # Create a complete, self-contained Python environment
+                  pythonEnv = pkgs.python3.withPackages (ps: pythonDependencies);
+
                   manageBin = "${requestTrackerPackage}/bin/rtutils-manage";
-                  secretEnvFile = "${config.services.requestTrackerUtils.workingDirectory}/secret.env";
-                  pythonPath = pkgs.lib.makeSearchPath "lib/${pkgs.python3.libPrefix}/site-packages" (
-                    [ requestTrackerPackage ]
-                    ++ (with pkgs.python3Packages; [
-                      django
-                      gunicorn
-                      django-extensions
-                      django-import-export
-                      tablib
-                      whitenoise
-                      pandas
-                      requests
-                      reportlab
-                      qrcode
-                      python-barcode
-                      pillow
-                      python-dotenv
-                      click
-                      sqlparse
-                      ldap3
-                      asgiref
-                      google-api-python-client
-                      google-auth
-                      google-auth-httplib2
-                      google-auth-oauthlib
-                    ])
-                  );
 
                   generateSecretKeyScript = pkgs.writeScript "generate-secret-key" ''
                     #!${pkgs.bash}/bin/bash
@@ -320,8 +326,7 @@
                     wantedBy = [ "multi-user.target" ];
 
                     environment.PATH = lib.mkForce "${pkgs.lib.makeBinPath [
-                      requestTrackerPackage
-                      pkgs.python3
+                      pythonEnv # Provides python, gunicorn, etc.
                       pkgs.coreutils
                       pkgs.bash
                       pkgs.sops
@@ -331,7 +336,6 @@
 
                     preStart =
                       let
-                        cfg = config.services.requestTrackerUtils;
                         workDir = cfg.workingDirectory;
                         user = cfg.user;
                         group = cfg.group;
@@ -360,7 +364,7 @@
                         ''}
 
                         # 3. Ensure DJANGO_SECRET_KEY exists, generating if needed.
-                        "${generateSecretKeyScript}" "$tempEnvFile" "${pkgs.python3}/bin/python"
+                        "${generateSecretKeyScript}" "$tempEnvFile" "${pythonEnv}/bin/python"
 
                         # 4. Finalize the environment file
                         mv "$tempEnvFile" "${envFile}"
@@ -374,7 +378,6 @@
                         set +a
 
                         # 6. Run Django management commands
-                        export PYTHONPATH=${pythonPath}
                         cd "${workDir}"
                         echo "Running Django migrations..."
                         ${manageBin} migrate --noinput
@@ -388,22 +391,15 @@
 
                     serviceConfig =
                       let
-                        cfg = config.services.requestTrackerUtils;
-                        gunicornBin = "${pkgs.python3Packages.gunicorn}/bin/gunicorn";
-                        host = cfg.host;
-                        port = toString cfg.port;
-                        workers = toString cfg.workers;
                         workDir = cfg.workingDirectory;
                         envFile = "/run/${cfg.user}/secrets.env";
                       in
                       {
                         # Load all secrets securely using systemd's EnvironmentFile directive.
-                        # The leading '-' tells systemd to ignore the file if it doesn't exist,
-                        # which is useful on the very first start before preStart has run.
                         EnvironmentFile = "-${envFile}";
 
-                        # The ExecStart command is now much simpler, with no shell logic.
-                        ExecStart = "${gunicornBin} --bind ${host}:${port} --workers ${workers} --timeout 120 --access-logfile ${workDir}/logs/access.log --error-logfile ${workDir}/logs/error.log --log-level info rtutils.wsgi:application";
+                        # The ExecStart command now uses the gunicorn from our complete pythonEnv
+                        ExecStart = "${pythonEnv}/bin/gunicorn --bind ${cfg.host}:${toString cfg.port} --workers ${toString cfg.workers} --timeout 120 --access-logfile ${workDir}/logs/access.log --error-logfile ${workDir}/logs/error.log --log-level info rtutils.wsgi:application";
 
                         WorkingDirectory = cfg.workingDirectory;
                         RuntimeDirectory = "rtutils";
@@ -420,9 +416,6 @@
                           "ALLOWED_HOSTS=${lib.concatStringsSep "," cfg.allowedHosts}"
                           "STATIC_ROOT=${cfg.workingDirectory}/static"
                           "MEDIA_ROOT=${cfg.workingDirectory}/media"
-                          # RT_TOKEN, LDAP settings, and DJANGO_SECRET_KEY are now loaded
-                          # via the EnvironmentFile, keeping them out of the Nix store.
-                          "PYTHONPATH=${pythonPath}"
                         ]
                         ++ lib.optional (
                           cfg.ldapCaCertFile != null
