@@ -376,9 +376,9 @@
                         # 6. Run Django management commands
                         cd "${workDir}"
                         echo "Running Django migrations..."
-                        ${manageBin} migrate --noinput
+                        ${pythonEnv}/bin/python $SITE_PACKAGES/manage.py migrate --noinput
                         echo "Collecting static files..."
-                        ${manageBin} collectstatic --noinput --clear
+                        ${pythonEnv}/bin/python $SITE_PACKAGES/manage.py collectstatic --noinput --clear
 
                         # 7. Set final permissions
                         chown -R ''${user}:''${group} "${workDir}"
