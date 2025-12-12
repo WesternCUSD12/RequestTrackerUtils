@@ -32,7 +32,7 @@
           nativeBuildInputs = with pkgs.python3Packages; [
             setuptools
             wheel
-          ];
+          ] ++ [ pkgs.make-wrapper ];
 
           propagatedBuildInputs = with pkgs.python3Packages; [
             # Django and WSGI server
@@ -100,15 +100,12 @@
                           fi
                         done
 
-                        # Provide a helper for manage.py that uses the packaged interpreter
+                        # Use makeWrapper to create the rtutils-manage script
                         mkdir -p $out/bin
-                        # Render the wrapper from the template in the source tree.
-                        mkdir -p $out/bin
-                        sed \
-                          -e "s|@SITE_PACKAGES@|$out/lib/${pkgs.python3.libPrefix}/site-packages|g" \
-                          -e "s|@PYTHON_BIN@|${pkgs.python3}/bin/python|g" \
-                          ${./scripts/rtutils-manage.template} > $out/bin/rtutils-manage
-                        chmod +x $out/bin/rtutils-manage
+                        makeWrapper ${pkgs.python3}/bin/python $out/bin/rtutils-manage \
+                          --add-flags "$SITE_PACKAGES/manage.py" \
+                          --set PYTHONPATH "$SITE_PACKAGES"
+
 
                         chmod -R +r $SITE_PACKAGES
           '';
@@ -315,106 +312,117 @@
 
                     preStart =
                       let
-                        workDir = config.services.requestTrackerUtils.workingDirectory;
-                        user = config.services.requestTrackerUtils.user;
-                        group = config.services.requestTrackerUtils.group;
-                        providedSecret = config.services.requestTrackerUtils.secretKey;
-                        secretLines =
-                          if config.services.requestTrackerUtils.secretsFile != null then
-                            [
-                              # Decrypt and source the secrets using bash so process-substitution works.
-                              "${pkgs.bash}/bin/bash -c 'set -a; \n                              if [ -f ${config.services.requestTrackerUtils.secretsFile} ]; then \n                                sed -E \"s/^[[:space:]]*([^=[:space:]]+)[[:space:]]*=[[:space:]]*(.*)$/\\1=\\2/; /^\\s*#/d\" ${config.services.requestTrackerUtils.secretsFile} | . /dev/stdin; \n                              elif ${pkgs.sops}/bin/sops -d ${config.services.requestTrackerUtils.secretsFile} >/dev/null 2>&1; then \n                                ${pkgs.sops}/bin/sops -d ${config.services.requestTrackerUtils.secretsFile} | sed -E \"s/^[[:space:]]*([^=[:space:]]+)[[:space:]]*=[[:space:]]*(.*)$/\\1=\\2/; /^\\s*#/d\" | . /dev/stdin; \n                              else \n                                echo \"sops decryption failed\" >&2; \n                              fi; set +a'"
-                            ] else if providedSecret == null then
-                            [
-                              "${pkgs.python3}/bin/python - <<'PY' > ${secretEnvFile}"
-                              "import secrets, string"
-                              "alphabet = string.ascii_letters + string.digits + '!@#$%^&*(-_=+)'"
-                              "key = ''.join(secrets.choice(alphabet) for _ in range(50))"
-                              "print(f'DJANGO_SECRET_KEY={key}')"
-                              "PY"
-                            ]
-                          else
-                            [
-                              "printf 'DJANGO_SECRET_KEY=%s\\n' '${providedSecret}' > ${secretEnvFile}"
-                            ];
+                        cfg = config.services.requestTrackerUtils;
+                        workDir = cfg.workingDirectory;
+                        user = cfg.user;
+                        group = cfg.group;
+                        envFile = "/run/${user}/secrets.env"; # The single source of truth for secrets
                       in
-                      (lib.concatStringsSep "\n" (
-                        [
-                          "mkdir -p ${workDir}/static"
-                          "mkdir -p ${workDir}/media"
-                          "mkdir -p ${workDir}/logs"
-                        ]
-                        ++ secretLines
-                        ++ [
-                          (lib.optionalString (config.services.requestTrackerUtils.secretsFile == null)
-                            "chmod 640 ${secretEnvFile}"
-                          )
-                          (lib.optionalString (config.services.requestTrackerUtils.secretsFile == null)
-                            "chown ${user}:${group} ${secretEnvFile}"
-                          )
-                          "set -a"
-                          "if [ -f ${secretEnvFile} ]; then . ${secretEnvFile}; fi"
-                          "set +a"
-                          "export PYTHONPATH=${pythonPath}"
-                          "cd ${workDir}"
-                          "${manageBin} migrate --noinput"
-                          "${manageBin} collectstatic --noinput --clear"
-                          "chown -R ${user}:${group} ${workDir}"
-                        ]
-                      ))
-                      + "\n";
+                      lib.hermetic ''
+                        set -e
+                        echo "--- rtutils pre-start ---"
+
+                        # 1. Prepare directories
+                        mkdir -p "${workDir}/static" "${workDir}/media" "${workDir}/logs" "/run/${user}"
+                        chown ''${user}:''${group} "/run/${user}"
+                        chmod 0700 "/run/${user}"
+
+                        # 2. Prepare environment file
+                        echo "Preparing environment file at ${envFile}"
+                        tempEnvFile=$(mktemp)
+
+                        # If a secrets file is provided, decrypt or copy it.
+                        ${lib.optionalString (cfg.secretsFile != null) ''
+                          if ${pkgs.sops}/bin/sops -d "${cfg.secretsFile}" > /dev/null 2>&1; then
+                            echo "Decrypting sops file: ${cfg.secretsFile}"
+                            ${pkgs.sops}/bin/sops -d "${cfg.secretsFile}" > "$tempEnvFile"
+                          else
+                            echo "Copying plaintext secrets file: ${cfg.secretsFile}"
+                            cp "${cfg.secretsFile}" "$tempEnvFile"
+                          fi
+                        ''}
+
+                        # 3. Ensure DJANGO_SECRET_KEY exists, generating if needed.
+                        if ! grep -q "^DJANGO_SECRET_KEY=" "$tempEnvFile"; then
+                          echo "DJANGO_SECRET_KEY not found, generating a new one."
+                          # The key is safely quoted for shell sourcing.
+                          GENERATED_KEY=$(${pkgs.python3}/bin/python -c 'import secrets; print(secrets.token_urlsafe(40)')
+                          echo "DJANGO_SECRET_KEY=''$GENERATED_KEY''" >> "$tempEnvFile"
+                        fi
+
+                        # 4. Finalize the environment file
+                        mv "$tempEnvFile" "${envFile}"
+                        chmod 0600 "${envFile}"
+                        chown ''${user}:''${group} "${envFile}"
+
+                        # 5. Source the environment for pre-start tasks
+                        set -a
+                        source "${envFile}"
+                        set +a
+
+                        # 6. Run Django management commands
+                        export PYTHONPATH=${pythonPath}
+                        cd "${workDir}"
+                        echo "Running Django migrations..."
+                        ${manageBin} migrate --noinput
+                        echo "Collecting static files..."
+                        ${manageBin} collectstatic --noinput --clear
+
+                        # 7. Set final permissions
+                        chown -R ''${user}:''${group} "${workDir}"
+                        echo "--- rtutils pre-start complete ---"
+                      '';
 
                     serviceConfig =
                       let
+                        cfg = config.services.requestTrackerUtils;
                         gunicornBin = "${pkgs.python3Packages.gunicorn}/bin/gunicorn";
-                        host = config.services.requestTrackerUtils.host;
-                        port = toString config.services.requestTrackerUtils.port;
-                        workers = toString config.services.requestTrackerUtils.workers;
-                        workDir = config.services.requestTrackerUtils.workingDirectory;
-                        envSources = lib.concatStringsSep " " (
-                          [ "[ -f ${secretEnvFile} ] && . ${secretEnvFile}" ]
-                          ++
-                            lib.optional (config.services.requestTrackerUtils.secretsFile != null)
-                              "[ -f ${config.services.requestTrackerUtils.secretsFile} ] && . ${config.services.requestTrackerUtils.secretsFile}"
-                        );
+                        host = cfg.host;
+                        port = toString cfg.port;
+                        workers = toString cfg.workers;
+                        workDir = cfg.workingDirectory;
+                        envFile = "/run/${cfg.user}/secrets.env";
                       in
                       {
-                        ExecStart = "${pkgs.bash}/bin/bash -c 'set -a; ${envSources}; set +a; exec ${gunicornBin} --bind ${host}:${port} --workers ${workers} --timeout 120 --access-logfile ${workDir}/logs/access.log --error-logfile ${workDir}/logs/error.log --log-level info rtutils.wsgi:application'";
+                        # Load all secrets securely using systemd's EnvironmentFile directive.
+                        # The leading '-' tells systemd to ignore the file if it doesn't exist,
+                        # which is useful on the very first start before preStart has run.
+                        EnvironmentFile = "-${envFile}";
 
-                        WorkingDirectory = config.services.requestTrackerUtils.workingDirectory;
+                        # The ExecStart command is now much simpler, with no shell logic.
+                        ExecStart = "${gunicornBin} --bind ${host}:${port} --workers ${workers} --timeout 120 --access-logfile ${workDir}/logs/access.log --error-logfile ${workDir}/logs/error.log --log-level info rtutils.wsgi:application";
+
+                        WorkingDirectory = cfg.workingDirectory;
                         Environment = [
                           "DJANGO_SETTINGS_MODULE=rtutils.settings"
-                          "WORKING_DIR=${config.services.requestTrackerUtils.workingDirectory}"
-                          "LABEL_WIDTH_MM=${toString config.services.requestTrackerUtils.labelWidthMm}"
-                          "LABEL_HEIGHT_MM=${toString config.services.requestTrackerUtils.labelHeightMm}"
-                          "RT_URL=${config.services.requestTrackerUtils.rtUrl}"
-                          "API_ENDPOINT=${config.services.requestTrackerUtils.apiEndpoint}"
-                          "PREFIX=${config.services.requestTrackerUtils.prefix}"
-                          "PADDING=${toString config.services.requestTrackerUtils.padding}"
-                          "DEBUG=${if config.services.requestTrackerUtils.debug then "True" else "False"}"
-                          "ALLOWED_HOSTS=${lib.concatStringsSep "," config.services.requestTrackerUtils.allowedHosts}"
-                          "STATIC_ROOT=${config.services.requestTrackerUtils.workingDirectory}/static"
-                          "MEDIA_ROOT=${config.services.requestTrackerUtils.workingDirectory}/media"
-                          # RT_TOKEN and LDAP settings are intentionally NOT
-                          # injected here from Nix options so they can remain
-                          # in the external `secretsFile` (sops) and sourced at
-                          # runtime. The service `preStart` step already sources
-                          # `${secretEnvFile}` and the optional `secretsFile`.
+                          "WORKING_DIR=${cfg.workingDirectory}"
+                          "LABEL_WIDTH_MM=${toString cfg.labelWidthMm}"
+                          "LABEL_HEIGHT_MM=${toString cfg.labelHeightMm}"
+                          "RT_URL=${cfg.rtUrl}"
+                          "API_ENDPOINT=${cfg.apiEndpoint}"
+                          "PREFIX=${cfg.prefix}"
+                          "PADDING=${toString cfg.padding}"
+                          "DEBUG=${if cfg.debug then "True" else "False"}"
+                          "ALLOWED_HOSTS=${lib.concatStringsSep "," cfg.allowedHosts}"
+                          "STATIC_ROOT=${cfg.workingDirectory}/static"
+                          "MEDIA_ROOT=${cfg.workingDirectory}/media"
+                          # RT_TOKEN, LDAP settings, and DJANGO_SECRET_KEY are now loaded
+                          # via the EnvironmentFile, keeping them out of the Nix store.
                           "PYTHONPATH=${pythonPath}"
                         ]
                         ++ lib.optional (
-                          config.services.requestTrackerUtils.ldapCaCertFile != null
-                        ) "LDAP_CA_CERT_FILE=${config.services.requestTrackerUtils.ldapCaCertFile}";
+                          cfg.ldapCaCertFile != null
+                        ) "LDAP_CA_CERT_FILE=${cfg.ldapCaCertFile}";
                         Restart = "always";
                         RestartSec = "10s";
-                        User = config.services.requestTrackerUtils.user;
-                        Group = config.services.requestTrackerUtils.group;
+                        User = cfg.user;
+                        Group = cfg.group;
 
                         NoNewPrivileges = true;
                         PrivateTmp = true;
                         ProtectSystem = "strict";
                         ProtectHome = true;
-                        ReadWritePaths = [ config.services.requestTrackerUtils.workingDirectory ];
+                        ReadWritePaths = [ cfg.workingDirectory ];
                       };
                   };
 
