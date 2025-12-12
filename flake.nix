@@ -341,9 +341,9 @@
                          ls -l "$SITE_PACKAGES"
                          cd "${workDir}"
                          echo "Running Django migrations..."
-                         ${pythonEnv}/bin/python ${requestTrackerPackage}/manage.py migrate --noinput
+                         ${requestTrackerPackage}/bin/rtutils-manage migrate --noinput
                          echo "Collecting static files..."
-                         ${pythonEnv}/bin/python ${requestTrackerPackage}/manage.py collectstatic --noinput --clear
+                         ${requestTrackerPackage}/bin/rtutils-manage collectstatic --noinput --clear
 
                         # 7. Set final permissions
                         chown -R ''${user}:''${group} "${workDir}"
