@@ -1,1 +1,11 @@
-include rtutils/cli.py
+recursive-include rtutils/templates *
+recursive-include rtutils/static *
+recursive-include apps/*/templates *
+recursive-include apps/*/static *
+recursive-include apps/*/migrations *.py
+recursive-include common/templates *
+recursive-include common/static *
+recursive-include templates *
+recursive-include request_tracker_utils/templates *
+recursive-include request_tracker_utils/static *
+recursive-include request_tracker_utils/data *

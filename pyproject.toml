@@ -35,12 +35,14 @@ rtutils-gunicorn = "rtutils.management.gunicorn_entry:main"
 
 
 [tool.setuptools]
-packages = ["rtutils", "rtutils.management", "apps", "common"]
+packages = ["rtutils", "rtutils.management", "apps", "common", "request_tracker_utils"]
 
 [tool.setuptools.package-data]
 "rtutils" = ["templates/**/*", "static/**/*"]
 "apps" = ["*/migrations/*.py", "*/templates/**/*", "*/static/**/*"]
-"common" = ["*.py"]
+"common" = ["*.py", "templates/**/*", "static/**/*"]
+"request_tracker_utils" = ["templates/**/*", "static/**/*", "data/*"]
+"" = ["templates/**/*"]
 
 [tool.pyright]
 reportUnknownParameterType = "none"
