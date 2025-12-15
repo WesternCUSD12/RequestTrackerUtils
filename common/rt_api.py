@@ -10,14 +10,38 @@ from urllib3.util.retry import Retry
 from pathlib import Path
 
 # Django-only config and logger helpers
+try:
+    from django.conf import settings
 
-
-def get_config(key, default=None):
-    return default
+    def get_config(key, default=None):
+        return getattr(settings, key, default)
+except ImportError:
+    # Fallback for non-Django environments
+    def get_config(key, default=None):
+        return default
 
 
 def get_logger():
-    return logging.getLogger(__name__)
+    try:
+        import logging
+
+        return logging.getLogger(__name__)
+    except ImportError:
+        # Fallback logger
+        class FallbackLogger:
+            def debug(self, msg):
+                pass
+
+            def info(self, msg):
+                pass
+
+            def warning(self, msg):
+                pass
+
+            def error(self, msg):
+                pass
+
+        return FallbackLogger()
 
 
 logger = get_logger()
@@ -81,7 +105,6 @@ class PersistentAssetCache:
         self.cache_file = cache_dir / "asset_cache.json"
 
         logger.info(f"Final resolved cache directory: {self.cache_file.parent}")
-
 
         # Only create the cache directory if in development mode
         if debug:

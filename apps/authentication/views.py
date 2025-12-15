@@ -34,7 +34,7 @@ def login_view(request: HttpRequest) -> HttpResponse:
     if request.session.get("ldap_user"):
         user_role = request.session.get("user_role")
         if user_role == "teacher":
-            return redirect("/audit/")
+            return redirect("/devices/audit/")
         return redirect("/")
 
     if request.method == "GET":
@@ -46,6 +46,33 @@ def login_view(request: HttpRequest) -> HttpResponse:
     username = request.POST.get("username", "").strip()
     password = request.POST.get("password", "")
     next_url = request.POST.get("next", "/")
+
+    # Test credentials for development (bypass LDAP)
+    if username == "admin" and password == "admin":
+        # Simulate admin user session
+        request.session["ldap_user"] = "admin"
+        request.session["user_dn"] = "CN=admin,OU=Test,DC=test,DC=com"
+        request.session["display_name"] = "Admin User"
+        request.session["email"] = "admin@example.com"
+        request.session["user_role"] = "technology_staff"
+        request.session["groups"] = ["tech-team"]
+        request.session["authenticated_at"] = datetime.utcnow().isoformat()
+
+        logger.info(f"test_login_success: {username} (role: technology_staff)")
+        return redirect("/")
+
+    elif username == "teacher" and password == "teacher":
+        # Simulate teacher user session
+        request.session["ldap_user"] = "teacher"
+        request.session["user_dn"] = "CN=teacher,OU=Test,DC=test,DC=com"
+        request.session["display_name"] = "Teacher User"
+        request.session["email"] = "teacher@example.com"
+        request.session["user_role"] = "teacher"
+        request.session["groups"] = ["TEACHERS"]
+        request.session["authenticated_at"] = datetime.utcnow().isoformat()
+
+        logger.info(f"test_login_success: {username} (role: teacher)")
+        return redirect("/devices/audit/")
 
     if not username or not password:
         return render(
