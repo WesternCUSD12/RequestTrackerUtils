@@ -659,7 +659,7 @@ document.querySelectorAll('.student-checkbox').forEach(checkbox => {
                 },
                 body: JSON.stringify({
                     student_id: studentId,
-auditor_name: '{% if request.user.is_authenticated %}{{ request.user.get_full_name|default:request.user.get_username }}{% else %}{{ request.session.display_name|default:request.session.username|default:"Guest" }}{% endif %}',
+auditor_name: '{{ current_user_name }}',
                     notes: ''
                 })
             });
@@ -704,7 +704,7 @@ async function markStudentAudited(button, studentId) {
             },
             body: JSON.stringify({
                 student_id: studentId,
-                auditor_name: '{% if request.user.is_authenticated %}{{ request.user.get_full_name|default:request.user.get_username }}{% else %}{{ request.session.display_name|default:request.session.username|default:"Guest" }}{% endif %}',
+                auditor_name: '{{ current_user_name }}',
                 notes: ''
             })
         });
@@ -762,7 +762,7 @@ async function undoAudit(button, studentId) {
             },
             body: JSON.stringify({
                 student_id: studentId,
-                auditor_name: '{% if request.user.is_authenticated %}{{ request.user.get_full_name|default:request.user.get_username }}{% else %}{{ request.session.display_name|default:request.session.username|default:"Guest" }}{% endif %}',
+                auditor_name: '{{ current_user_name }}',
                 notes: '',
                 undo: true
             })
