@@ -133,7 +133,17 @@ func main() {
 
 func setAuth(req *http.Request, token, cookie string) {
 	if token != "" {
-		req.Header.Set("Authorization", token)
+		// If token already contains a scheme (contains space like "Token abc"), use as-is.
+		if strings.Contains(token, " ") {
+			req.Header.Set("Authorization", token)
+		} else {
+			// Allow overriding default scheme via RTUTILS_AUTH_SCHEME env var; default to "Token".
+			scheme := os.Getenv("RTUTILS_AUTH_SCHEME")
+			if scheme == "" {
+				scheme = "Token"
+			}
+			req.Header.Set("Authorization", scheme+" "+token)
+		}
 	}
 	if cookie != "" {
 		req.Header.Set("Cookie", cookie)
