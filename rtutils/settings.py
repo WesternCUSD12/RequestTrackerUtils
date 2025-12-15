@@ -63,7 +63,7 @@ LDAP_UPN_SUFFIX = os.environ.get(
     "LDAP_UPN_SUFFIX"
 )  # Optional: UPN suffix (e.g., westerncusd12.org)
 LDAP_TECH_GROUP = os.environ.get("LDAP_TECH_GROUP", "tech-team")
-LDAP_TEACHER_GROUP = os.environ.get("LDAP_TEACHER_GROUP", "TEACHERS")
+LDAP_TEACHER_GROUPS = os.environ.get("LDAP_TEACHER_GROUPS", "TEACHERS").split(",")
 
 # Optional LDAP Settings
 LDAP_VERIFY_CERT = os.environ.get("LDAP_VERIFY_CERT", "true").lower() == "true"
