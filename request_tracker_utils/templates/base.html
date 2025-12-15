@@ -227,8 +227,8 @@
                     <li class="nav-item">
                         <span class="navbar-text text-light me-3">
                             <i class="bi bi-person-circle"></i>
-                            {{ request.session.display_name|default:request.session.ldap_user }}
-                            <span class="badge bg-secondary ms-2">{{ request.session.user_role|title }}</span>
+                            {{ request.session.display_name|default:(request.session.ldap_user|default:"User") }}
+                            <span class="badge bg-secondary ms-2">{{ request.session.user_role|default:""|title }}</span>
                         </span>
                     </li>
                     <li class="nav-item">
