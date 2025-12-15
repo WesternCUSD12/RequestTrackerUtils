@@ -83,7 +83,7 @@ name,grade,advisor
 John Smith,9,Ms. Johnson
 Jane Doe,10,Mr. Williams
 Bob Johnson,11,Mrs. Davis</pre>
-                        <a href="{{ url_for('static', filename='sample_audit.csv') }}" class="btn btn-sm btn-secondary" download>
+                         <a href="{% static 'sample_audit.csv' %}" class="btn btn-sm btn-secondary" download>
                             Download Template
                         </a>
                     </details>
@@ -135,9 +135,11 @@ Bob Johnson,11,Mrs. Davis</pre>
                     <button class="btn btn-secondary" id="applyFilter">Filter</button>
                 </div>
                 <div class="col-md-3 text-end">
-                    <a href="{{ url_for('audit.view_completed', session_id=session_id) }}" class="btn btn-info">
-                        View Completed Audits
-                    </a>
+                     {# View Completed Audits feature not yet migrated to Django
+                     <a href="#" class="btn btn-info disabled">
+                         View Completed Audits
+                     </a>
+                     #}
                 </div>
             </div>
             
@@ -184,5 +186,5 @@ console.log('[AUDIT PAGE] Loaded at:', new Date().toISOString());
 console.log('[AUDIT PAGE] SESSION_ID:', SESSION_ID);
 console.log('[AUDIT PAGE] Document ready state:', document.readyState);
 </script>
-<script src="{{ url_for('static', filename='js/audit.js') }}?v={{ range(1, 9999999) | random }}"></script>
+<script src="{% static 'js/audit.js' %}?v={{ range(1, 9999999) | random }}"></script>
 {% endblock %}

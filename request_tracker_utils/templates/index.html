@@ -9,31 +9,31 @@
 <div class="mb-4">
     <h2>Web Interfaces</h2>
     <div class="list-group">
-        <a href="{{ url_for('asset_routes.asset_form') }}" class="list-group-item list-group-item-action">
+        <a href="{% url 'assets:create' %}" class="list-group-item list-group-item-action">
             <i class="bi bi-plus-circle"></i> Batch Asset Creation
             <p class="text-muted small mb-0 mt-1">Create multiple assets quickly with auto-generated tags and names</p>
         </a>
-        <a href="{{ url_for('label_routes.label_home') }}" class="list-group-item list-group-item-action">
+        <a href="{% url 'labels:home' %}" class="list-group-item list-group-item-action">
             <i class="bi bi-printer"></i> Label Printing
             <p class="text-muted small mb-0 mt-1">Generate and print asset labels one at a time</p>
         </a>
-        <a href="{{ url_for('label_routes.batch_labels') }}" class="list-group-item list-group-item-action">
+        <a href="{% url 'labels:batch' %}" class="list-group-item list-group-item-action">
             <i class="bi bi-printer-fill"></i> Batch Label Printing
             <p class="text-muted small mb-0 mt-1">Print multiple asset labels using an RT query with page breaks</p>
         </a>
-        <a href="{{ url_for('devices.asset_checkin') }}" class="list-group-item list-group-item-action">
+        <a href="{% url 'devices:device_checkin' %}" class="list-group-item list-group-item-action">
             <i class="bi bi-laptop"></i> Device Check-in
             <p class="text-muted small mb-0 mt-1">Process and document returned devices in the system</p>
         </a>
-        <a href="{{ url_for('students.student_device_list') }}" class="list-group-item list-group-item-action">
+        <a href="{% url 'students:devices' %}" class="list-group-item list-group-item-action">
             <i class="bi bi-people"></i> Student Device Tracking
             <p class="text-muted small mb-0 mt-1">Track and filter student device check-ins by grade levels</p>
         </a>
-        <a href="{{ url_for('devices.checkin_logs') }}" class="list-group-item list-group-item-action">
+        <a href="{% url 'devices:logs' %}" class="list-group-item list-group-item-action">
             <i class="bi bi-file-earmark-spreadsheet"></i> Check-in Logs
             <p class="text-muted small mb-0 mt-1">View and download daily device check-in logs</p>
         </a>
-        <a href="{{ url_for('audit.audit_index') }}" class="list-group-item list-group-item-action">
+        <a href="{% url 'audit:session_list' %}" class="list-group-item list-group-item-action">
             <i class="bi bi-clipboard-check"></i> Device Audit
             <p class="text-muted small mb-0 mt-1">Upload student lists and verify device possession during audits</p>
         </a>
@@ -43,10 +43,12 @@
             <p class="text-muted small mb-0 mt-1">Track students and their device check-in status for the school year</p>
         </a>
         #}
-        <a href="{{ url_for('tag_routes.asset_tag_admin') }}" class="list-group-item list-group-item-action">
+        {# Asset Tag Admin feature not yet migrated to Django
+        <a href="#" class="list-group-item list-group-item-action disabled">
             <i class="bi bi-tag"></i> Asset Tag Admin
-            <p class="text-muted small mb-0 mt-1">View and update the asset tag sequence and logs</p>
+            <p class="text-muted small mb-0 mt-1">View and update the asset tag sequence and logs (coming soon)</p>
         </a>
+        #}
     </div>
 </div>
 
