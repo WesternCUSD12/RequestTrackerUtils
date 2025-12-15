@@ -1173,6 +1173,34 @@ redis>=4.5.0
 
 ### Django Management Commands
 
+#### Admin Management Wrapper (NixOS/Production)
+
+For robust admin/superuser management on NixOS or in production, use the `rtutils-admin` CLI wrapper. This ensures all environment variables (including secrets from sops-nix or systemd) are loaded and Django management commands are run with the correct settings and writable directories.
+
+**Usage:**
+
+1. Source your environment (if not already loaded by systemd):
+   ```sh
+   set -a
+   . /run/secrets/request-tracker-utils.env
+   set +a
+   export WORKING_DIR=/var/lib/request-tracker-utils
+   ```
+2. Run admin commands using the Nix store path:
+   ```sh
+   /nix/store/<hash>-request-tracker-utils-<version>/bin/rtutils-admin createsuperuser
+   /nix/store/<hash>-request-tracker-utils-<version>/bin/rtutils-admin changepassword admin
+   ```
+   Replace `<hash>-request-tracker-utils-<version>` with your actual Nix store path (find it with `ls /nix/store | grep request-tracker-utils`).
+
+- This wrapper loads environment variables from `/run/secrets/request-tracker-utils.env` (or the path set in `RTUTILS_ENV_FILE`).
+- It ensures `WORKING_DIR` is set for logs and database.
+- All arguments are forwarded to Django’s management CLI.
+
+**This is the recommended way to manage Django admin users and passwords on NixOS or any production deployment.**
+
+
+
 #### Initialize Database (`core/management/commands/init_db.py`)
 
 ```python

@@ -32,6 +32,7 @@ build-backend = "setuptools.build_meta"
 [project.scripts]
 rtutils-manage = "rtutils.management.cli:main"
 rtutils-gunicorn = "rtutils.management.gunicorn_entry:main"
+rtutils-admin = "rtutils.management.admin:main"
 
 
 [tool.setuptools]
