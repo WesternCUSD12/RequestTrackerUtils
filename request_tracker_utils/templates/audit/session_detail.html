@@ -1004,10 +1004,22 @@ document.addEventListener('DOMContentLoaded', function() {
             .map(cb => cb.value);
 
         studentRows.forEach(row => {
-            const gradeCell = row.querySelector('td:nth-child(3)'); // Grade column
+            // Grade is in the 2nd column, Advisor in the 3rd column
+            const gradeCell = row.querySelector('td:nth-child(2)');
+            const advisorCell = row.querySelector('td:nth-child(3)');
             const grade = gradeCell ? gradeCell.textContent.trim() : '';
+            const advisorText = advisorCell ? advisorCell.textContent.trim() : '';
 
-            if (selectedGrades.length === 0 || selectedGrades.includes(grade)) {
+            // Read selected advisor filter value (if present)
+            const advisorFilterEl = document.getElementById('advisor-filter');
+            const advisorFilterValue = advisorFilterEl ? advisorFilterEl.value : '';
+
+            // Determine grade match
+            const gradeMatch = (selectedGrades.length === 0 || selectedGrades.includes(grade));
+            // Determine advisor match
+            const advisorMatch = (!advisorFilterValue || advisorFilterValue === '' || advisorFilterValue === advisorText);
+
+            if (gradeMatch && advisorMatch) {
                 row.style.display = '';
             } else {
                 row.style.display = 'none';
@@ -1030,6 +1042,12 @@ document.addEventListener('DOMContentLoaded', function() {
     gradeCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', filterStudentsByGrade);
     });
+
+    // Advisor filter change handling
+    const advisorFilter = document.getElementById('advisor-filter');
+    if (advisorFilter) {
+        advisorFilter.addEventListener('change', filterStudentsByGrade);
+    }
 
     // Select All button functionality
     if (selectAllBtn) {
