@@ -258,3 +258,4 @@ gha-creds-*.json
 collect.out
 migrate.out
 secret.env
+\n# Caching and static file directories\ncache/\nstatic/

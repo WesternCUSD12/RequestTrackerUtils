@@ -59,27 +59,44 @@ class PersistentAssetCache:
         state_dir = os.environ.get("STATE_DIRECTORY") or os.environ.get(
             "XDG_STATE_HOME"
         )
-        if state_dir:
+        debug = os.environ.get("DEBUG", "True").lower() in ("true", "1", "yes")
+
+        logger.info(f"DEBUG status: {debug}")
+        logger.info(f"STATE_DIRECTORY env var: {os.environ.get('STATE_DIRECTORY')}")
+        logger.info(f"XDG_STATE_HOME env var: {os.environ.get('XDG_STATE_HOME')}")
+
+        if debug:
+            cache_dir = Path(__file__).resolve().parent.parent / "cache"
+            logger.info(f"[DEV MODE] Using local cache directory: {cache_dir}")
+            # Only create the cache dir in development
+            cache_dir.mkdir(parents=True, exist_ok=True)
+        elif state_dir:
             cache_dir = Path(state_dir) / "cache"
             logger.info(f"Using state directory for cache: {cache_dir}")
+            # In production, do not create the directory, just use it
         else:
             cache_dir = Path("/var/lib/request-tracker-utils/cache")
             logger.info(f"Using fallback cache directory: {cache_dir}")
+            # In production, do not create the directory, just use it
         self.cache_file = cache_dir / "asset_cache.json"
 
-        # Ensure cache directory exists
-        try:
-            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-            logger.info(
-                f"Created or verified cache directory: {self.cache_file.parent}"
-            )
-        except Exception as e:
-            logger.error(
-                f"Failed to create cache directory at {self.cache_file.parent}: {e}"
-            )
-            raise RuntimeError(
-                f"Cannot create cache directory at {self.cache_file.parent}: {e}"
-            )
+        logger.info(f"Final resolved cache directory: {self.cache_file.parent}")
+
+
+        # Only create the cache directory if in development mode
+        if debug:
+            try:
+                self.cache_file.parent.mkdir(parents=True, exist_ok=True)
+                logger.info(
+                    f"[DEV MODE] Created or verified cache directory: {self.cache_file.parent}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[DEV MODE] Failed to create cache directory at {self.cache_file.parent}: {e}"
+                )
+                raise RuntimeError(
+                    f"[DEV MODE] Cannot create cache directory at {self.cache_file.parent}: {e}"
+                )
 
         # Load existing cache from file
         self._load_cache()

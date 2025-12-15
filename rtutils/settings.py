@@ -32,6 +32,7 @@ DEBUG = os.environ.get("DEBUG", "True").lower() in ("true", "1", "yes")
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost,0.0.0.0").split(
     ","
 )
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Working directory for database and other files
 # Use NixOS-provided WORKING_DIR, or default to /var/lib/request-tracker-utils in production
@@ -162,6 +163,7 @@ SESSION_SAVE_EVERY_REQUEST = True  # Update session on every request
 SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access
 SESSION_COOKIE_SECURE = not DEBUG  # HTTPS only in production
 SESSION_COOKIE_SAMESITE = "Lax"  # CSRF protection
+CSRF_COOKIE_SECURE = not DEBUG  # HTTPS only in production
 
 
 # Database

@@ -14,12 +14,19 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 from . import views as root_views
 from apps.assets import views as assets_views
 
+from django.views.generic.base import RedirectView
+
 urlpatterns = [
+    # Favicon
+    path('favicon.ico', RedirectView.as_view(url='/static/favicon.svg')),
+
     # Django admin (protected by admin auth)
     path('admin/', admin.site.urls),
     
@@ -50,4 +57,12 @@ urlpatterns = [
     path('webhook/asset-created', assets_views.webhook_created, name='webhook'),
 ]
 
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 
+# ... (existing code)
+
+if settings.DEBUG:
+    # Add static files serving for development
+    urlpatterns += staticfiles_urlpatterns()
+    # Add media files serving for development
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
