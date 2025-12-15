@@ -402,9 +402,40 @@ def audit_session_detail(request, session_id):
         )
         logger.info(f"[audit_session_detail] Final queryset count: {queryset.count()}")
 
+        # Build a safe serializable list of students for the template to avoid
+        # accessing related objects directly (Student.device_info may not exist)
+        safe_students = []
+        for s in queryset.order_by("name"):
+            # Build a nested 'student' mapping with 'device_info' if available
+            student_mapping = None
+            if s.student:
+                try:
+                    di = s.student.device_info
+                    device_info = {
+                        "asset_tag": getattr(di, "asset_tag", None),
+                        "device_type": getattr(di, "device_type", None),
+                        "asset_id": getattr(di, "asset_id", None),
+                    }
+                except Exception:
+                    device_info = None
+
+                student_mapping = {"device_info": device_info}
+
+            safe_students.append(
+                {
+                    "id": s.id,
+                    "name": s.name,
+                    "grade": s.grade,
+                    "advisor": s.advisor,
+                    "audited": s.audited,
+                    "audit_timestamp": s.audit_timestamp,
+                    "student": student_mapping,
+                }
+            )
+
         context = {
             "session": session,
-            "students": queryset.order_by("name"),
+            "students": safe_students,
             "summary": {
                 "total_students": total,
                 "audited_count": audited,
@@ -424,6 +455,9 @@ def audit_session_detail(request, session_id):
             "page_title": session.name
             or f"Audit Session {str(session.session_id)[:8]}",
             "page_description": "Review and mark students as audited",
+            "user_role": user_role,
+            "label_width": 100,  # Default label width in mm
+            "label_height": 62,  # Default label height in mm
         }
         logger.info(
             f"[audit_session_detail] Rendering template with {len(context['students'])} students"
@@ -799,38 +833,343 @@ def mark_student_completed(request, session_id, student_id):
 
 @require_http_methods(["GET"])
 @teacher_required
-def get_audit_logs(request, session_id):
-    """Get audit change logs for a session - viewable by all users"""
+def lookup_device_owner(request, asset_id):
+    """Lookup device owner by asset ID using RT API"""
     try:
-        session = get_object_or_404(AuditSession, session_id=session_id)
+        from common.rt_api import find_asset_by_name
 
-        logs = (
-            AuditChangeLog.objects.filter(session=session)
-            .select_related("audit_student", "device_record")
-            .order_by("-timestamp")
-        )
+        logger.info(f"Looking up device owner for asset_id: {asset_id}")
 
-        log_data = []
-        for log in logs:
-            log_data.append(
+        device_info = find_asset_by_name(asset_id)
+
+        if device_info:
+            # Extract owner information
+            owner_raw = device_info.get("Owner")
+            owner_id = None
+            owner_name = None
+            owner_username = None
+
+            if owner_raw:
+                # Owner can be a dict with 'id', 'type', '_url' or just a string
+                if isinstance(owner_raw, dict):
+                    owner_id = owner_raw.get("id")
+                else:
+                    owner_id = str(owner_raw)
+
+                if owner_id:
+                    try:
+                        from common.rt_api import fetch_user_data
+
+                        owner_data = fetch_user_data(owner_id)
+                        if owner_data:
+                            owner_name = owner_data.get("Name", f"User {owner_id}")
+                            owner_username = owner_data.get("Name", f"User {owner_id}")
+                    except Exception as owner_err:
+                        logger.warning(
+                            f"Could not fetch owner details for {owner_id}: {owner_err}"
+                        )
+                        owner_name = f"User {owner_id}"
+                        owner_username = f"User {owner_id}"
+
+            # Extract device type from custom fields
+            device_type = "Unknown"
+            custom_fields = device_info.get("CustomFields", [])
+            if isinstance(custom_fields, list):
+                for cf in custom_fields:
+                    if isinstance(cf, dict) and cf.get("name") == "Device Type":
+                        device_type = cf.get("value", "Unknown")
+                        break
+            elif isinstance(custom_fields, dict):
+                device_type = custom_fields.get("Device Type", "Unknown")
+
+            return JsonResponse(
                 {
-                    "id": log.id,
-                    "timestamp": log.timestamp.isoformat(),
-                    "user": log.user_name,
-                    "student": log.audit_student.name if log.audit_student else "N/A",
-                    "device": log.device_info,
-                    "action": log.get_action_display(),
-                    "old_value": log.old_value,
-                    "new_value": log.new_value,
-                    "notes": log.notes,
+                    "found": True,
+                    "asset_id": device_info.get("id", asset_id),
+                    "asset_name": device_info.get("Name")
+                    or device_info.get("Description"),
+                    "owner_name": owner_name,
+                    "owner_username": owner_username,
+                    "device_type": device_type,
+                    "status": device_info.get("Status", "Unknown"),
                 }
             )
-
-        return JsonResponse({"success": True, "logs": log_data})
+        else:
+            return JsonResponse({"found": False, "error": "Device not found"})
 
     except Exception as e:
-        logger.error(f"Error fetching audit logs: {e}")
+        logger.error(f"Error looking up device {asset_id}: {e}")
+        return JsonResponse({"found": False, "error": str(e)}, status=500)
+
+
+# In-memory prefetch job registry
+import uuid
+import time
+
+PREFETCH_JOBS = {}
+PREFETCH_JOBS_LOCK = threading.RLock()
+
+
+def _run_manual_prefetch(session_id, job=None):
+    """Core manual prefetch logic extracted to a helper so it can run in background threads.
+
+    Returns a result dict with keys: processed_students, total_students, total_devices, errors
+    Updates `job` dict (if provided) with status/log/progress fields.
+    """
+    result = {
+        "processed_students": 0,
+        "total_students": 0,
+        "total_devices": 0,
+        "errors": [],
+    }
+    try:
+        session = AuditSession.objects.get(session_id=session_id)
+
+        # Get all audit students for this session
+        audit_students = list(
+            AuditStudent.objects.filter(session=session).select_related("student")
+        )
+        student_count = len(audit_students)
+        result["total_students"] = student_count
+
+        # Import RT API helpers
+        from common.rt_api import (
+            fetch_user_data,
+            search_assets,
+            fetch_all_assets_cached,
+            build_asset_indexes,
+        )
+
+        # Fetch ALL assets in one query and build local indexes
+        try:
+            all_assets = fetch_all_assets_cached(config=None, force_refresh=True)
+        except Exception as e:
+            msg = f"Failed to fetch all assets: {e}"
+            logger.error(f"[MANUAL PREFETCH] {msg}")
+            if job is not None:
+                job["status"] = "failed"
+                job.setdefault("log", []).append(msg)
+            result["errors"].append(msg)
+            return result
+
+        indexes = build_asset_indexes(all_assets)
+        assets_by_owner = indexes.get("by_owner", {})
+
+        # Map usernames to RT numeric IDs
+        username_to_rt_id = {}
+        for audit_student in audit_students:
+            username = None
+            if audit_student.student and getattr(
+                audit_student.student, "username", None
+            ):
+                username = audit_student.student.username
+            elif audit_student.username:
+                username = audit_student.username
+
+            if username and username not in username_to_rt_id:
+                try:
+                    user_data = fetch_user_data(username)
+                    numeric_id = None
+                    hyperlinks = user_data.get("_hyperlinks", [])
+                    for link in hyperlinks:
+                        if link.get("ref") == "self" and link.get("type") == "user":
+                            numeric_id = str(link.get("id"))
+                            break
+
+                    if numeric_id:
+                        username_to_rt_id[username] = numeric_id
+                    else:
+                        logger.warning(
+                            f"[MANUAL PREFETCH] No RT ID found for username {username}"
+                        )
+                        result["errors"].append(f"No RT ID for {username}")
+                except Exception as e:
+                    logger.warning(
+                        f"[MANUAL PREFETCH] Failed to get RT ID for {username}: {e}"
+                    )
+                    result["errors"].append(f"RT ID lookup failed for {username}: {e}")
+
+        # Process students using the pre-fetched asset data
+        processed_students = 0
+        total_devices = 0
+
+        for idx, audit_student in enumerate(audit_students):
+            try:
+                username = None
+                if audit_student.student and getattr(
+                    audit_student.student, "username", None
+                ):
+                    username = audit_student.student.username
+                elif audit_student.username:
+                    username = audit_student.username
+
+                if not username:
+                    continue
+
+                numeric_id = username_to_rt_id.get(username)
+                if not numeric_id:
+                    result["errors"].append(
+                        f"No RT ID mapping found for username {username}"
+                    )
+                    continue
+
+                student_assets = assets_by_owner.get(numeric_id, [])
+
+                student_device_count = 0
+                for asset in student_assets:
+                    try:
+                        asset_id = asset.get("id") or asset.get("asset_id") or ""
+                        asset_name = asset.get("Name") or asset.get("asset_name") or ""
+                        asset_tag = asset.get("Name") or asset.get("asset_tag") or ""
+
+                        device_type = "Unknown"
+                        custom_fields = asset.get("CustomFields", [])
+                        if isinstance(custom_fields, list):
+                            for cf in custom_fields:
+                                if (
+                                    isinstance(cf, dict)
+                                    and cf.get("name") == "Device Type"
+                                ):
+                                    device_type = cf.get("value", "Unknown")
+                                    break
+                        elif isinstance(custom_fields, dict):
+                            device_type = custom_fields.get("Device Type", "Unknown")
+
+                        AuditDeviceRecord.objects.get_or_create(
+                            audit_student=audit_student,
+                            asset_id=asset_id,
+                            defaults={
+                                "asset_tag": asset_tag,
+                                "asset_name": asset_name,
+                                "device_type": device_type,
+                            },
+                        )
+                        student_device_count += 1
+                        total_devices += 1
+                    except Exception as asset_err:
+                        logger.error(
+                            f"[MANUAL PREFETCH] Error creating device record for asset {asset}: {asset_err}"
+                        )
+
+                processed_students += 1
+
+                # Update job progress if provided
+                if job is not None:
+                    job["progress"] = int(
+                        (processed_students / (student_count or 1)) * 100
+                    )
+                    job.setdefault("log", []).append(
+                        f"Processed {audit_student.name}: {student_device_count} devices"
+                    )
+
+            except Exception as student_err:
+                msg = f"Error processing student {getattr(audit_student, 'id', 'unknown')}: {student_err}"
+                logger.error(f"[MANUAL PREFETCH] {msg}")
+                result["errors"].append(msg)
+
+        result["processed_students"] = processed_students
+        result["total_devices"] = total_devices
+
+        if job is not None:
+            job["status"] = "completed"
+            job.setdefault("log", []).append(
+                f"Completed: {processed_students}/{student_count} students, {total_devices} devices"
+            )
+
+        return result
+
+    except AuditSession.DoesNotExist:
+        msg = f"AuditSession not found: {session_id}"
+        logger.error(f"[MANUAL PREFETCH] {msg}")
+        if job is not None:
+            job["status"] = "failed"
+            job.setdefault("log", []).append(msg)
+        return result
+    except Exception as e:
+        logger.error(f"[MANUAL PREFETCH] Unexpected error: {e}", exc_info=True)
+        if job is not None:
+            job["status"] = "failed"
+            job.setdefault("log", []).append(str(e))
+        result["errors"].append(str(e))
+        return result
+
+
+@require_http_methods(["POST"])
+@admin_required
+def prefetch_session_devices_manual(request, session_id):
+    """Manual trigger for device prefetch - admin/tech team only (synchronous)
+
+    This endpoint still exists for synchronous admin use; it delegates to the
+    shared helper above.
+    """
+    try:
+        result = _run_manual_prefetch(session_id, job=None)
+        return JsonResponse({"success": True, **result})
+    except Exception as e:
+        logger.error(f"[MANUAL PREFETCH] Unexpected error in sync endpoint: {e}")
         return JsonResponse({"error": str(e)}, status=500)
+
+
+@require_http_methods(["POST"])
+@admin_required
+def prefetch_session_devices_async(request, session_id):
+    """Start an asynchronous prefetch job and return a job_id for status polling."""
+    try:
+        job_id = str(uuid.uuid4())
+        job = {
+            "id": job_id,
+            "status": "queued",
+            "progress": 0,
+            "log": [],
+            "created_at": time.time(),
+        }
+        with PREFETCH_JOBS_LOCK:
+            PREFETCH_JOBS[job_id] = job
+
+        def _worker():
+            with PREFETCH_JOBS_LOCK:
+                PREFETCH_JOBS[job_id]["status"] = "running"
+            try:
+                _run_manual_prefetch(session_id, job=PREFETCH_JOBS[job_id])
+            except Exception as e:
+                logger.error(f"Async prefetch job {job_id} failed: {e}")
+                with PREFETCH_JOBS_LOCK:
+                    PREFETCH_JOBS[job_id]["status"] = "failed"
+                    PREFETCH_JOBS[job_id].setdefault("log", []).append(str(e))
+
+        thread = threading.Thread(target=_worker, daemon=True)
+        thread.start()
+
+        return JsonResponse(
+            {
+                "success": True,
+                "job_id": job_id,
+                "status_url": f"/devices/audit/api/prefetch-status/{job_id}/",
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error starting async prefetch: {e}")
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@require_http_methods(["GET"])
+@admin_required
+def prefetch_status(request, job_id):
+    """Return status and logs for a prefetch job."""
+    with PREFETCH_JOBS_LOCK:
+        job = PREFETCH_JOBS.get(job_id)
+    if not job:
+        return JsonResponse({"error": "Job not found"}, status=404)
+    # Return a copy
+    return JsonResponse(
+        {
+            "id": job.get("id"),
+            "status": job.get("status"),
+            "progress": job.get("progress"),
+            "log": job.get("log", [])[-50:],
+            "created_at": job.get("created_at"),
+        }
+    )
 
 
 @require_http_methods(["POST"])
@@ -891,38 +1230,82 @@ def get_audit_student_devices(request, session_id, audit_student_id):
         )
         logger.info(f"[4] ✓ Found audit_student: {audit_student.name}")
 
+        # FIRST: Check for cached AuditDeviceRecord entries
+        logger.info(f"[5] Checking for cached AuditDeviceRecord entries")
+        cached_devices = AuditDeviceRecord.objects.filter(audit_student=audit_student)
+        cached_count = cached_devices.count()
+        logger.info(f"[6] ✓ Found {cached_count} cached device records")
+
+        if cached_count > 0:
+            logger.info(f"[7] ✓ Using CACHED data - no RT API call needed")
+            # Convert cached records to the expected format
+            devices_data = []
+            for record in cached_devices:
+                devices_data.append(
+                    {
+                        "id": record.asset_id,
+                        "Name": record.asset_tag,
+                        "Description": record.asset_name,
+                        "CustomFields": [
+                            {"name": "Device Type", "value": record.device_type}
+                        ],
+                        "asset_id": record.asset_id,
+                        "asset_name": record.asset_name,
+                        "model_number": record.device_type,
+                        "audit_status": record.audit_status,
+                        "audit_notes": record.audit_notes,
+                    }
+                )
+
+            logger.info(f"[8] ✓ Returning {len(devices_data)} cached devices")
+            return JsonResponse(
+                {
+                    "student_id": audit_student.id,
+                    "student_name": audit_student.name,
+                    "devices": devices_data,
+                    "cached": True,
+                    "cache_count": cached_count,
+                }
+            )
+
+        # FALLBACK: No cached data found, fetch from RT API
+        logger.info(f"[7] ✗ No cached data found, fetching from RT API")
+
         # Get username - first try linked Student, then fallback to AuditStudent's own username
         username = None
         if audit_student.student:
             username = audit_student.student.username
-            logger.info(f"[5] Using username from linked Student: {username}")
+            logger.info(f"[8] Using username from linked Student: {username}")
         elif audit_student.username:
             username = audit_student.username
-            logger.info(f"[5] Using username from AuditStudent: {username}")
+            logger.info(f"[8] Using username from AuditStudent: {username}")
         else:
             logger.warning(
-                f"[5] ✗ NO USERNAME - audit_student.student={audit_student.student}, audit_student.username={audit_student.username}"
+                f"[8] ✗ NO USERNAME - audit_student.student={audit_student.student}, audit_student.username={audit_student.username}"
             )
 
         if not username:
-            logger.warning(f"[6] ✗ NO USERNAME FOUND - returning empty devices")
+            logger.warning(f"[9] ✗ NO USERNAME FOUND - returning empty devices")
             return JsonResponse({"devices": [], "error": "Student has no username"})
 
-        logger.info(f"[6] ✓ Username to use for RT lookup: {username}")
+        logger.info(f"[9] ✓ Username to use for RT lookup: {username}")
 
         # Use the common RT API to get devices - use username to look up RT ID
         try:
-            from common.rt_api import get_assets_by_owner, fetch_user_data
+            from common.rt_api import (
+                get_assets_by_owner,
+                fetch_user_data,
+            )
 
-            logger.info(f"[7] ✓ RT API imported successfully")
+            logger.info(f"[10] ✓ RT API imported successfully")
 
-            logger.info(f"[8] Calling fetch_user_data('{username}')")
+            logger.info(f"[11] Calling fetch_user_data('{username}')")
 
             # Fetch user data using username to get numeric ID
             try:
                 user_data = fetch_user_data(username)
                 logger.info(
-                    f"[9] ✓ fetch_user_data returned: {type(user_data).__name__}"
+                    f"[12] ✓ fetch_user_data returned: {type(user_data).__name__}"
                 )
                 logger.info(
                     f"    - keys: {list(user_data.keys()) if isinstance(user_data, dict) else 'N/A'}"
@@ -930,7 +1313,7 @@ def get_audit_student_devices(request, session_id, audit_student_id):
 
                 numeric_id = None
                 hyperlinks = user_data.get("_hyperlinks", [])
-                logger.info(f"[10] Hyperlinks found: {len(hyperlinks)}")
+                logger.info(f"[13] Hyperlinks found: {len(hyperlinks)}")
 
                 for idx, link in enumerate(hyperlinks):
                     logger.info(
@@ -942,10 +1325,10 @@ def get_audit_student_devices(request, session_id, audit_student_id):
                         break
 
                 if numeric_id:
-                    logger.info(f"[11] Calling get_assets_by_owner('{numeric_id}')")
+                    logger.info(f"[14] Calling get_assets_by_owner('{numeric_id}')")
                     assets = get_assets_by_owner(numeric_id)
                     logger.info(
-                        f"[12] ✓ get_assets_by_owner returned {len(assets)} devices"
+                        f"[15] ✓ get_assets_by_owner returned {len(assets)} devices"
                     )
                     for asset_idx, asset in enumerate(assets[:3]):  # Log first 3
                         logger.info(f"     - asset[{asset_idx}]: {asset}")
@@ -953,7 +1336,7 @@ def get_audit_student_devices(request, session_id, audit_student_id):
                         logger.info(f"     ... and {len(assets) - 3} more devices")
 
                     # Create AuditDeviceRecord entries for each asset if they don't exist
-                    logger.info(f"[12a] Creating/updating AuditDeviceRecord entries")
+                    logger.info(f"[15a] Creating/updating AuditDeviceRecord entries")
                     for asset in assets:
                         asset_id = asset.get("id", "")
                         asset_name = asset.get("Name", "")
@@ -985,6 +1368,7 @@ def get_audit_student_devices(request, session_id, audit_student_id):
                                 },
                             )
                         )
+
                         if created:
                             logger.info(
                                 f"     - Created AuditDeviceRecord for asset {asset_id}"
@@ -995,28 +1379,31 @@ def get_audit_student_devices(request, session_id, audit_student_id):
                             )
                 else:
                     logger.warning(
-                        f"[11] ✗ Could not extract numeric ID from RT user {username}"
+                        f"[14] ✗ Could not extract numeric ID from RT user {username}"
                     )
                     logger.warning(f"     Available hyperlinks: {hyperlinks}")
                     assets = []
             except Exception as user_err:
                 logger.error(
-                    f"[9] ✗ Exception calling fetch_user_data: {type(user_err).__name__}: {user_err}",
+                    f"[12] ✗ Exception calling fetch_user_data: {type(user_err).__name__}: {user_err}",
                     exc_info=True,
                 )
                 assets = []
 
-            logger.info(f"[13] Returning JsonResponse with {len(assets)} devices")
+            logger.info(f"[16] Returning JsonResponse with {len(assets)} devices")
+
             return JsonResponse(
                 {
                     "student_id": audit_student.id,
                     "student_name": audit_student.name,
                     "devices": assets,
+                    "cached": False,
+                    "cache_count": 0,
                 }
             )
 
         except ImportError as e:
-            logger.error(f"[7] ✗ Could not import RT API: {e}")
+            logger.error(f"[10] ✗ Could not import RT API: {e}")
             return JsonResponse({"devices": [], "error": "RT API import failed"})
 
     except Exception as e:
@@ -1025,4 +1412,3 @@ def get_audit_student_devices(request, session_id, audit_student_id):
             exc_info=True,
         )
         return JsonResponse({"devices": [], "error": str(e)}, status=200)
-        return JsonResponse({"error": str(e)}, status=500)
