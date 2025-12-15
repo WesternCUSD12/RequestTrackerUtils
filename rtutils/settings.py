@@ -260,7 +260,11 @@ LOGGING = {
         },
         "django": {
             "handlers": ["console"],
-            "level": "INFO",
+            "level": "DEBUG",
+        },
+        "": {  # Root logger
+            "handlers": ["console"],
+            "level": "DEBUG",
         },
     },
 }
