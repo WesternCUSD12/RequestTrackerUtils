@@ -38,7 +38,7 @@
             <p class="text-muted small mb-0 mt-1">Upload student lists and verify device possession during audits</p>
         </a>
         {# Student check-in feature is still being developed in another branch
-        <a href="{{ url_for('students.student_checkin_list') }}" class="list-group-item list-group-item-action">
+        <a href="{% url 'students:student_checkin_list' %}" class="list-group-item list-group-item-action">
             <i class="bi bi-people"></i> Student Device Tracker
             <p class="text-muted small mb-0 mt-1">Track students and their device check-in status for the school year</p>
         </a>

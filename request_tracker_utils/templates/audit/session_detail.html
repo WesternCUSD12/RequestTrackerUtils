@@ -917,28 +917,68 @@ async function lockAuditSession(sessionId) {
     }
 }
 
-// Add event listeners for search
+// Grade level filtering
 document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('search-input');
-    const clearSearchBtn = document.getElementById('clear-search');
-    const advisorFilter = document.getElementById('advisor-filter');
+    const gradeCheckboxes = document.querySelectorAll('input[name="grade"]');
+    const selectAllBtn = Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.trim() === 'Select All');
+    const clearBtn = Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.trim() === 'Clear');
+    const studentTable = document.querySelector('.student-table');
+    const studentRows = studentTable ? studentTable.querySelectorAll('tbody tr') : [];
 
-    if (searchInput) {
-        searchInput.addEventListener('input', filterStudentsClient);
+    // Function to filter students based on selected grades
+    function filterStudentsByGrade() {
+        const selectedGrades = Array.from(gradeCheckboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+
+        studentRows.forEach(row => {
+            const gradeCell = row.querySelector('td:nth-child(3)'); // Grade column
+            const grade = gradeCell ? gradeCell.textContent.trim() : '';
+
+            if (selectedGrades.length === 0 || selectedGrades.includes(grade)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        updateStudentCount();
     }
 
-    if (clearSearchBtn) {
-        clearSearchBtn.addEventListener('click', function() {
-            if (searchInput) {
-                searchInput.value = '';
-                filterStudentsClient();
-            }
+    // Function to update student count display
+    function updateStudentCount() {
+        const visibleRows = Array.from(studentRows).filter(row => row.style.display !== 'none');
+        const countElement = document.querySelector('[class*="student-count"]');
+        if (countElement) {
+            countElement.textContent = `${visibleRows.length} students`;
+        }
+    }
+
+    // Add event listeners to grade checkboxes
+    gradeCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', filterStudentsByGrade);
+    });
+
+    // Select All button functionality
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            gradeCheckboxes.forEach(cb => cb.checked = true);
+            filterStudentsByGrade();
         });
     }
 
-    if (advisorFilter) {
-        advisorFilter.addEventListener('change', filterStudentsClient);
+    // Clear button functionality
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            gradeCheckboxes.forEach(cb => cb.checked = false);
+            filterStudentsByGrade();
+        });
     }
+
+    // Initial filter application
+    filterStudentsByGrade();
 });
 
 // Device Audit Modal Functions
