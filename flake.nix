@@ -340,10 +340,18 @@
                          echo "Contents of site-packages:"
                          ls -l "$SITE_PACKAGES"
                          cd "${workDir}"
-                         echo "Running Django migrations..."
-                         ${requestTrackerPackage}/bin/rtutils-manage migrate --noinput
-                         echo "Collecting static files..."
-                         ${requestTrackerPackage}/bin/rtutils-manage collectstatic --noinput --clear
+echo "Running Django migrations..."
+${requestTrackerPackage}/bin/rtutils-manage migrate --noinput
+
+# 6b. Create default admin user (for development/demo only)
+echo "Creating default Django admin user (admin/admin) -- DO NOT USE IN PRODUCTION!"
+export DJANGO_SUPERUSER_USERNAME=admin
+export DJANGO_SUPERUSER_PASSWORD=admin
+export DJANGO_SUPERUSER_EMAIL=admin@example.com
+${requestTrackerPackage}/bin/rtutils-manage createsuperuser --noinput || true
+
+echo "Collecting static files..."
+${requestTrackerPackage}/bin/rtutils-manage collectstatic --noinput --clear
 
                         # 7. Set final permissions
                         chown -R ''${user}:''${group} "${workDir}"
@@ -420,6 +428,7 @@
 
         packages = {
           default = requestTrackerPackage;
+          request-tracker-utils = requestTrackerPackage;
         };
       }
     );
