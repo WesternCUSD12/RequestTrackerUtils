@@ -93,7 +93,7 @@ PUBLIC_PATHS = [
 ROLE_ACCESS_RULES = {
     "technology_staff": ["*"],  # Full access to all pages (includes /admin/*)
     "teacher": [
-        "/audit/",  # Student device audit
+        "/devices/audit/",  # Student device audit
         "/auth/logout/",
         "/static/",
         "/media/",
