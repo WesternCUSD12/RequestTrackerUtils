@@ -30,8 +30,15 @@ func main() {
 		os.Exit(2)
 	}
 
-	base := flag.String("base", "http://localhost:8000", "Base URL of RTUtils server")
-	token := flag.String("token", "", "Authorization header value (e.g. 'Token ...' or 'Bearer ...')")
+	// Default from environment when available
+	defaultBase := os.Getenv("RTUTILS_BASE")
+	if defaultBase == "" {
+		defaultBase = "http://localhost:8000"
+	}
+	defaultToken := os.Getenv("RTUTILS_TOKEN")
+
+	base := flag.String("base", defaultBase, "Base URL of RTUtils server")
+	token := flag.String("token", defaultToken, "Authorization header value (e.g. 'Token ...' or 'Bearer ...')")
 	cookie := flag.String("cookie", "", "Raw Cookie header to send")
 	insecure := flag.Bool("insecure", false, "Skip TLS certificate verification")
 	// Parse common flags only for now; subcommands will use flag package again
