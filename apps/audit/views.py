@@ -433,6 +433,35 @@ def audit_session_detail(request, session_id):
                 }
             )
 
+        # Compute a safe current user name to avoid template lookups on session keys
+        try:
+            if getattr(request, "user", None) and getattr(
+                request.user, "is_authenticated", False
+            ):
+                try:
+                    current_user_name = (
+                        request.user.get_full_name() or request.user.get_username()
+                    )
+                except Exception:
+                    # Fallback if methods are unavailable
+                    current_user_name = (
+                        getattr(request.user, "get_username", lambda: None)() or "Guest"
+                    )
+            else:
+                current_user_name = (
+                    request.session.get("display_name")
+                    or request.session.get("username")
+                    or "Guest"
+                )
+        except Exception:
+            current_user_name = "Guest"
+
+        # Expose a base URL for client-side JS so the frontend can call the API
+        try:
+            base_url = f"{request.scheme}://{request.get_host()}"
+        except Exception:
+            base_url = None
+
         context = {
             "session": session,
             "students": safe_students,
@@ -458,6 +487,8 @@ def audit_session_detail(request, session_id):
             "user_role": user_role,
             "label_width": 100,  # Default label width in mm
             "label_height": 62,  # Default label height in mm
+            "current_user_name": current_user_name,
+            "base_url": base_url,
         }
         logger.info(
             f"[audit_session_detail] Rendering template with {len(context['students'])} students"
@@ -938,6 +969,8 @@ def _run_manual_prefetch(session_id, job=None):
             search_assets,
             fetch_all_assets_cached,
             build_asset_indexes,
+            get_assets_by_owner,
+            asset_cache,
         )
 
         # Fetch ALL assets in one query and build local indexes
@@ -954,6 +987,20 @@ def _run_manual_prefetch(session_id, job=None):
 
         indexes = build_asset_indexes(all_assets)
         assets_by_owner = indexes.get("by_owner", {})
+
+        # Prefetch live-fallback configuration
+        import os
+
+        fetch_on_miss = os.getenv("RTUTILS_PREFETCH_FETCH_ON_MISS", "true").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        try:
+            max_rt_calls = int(os.getenv("RTUTILS_PREFETCH_MAX_RT_CALLS", "50"))
+        except Exception:
+            max_rt_calls = 50
+        rt_calls_made = 0
 
         # Map usernames to RT numeric IDs
         username_to_rt_id = {}
@@ -1014,6 +1061,104 @@ def _run_manual_prefetch(session_id, job=None):
                     continue
 
                 student_assets = assets_by_owner.get(numeric_id, [])
+
+                # If no assets found in the bulk index, optionally fetch live per-owner
+                # to cover cache misses. This will merge newly fetched assets into the
+                # persistent `asset_cache` under its lock and rebuild indexes so
+                # subsequent students benefit from the new data.
+                if (
+                    not student_assets
+                    and fetch_on_miss
+                    and rt_calls_made < max_rt_calls
+                ):
+                    try:
+                        if job is not None:
+                            job.setdefault("log", []).append(
+                                f"Cache miss for {audit_student.name} (RT id={numeric_id}), fetching live"
+                            )
+                        live_assets = get_assets_by_owner(numeric_id)
+                        rt_calls_made += 1
+
+                        if live_assets:
+                            try:
+                                # Merge live_assets into persistent all_assets cache safely
+                                with asset_cache.lock:
+                                    try:
+                                        existing_all = (
+                                            asset_cache.get("all_assets")
+                                            or all_assets
+                                            or []
+                                        )
+                                    except Exception:
+                                        existing_all = all_assets or []
+
+                                    # Build map of existing ids to avoid duplicates
+                                    existing_by_id = {
+                                        str(a.get("id")): a
+                                        for a in existing_all
+                                        if a.get("id")
+                                    }
+
+                                    new_added = 0
+                                    for a in live_assets:
+                                        aid = a.get("id") or a.get("asset_id")
+                                        aid = str(aid) if aid is not None else None
+                                        if aid and aid not in existing_by_id:
+                                            existing_all.append(a)
+                                            existing_by_id[aid] = a
+                                            new_added += 1
+
+                                    if new_added > 0:
+                                        try:
+                                            asset_cache.set("all_assets", existing_all)
+                                            if job is not None:
+                                                job.setdefault("log", []).append(
+                                                    f"Merged {new_added} live assets for owner {numeric_id} into cache"
+                                                )
+                                        except Exception as e:
+                                            logger.warning(
+                                                f"Failed to update asset_cache: {e}"
+                                            )
+                                            if job is not None:
+                                                job.setdefault("log", []).append(
+                                                    f"Warning: failed to save merged assets: {e}"
+                                                )
+
+                                    # Update local all_assets variable and rebuild indexes
+                                    all_assets = existing_all
+                                    try:
+                                        indexes = build_asset_indexes(all_assets)
+                                        assets_by_owner = indexes.get("by_owner", {})
+                                        student_assets = assets_by_owner.get(
+                                            numeric_id, live_assets
+                                        )
+                                    except Exception as e:
+                                        logger.warning(
+                                            f"Failed to rebuild indexes after merge: {e}"
+                                        )
+                                        # Fall back to using live_assets directly
+                                        student_assets = live_assets
+                            except Exception as merge_err:
+                                logger.error(
+                                    f"Error merging live assets into cache: {merge_err}"
+                                )
+                                result["errors"].append(
+                                    f"Cache merge failed for owner {numeric_id}: {merge_err}"
+                                )
+                                student_assets = live_assets
+                        else:
+                            # No live assets returned
+                            if job is not None:
+                                job.setdefault("log", []).append(
+                                    f"No live assets returned for owner {numeric_id}"
+                                )
+                    except Exception as live_err:
+                        logger.warning(
+                            f"Live fetch for owner {numeric_id} failed: {live_err}"
+                        )
+                        result["errors"].append(
+                            f"Live fetch failed for owner {numeric_id}: {live_err}"
+                        )
 
                 student_device_count = 0
                 for asset in student_assets:

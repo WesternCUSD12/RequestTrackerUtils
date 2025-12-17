@@ -2,6 +2,10 @@
 {% block title %}{{ session.name|default:"Audit Session "|add:session.session_id|stringformat:"s" }}{% endblock %}
 
 {% block extra_css %}
+<script>
+    // Expose server-rendered base URL for client-side API calls
+    window.__RTUTILS_BASE__ = {{ base_url|default:'null'|safe }};
+</script>
 <style>
     .session-header {
         display: flex;
@@ -1233,8 +1237,9 @@ function loadStudentDevicesForAudit(studentId) {
         const sessionId = '{{ session.session_id }}';
         console.log(`[2] sessionId: ${sessionId}`);
         
-        const url = `/devices/audit/api/student/${sessionId}/${studentId}/devices/`;
-        console.log(`[3] URL: ${url}`);
+        const baseUrl = window.__RTUTILS_BASE__ || window.location.origin;
+        const url = `${baseUrl}/devices/audit/api/student/${sessionId}/${studentId}/devices/`;
+        console.log(`[3] URL: ${url} (base=${baseUrl})`);
         
         console.log(`[4] Sending fetch request...`);
         
