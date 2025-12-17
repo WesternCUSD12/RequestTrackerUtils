@@ -1286,7 +1286,56 @@ function loadStudentDevicesForAudit(studentId) {
             }
             
             if (!data.devices || data.devices.length === 0) {
-                console.log(`[9] No devices to display, showing empty message`);
+                console.log(`[9] No devices to display`);
+
+                // If the backend indicated there was no cached data available, ask the
+                // server to force-refresh the all-assets cache and retry the lookup once.
+                if (!data.cached) {
+                    console.log(`[9a] No cached data available - attempting forced server refresh`);
+                    const retryUrl = url + (url.includes('?') ? '&' : '?') + 'force=1';
+                    fetch(retryUrl, {
+                        method: 'GET',
+                        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                    })
+                    .then(r => {
+                        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                        return r.json();
+                    })
+                    .then(retryData => {
+                        console.log(`[9b] Retry response: devices=${retryData.devices ? retryData.devices.length : 'undef'}, cached=${retryData.cached}`);
+                        if (retryData.devices && retryData.devices.length > 0) {
+                            currentAuditDevices = retryData.devices;
+                            renderDevicesForAudit(retryData.devices);
+                            console.log(`${separator}\n`);
+                            return;
+                        }
+
+                        // Still no devices after forced refresh - show empty message
+                        document.getElementById('auditDevicesContainer').innerHTML = `
+                            <div style="padding: 2rem; text-align: center; background: #f9fafb; border-radius: 8px;">
+                                <p style="color: #6b7280;">No devices found for this student.</p>
+                                <small style="color: #dc2626;">(No cached data available)</small>
+                            </div>
+                        `;
+                        console.log(`${separator}\n`);
+                        return;
+                    })
+                    .catch(err => {
+                        console.warn('[9c] Forced refresh failed:', err);
+                        document.getElementById('auditDevicesContainer').innerHTML = `
+                            <div style="padding: 2rem; text-align: center; background: #f9fafb; border-radius: 8px;">
+                                <p style="color: #6b7280;">No devices found for this student.</p>
+                                <small style="color: #dc2626;">(No cached data available)</small>
+                            </div>
+                        `;
+                        console.log(`${separator}\n`);
+                        return;
+                    });
+
+                    return; // wait for retry to complete
+                }
+
+                // If cached==true or we didn't attempt a retry, show empty message
                 document.getElementById('auditDevicesContainer').innerHTML = `
                     <div style="padding: 2rem; text-align: center; background: #f9fafb; border-radius: 8px;">
                         <p style="color: #6b7280;">No devices found for this student.</p>

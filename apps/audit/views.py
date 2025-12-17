@@ -1440,6 +1440,8 @@ def get_audit_student_devices(request, session_id, audit_student_id):
             from common.rt_api import (
                 get_assets_by_owner,
                 fetch_user_data,
+                fetch_all_assets_cached,
+                build_asset_indexes,
             )
 
             logger.info(f"[10] ✓ RT API imported successfully")
@@ -1536,6 +1538,101 @@ def get_audit_student_devices(request, session_id, audit_student_id):
                 assets = []
 
             logger.info(f"[16] Returning JsonResponse with {len(assets)} devices")
+
+            # If the RT lookup returned no assets, allow a forced refresh
+            # via query param ?force=1 which will attempt a bulk fetch and
+            # another per-owner lookup before returning.
+            force = False
+            try:
+                force = str(request.GET.get("force", "")).lower() in (
+                    "1",
+                    "true",
+                    "yes",
+                )
+            except Exception:
+                force = False
+
+            if not assets and force and numeric_id:
+                logger.info(
+                    f"[16a] Force-refresh requested; attempting bulk refresh and retry for user {username} ({numeric_id})"
+                )
+                try:
+                    # Attempt to refresh the all-assets cache and rebuild indexes
+                    try:
+                        refreshed_all = fetch_all_assets_cached(
+                            config=None, force_refresh=True
+                        )
+                        logger.info(
+                            f"[16b] Refreshed all-assets; count={len(refreshed_all)}"
+                        )
+                    except Exception as e:
+                        logger.warning(f"[16b] Failed to refresh all-assets: {e}")
+                        refreshed_all = None
+
+                    if refreshed_all is not None:
+                        try:
+                            refreshed_indexes = build_asset_indexes(refreshed_all)
+                            refreshed_by_owner = refreshed_indexes.get("by_owner", {})
+                            assets = refreshed_by_owner.get(numeric_id, []) or assets
+                            logger.info(
+                                f"[16c] After bulk refresh, found {len(assets)} assets for owner {numeric_id}"
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"[16c] Failed to build indexes after refresh: {e}"
+                            )
+
+                    # If still empty, try direct per-owner call again
+                    if not assets:
+                        try:
+                            assets = get_assets_by_owner(numeric_id)
+                            logger.info(
+                                f"[16d] get_assets_by_owner retry returned {len(assets)} assets"
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"[16d] get_assets_by_owner retry failed: {e}"
+                            )
+
+                    # Create AuditDeviceRecord entries for any newly found assets
+                    if assets:
+                        logger.info(
+                            f"[16e] Creating/updating AuditDeviceRecord entries after forced fetch"
+                        )
+                        for asset in assets:
+                            asset_id = asset.get("id", "")
+                            asset_name = asset.get("Name", "")
+                            asset_tag = asset.get("Name", "")
+
+                            device_type = "Unknown"
+                            custom_fields = asset.get("CustomFields", [])
+                            if isinstance(custom_fields, list):
+                                for cf in custom_fields:
+                                    if (
+                                        isinstance(cf, dict)
+                                        and cf.get("name") == "Device Type"
+                                    ):
+                                        device_type = cf.get("value", "Unknown")
+                                        break
+                            elif isinstance(custom_fields, dict):
+                                device_type = custom_fields.get(
+                                    "Device Type", "Unknown"
+                                )
+
+                            device_record, created = (
+                                AuditDeviceRecord.objects.get_or_create(
+                                    audit_student=audit_student,
+                                    asset_id=asset_id,
+                                    defaults={
+                                        "asset_tag": asset_tag,
+                                        "asset_name": asset_name,
+                                        "device_type": device_type,
+                                    },
+                                )
+                            )
+
+                except Exception as refresh_err:
+                    logger.error(f"[16f] Forced refresh attempt failed: {refresh_err}")
 
             return JsonResponse(
                 {
