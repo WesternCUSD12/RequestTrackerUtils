@@ -113,7 +113,16 @@ func main() {
 			if err := json.Unmarshal(body, &m); err == nil {
 				statusURL := ""
 				if s, ok := m["status_url"].(string); ok && s != "" {
-					statusURL = s
+					// Resolve relative URLs by prefixing the base if needed
+					if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
+						statusURL = s
+					} else {
+						if strings.HasPrefix(s, "/") {
+							statusURL = strings.TrimRight(*base, "/") + s
+						} else {
+							statusURL = strings.TrimRight(*base, "/") + "/" + s
+						}
+					}
 				} else if job, ok := m["job_id"].(string); ok && job != "" {
 					statusURL = strings.TrimRight(*base, "/") + "/devices/audit/api/prefetch-status/" + job + "/"
 				}
