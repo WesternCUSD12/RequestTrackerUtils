@@ -27,7 +27,7 @@ SECRET_KEY = os.environ.get(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DEBUG", "True").lower() in ("true", "1", "yes")
+DEBUG = os.environ.get("DEBUG", "False").lower() in ("true", "1", "yes")
 
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost,0.0.0.0").split(
     ","
@@ -262,9 +262,14 @@ LOGGING = {
             "handlers": ["console"],
             "level": "DEBUG",
         },
+        "django.utils.autoreload": {
+            "handlers": ["console"],
+            "level": "WARNING",  # Suppress autoreload DEBUG messages
+            "propagate": False,
+        },
         "": {  # Root logger
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": "INFO",
         },
     },
 }

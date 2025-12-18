@@ -62,6 +62,7 @@ __all__ = [
     "fetch_user_data",
     "create_ticket",
     "update_asset_owner",
+    "get_asset_cache_info",
 ]
 
 # Configure logging
@@ -581,103 +582,169 @@ def search_assets(query, config=None, try_post_fallback=True, use_cache=False):
         raise Exception(f"Failed to search assets in RT: {e}")
 
 
-def find_asset_by_name(asset_name, config=None):
+def get_asset_cache_info():
     """
-    Find an asset by its name in RT.
-
-    Args:
-        asset_name (str): The name of the asset to find
-        config (dict, optional): Configuration dictionary, defaults to current_app.config
+    Return metadata about the cached all-assets entry.
 
     Returns:
-        dict: The first asset with the matching name, or None if no match is found
-
-    Raises:
-        Exception: If there's an error searching for the asset
+        dict: {"cached": bool, "count": int, "last_updated": timestamp or None}
     """
-    # Log the search attempt
+    cache_key = "all_assets"
+    try:
+        entry = asset_cache.get(cache_key)
+        if entry is None:
+            return {"cached": False, "count": 0, "last_updated": None}
+        # The persistent cache stores the list directly; we cannot read last_updated
+        # from PersistentAssetCache.get(), so attempt to read the file if available.
+        try:
+            cache_file = asset_cache.cache_file
+            if cache_file.exists():
+                with open(cache_file, "r") as f:
+                    data = json.load(f)
+                    last_updated = data.get("last_updated")
+            else:
+                last_updated = None
+        except Exception:
+            last_updated = None
+
+        return {"cached": True, "count": len(entry), "last_updated": last_updated}
+
+    except Exception as e:
+        logger.error(f"Error fetching cache info: {e}")
+        return {"cached": False, "count": 0, "last_updated": None}
+
+
+def fetch_all_assets_cached(config=None, force_refresh=False):
+    """
+    Fetch all assets from RT once and cache them in `asset_cache`.
+
+    Args:
+        config (dict, optional): Config for RT API helpers
+        force_refresh (bool): If True, bypass the cache and refetch from RT
+
+    Returns:
+        list: List of asset dictionaries
+    """
+    cache_key = "all_assets"
+    try:
+        if not force_refresh:
+            cached = asset_cache.get(cache_key)
+            if cached is not None:
+                logger.info("Using cached all-assets list")
+                return cached
+
+        logger.info("Fetching all assets from RT (bulk)...")
+        assets = search_assets("id>0", config)
+        # Save to persistent cache (single entry)
+        try:
+            asset_cache.set(cache_key, assets)
+            logger.info(f"Cached {len(assets)} assets under key '{cache_key}'")
+        except Exception as e:
+            logger.warning(f"Failed to cache all assets: {e}")
+        return assets
+    except Exception as e:
+        logger.error(f"Error fetching all assets: {e}")
+        raise
+
+
+def build_asset_indexes(assets):
+    """
+    Build simple lookup indexes from a list of assets.
+
+    Returns:
+        dict: {"by_owner": {owner_id: [assets...]}, "by_name": {name_lower: [assets...]}}
+    """
+    by_owner = {}
+    by_name = {}
+
+    for asset in assets:
+        # Owner can be dict or string
+        owner_raw = asset.get("Owner")
+        owner_id = None
+        if owner_raw:
+            if isinstance(owner_raw, dict):
+                owner_id = str(owner_raw.get("id", ""))
+            else:
+                owner_id = str(owner_raw)
+
+        if owner_id:
+            by_owner.setdefault(owner_id, []).append(asset)
+
+        name = asset.get("Name") or asset.get("asset_tag") or asset.get("asset_name")
+        if name:
+            key = name.strip().lower()
+            by_name.setdefault(key, []).append(asset)
+
+    return {"by_owner": by_owner, "by_name": by_name}
+
+
+def find_asset_by_name(asset_name, config=None):
+    """
+    Find an asset by its name in RT - optimized to use bulk cached assets if available.
+    """
     logger.info(f"Searching for asset with name: {asset_name}")
 
-    # Try a more direct approach: First get all assets and filter locally
-    # This bypasses search query encoding issues entirely
-    logger.info("Getting all assets and filtering locally")
+    try:
+        # First try the cached all-assets index
+        assets = fetch_all_assets_cached(config, force_refresh=False)
+        indexes = build_asset_indexes(assets)
+        key = asset_name.strip().lower()
 
-    # Use a simple query to get a broader range of assets
-    # Get the prefix part of the asset name (e.g., "W12-" from "W12-1246")
-    prefix = None
-    import re
+        if key in indexes["by_name"]:
+            matches = indexes["by_name"][key]
+            logger.info(
+                f"Found {len(matches)} match(es) in local index for {asset_name}"
+            )
+            return matches[0]
 
-    prefix_match = re.match(r"^([A-Za-z0-9\-]+\-)", asset_name)
-    if prefix_match:
-        prefix = prefix_match.group(1)
+        # Fuzzy contains match using the cached list
+        fuzzy = []
+        for name_key, items in indexes["by_name"].items():
+            if key in name_key:
+                fuzzy.extend(items)
+        if fuzzy:
+            logger.info(
+                f"Found {len(fuzzy)} fuzzy match(es) in local index for {asset_name}"
+            )
+            return fuzzy[0]
 
-    if prefix:
-        # Use the prefix with wildcard to get relevant assets
-        query = f"Name LIKE '{prefix}*'"
-        logger.info(f"Using prefix query: {query}")
-    else:
-        # Fallback to a very simple query
-        query = "id>0"
-        logger.info("Using fallback query to get all assets")
+        # If no matches locally, fallback to previous logic that uses prefix or search_assets
+        logger.info("No local index matches, falling back to broader search")
+        import re
 
-    # Get assets matching the query
-    assets = search_assets(query, config)
+        prefix_match = re.match(r"^([A-Za-z0-9\-]+\-)", asset_name)
+        if prefix_match:
+            prefix = prefix_match.group(1)
+            query = f"Name LIKE '{prefix}*'"
+            logger.info(f"Using prefix query: {query}")
+        else:
+            query = "id>0"
+            logger.info("Using fallback query to get all assets")
 
-    logger.info(f"Retrieved {len(assets)} assets for filtering")
+        assets = search_assets(query, config)
+        # local filter
+        matching_assets = [
+            asset
+            for asset in assets
+            if asset.get("Name") and asset.get("Name").lower() == asset_name.lower()
+        ]
+        if matching_assets:
+            return matching_assets[0]
 
-    # Directly filter the assets by name - case insensitive comparison
-    matching_assets = [
-        asset
-        for asset in assets
-        if asset.get("Name") and asset.get("Name").lower() == asset_name.lower()
-    ]
-
-    if matching_assets:
-        logger.info(f"Found {len(matching_assets)} exact matches after filtering")
-        logger.info(f"First match ID: {matching_assets[0].get('id')}")
-        return matching_assets[0]
-
-    # If no exact match, try a fuzzy match (contains)
-    if not matching_assets:
-        logger.info("No exact matches, trying fuzzy matching")
-
+        # fuzzy
         fuzzy_matches = [
             asset
             for asset in assets
             if asset.get("Name") and asset_name.lower() in asset.get("Name").lower()
         ]
-
         if fuzzy_matches:
-            logger.info(f"Found {len(fuzzy_matches)} fuzzy matches")
-            logger.info(
-                f"First fuzzy match: {fuzzy_matches[0].get('Name')} (ID: {fuzzy_matches[0].get('id')})"
-            )
             return fuzzy_matches[0]
 
-    # As a last resort, try the specific search queries (from original function)
-    logger.info("Trying specific search queries as fallback")
-
-    query_methods = [
-        f"Name='{asset_name}'",
-        f"Name LIKE '{asset_name}'",
-        f"{asset_name}",
-    ]
-
-    for query in query_methods:
-        logger.info(f"Trying fallback query: {query}")
-
-        query_assets = search_assets(query, config)
-
-        if query_assets:
-            logger.info(f"Fallback found {len(query_assets)} assets")
-            logger.info(
-                f"First result: {query_assets[0].get('Name')} (ID: {query_assets[0].get('id')})"
-            )
-            return query_assets[0]
-
-    # If we get here, no assets were found
-    logger.info("No assets found with any method")
-    return None
+        return None
+    except Exception as e:
+        logger.error(f"Error in find_asset_by_name: {e}")
+        # Last-resort fallback to original function's behavior
+        return None
 
 
 def update_asset_custom_field(asset_id, field_name, field_value, config=None):
