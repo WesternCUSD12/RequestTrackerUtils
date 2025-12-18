@@ -15,6 +15,7 @@ from django.utils import timezone
 from django.conf import settings
 import logging
 import csv
+import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from apps.audit.models import (
@@ -1553,17 +1554,24 @@ def get_audit_student_devices(request, session_id, audit_student_id):
                 force = False
 
             if not assets and force and numeric_id:
+                request_user = request.session.get("username") or "unknown"
+                remote_addr = request.META.get("REMOTE_ADDR") or "unknown"
                 logger.info(
-                    f"[16a] Force-refresh requested; attempting bulk refresh and retry for user {username} ({numeric_id})"
+                    f"[16a] Force-refresh requested by user={request_user} remote={remote_addr}; attempting bulk refresh and retry for account {username} (rt_id={numeric_id})"
                 )
                 try:
+                    op_start = time.time()
+
                     # Attempt to refresh the all-assets cache and rebuild indexes
+                    refreshed_all = None
                     try:
+                        t0 = time.time()
                         refreshed_all = fetch_all_assets_cached(
                             config=None, force_refresh=True
                         )
+                        t1 = time.time()
                         logger.info(
-                            f"[16b] Refreshed all-assets; count={len(refreshed_all)}"
+                            f"[16b] Refreshed all-assets; count={len(refreshed_all)}; elapsed={t1 - t0:.2f}s"
                         )
                     except Exception as e:
                         logger.warning(f"[16b] Failed to refresh all-assets: {e}")
@@ -1571,11 +1579,13 @@ def get_audit_student_devices(request, session_id, audit_student_id):
 
                     if refreshed_all is not None:
                         try:
+                            t2 = time.time()
                             refreshed_indexes = build_asset_indexes(refreshed_all)
+                            t3 = time.time()
                             refreshed_by_owner = refreshed_indexes.get("by_owner", {})
                             assets = refreshed_by_owner.get(numeric_id, []) or assets
                             logger.info(
-                                f"[16c] After bulk refresh, found {len(assets)} assets for owner {numeric_id}"
+                                f"[16c] After bulk refresh, found {len(assets)} assets for owner {numeric_id}; index_build_elapsed={t3 - t2:.2f}s"
                             )
                         except Exception as e:
                             logger.warning(
@@ -1585,9 +1595,11 @@ def get_audit_student_devices(request, session_id, audit_student_id):
                     # If still empty, try direct per-owner call again
                     if not assets:
                         try:
+                            t4 = time.time()
                             assets = get_assets_by_owner(numeric_id)
+                            t5 = time.time()
                             logger.info(
-                                f"[16d] get_assets_by_owner retry returned {len(assets)} assets"
+                                f"[16d] get_assets_by_owner retry returned {len(assets)} assets; elapsed={t5 - t4:.2f}s"
                             )
                         except Exception as e:
                             logger.warning(
@@ -1595,9 +1607,10 @@ def get_audit_student_devices(request, session_id, audit_student_id):
                             )
 
                     # Create AuditDeviceRecord entries for any newly found assets
+                    created_count = 0
                     if assets:
                         logger.info(
-                            f"[16e] Creating/updating AuditDeviceRecord entries after forced fetch"
+                            f"[16e] Creating/updating AuditDeviceRecord entries after forced fetch (count={len(assets)})"
                         )
                         for asset in assets:
                             asset_id = asset.get("id", "")
@@ -1630,9 +1643,18 @@ def get_audit_student_devices(request, session_id, audit_student_id):
                                     },
                                 )
                             )
+                            if created:
+                                created_count += 1
+
+                    op_end = time.time()
+                    logger.info(
+                        f"[16f] Forced refresh flow completed for rt_id={numeric_id}; total_elapsed={op_end - op_start:.2f}s; created_records={created_count}"
+                    )
 
                 except Exception as refresh_err:
-                    logger.error(f"[16f] Forced refresh attempt failed: {refresh_err}")
+                    logger.exception(
+                        f"[16f] Forced refresh attempt failed (exception): {refresh_err}"
+                    )
 
             return JsonResponse(
                 {
