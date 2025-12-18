@@ -23,6 +23,7 @@ from apps.audit.models import (
     AuditStudent,
     AuditDeviceRecord,
     AuditChangeLog,
+    AuditNote,
 )
 from apps.students.models import Student
 
@@ -422,6 +423,24 @@ def audit_session_detail(request, session_id):
 
                 student_mapping = {"device_info": device_info}
 
+            # Collect notes for the student (visible to teachers and admins)
+            try:
+                notes_qs = s.notes.all().order_by("-created_at")
+                notes_list = [
+                    {
+                        "note_text": n.note_text,
+                        "created_at": n.created_at.isoformat()
+                        if n.created_at
+                        else None,
+                        "creator_name": n.creator_name,
+                    }
+                    for n in notes_qs
+                ]
+                latest_note_text = notes_list[0]["note_text"] if notes_list else ""
+            except Exception:
+                notes_list = []
+                latest_note_text = ""
+
             safe_students.append(
                 {
                     "id": s.id,
@@ -431,6 +450,8 @@ def audit_session_detail(request, session_id):
                     "audited": s.audited,
                     "audit_timestamp": s.audit_timestamp,
                     "student": student_mapping,
+                    "notes": notes_list,
+                    "latest_note_text": latest_note_text,
                 }
             )
 
@@ -814,18 +835,17 @@ def save_device_audit(request, session_id, student_id, device_id):
 def mark_student_completed(request, session_id, student_id):
     """Mark an AuditStudent as completed (audited=True) after all devices are verified.
 
-    POST /devices/audit/api/student/<session_id>/<student_id>/complete/
-
-    Response: {
-        'success': True,
-        'message': 'Student marked as completed',
-        'student_id': <id>,
-        'audited': True,
-        'timestamp': '2025-12-05T14:30:00Z',
-        'auditor_name': 'jmartin'
-    }
+    Accepts JSON body with optional `general_notes` to persist as an AuditNote.
     """
+    import json
+
     try:
+        # Parse JSON body if present
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            data = {}
+
         session = get_object_or_404(AuditSession, session_id=session_id)
         audit_student = get_object_or_404(AuditStudent, id=student_id, session=session)
 
@@ -835,13 +855,41 @@ def mark_student_completed(request, session_id, student_id):
                 {"error": "Session is locked. No further edits allowed."}, status=403
             )
 
-        user_name = request.session.get("username", "Unknown")
+        user_name = (
+            request.session.get("display_name")
+            or request.session.get("username")
+            or "Unknown"
+        )
 
         # Mark student as audited
         audit_student.audited = True
         audit_student.audit_timestamp = timezone.now()
         audit_student.auditor_name = user_name
         audit_student.save()
+
+        # If general notes were provided, persist them
+        general_notes = (data.get("general_notes") or "").strip()
+        if general_notes:
+            try:
+                AuditNote.objects.create(
+                    session=session,
+                    audit_student=audit_student,
+                    note_text=general_notes,
+                    creator_name=user_name,
+                )
+                # Log the note creation
+                AuditChangeLog.objects.create(
+                    session=session,
+                    audit_student=audit_student,
+                    user_name=user_name,
+                    action="student_audit_completed",
+                    device_info="",
+                    old_value="",
+                    new_value="completed_with_notes",
+                    notes=f"General notes: {general_notes}",
+                )
+            except Exception as note_err:
+                logger.warning(f"Failed to save audit note: {note_err}")
 
         logger.info(
             f"[Audit] {user_name} marked student {audit_student.name} (ID: {student_id}) as completed in session {session.session_id}"
@@ -859,7 +907,7 @@ def mark_student_completed(request, session_id, student_id):
         )
 
     except Exception as e:
-        logger.error(f"Error marking student as completed: {e}")
+        logger.error(f"Error marking student as completed: {e}", exc_info=True)
         return JsonResponse({"error": str(e)}, status=500)
 
 

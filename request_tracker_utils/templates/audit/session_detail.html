@@ -600,7 +600,7 @@
             </thead>
             <tbody>
                 {% for student in students %}
-                <tr data-student-id="{{ student.id }}">
+                <tr data-student-id="{{ student.id }}" data-latest-note="{{ student.latest_note_text|escape }}">
                     <td>{{ student.name }}</td>
                     <td>{{ student.grade }}</td>
                     <td>{{ student.advisor }}</td>
@@ -1186,6 +1186,10 @@ function openAuditModal(studentId, studentName) {
                     <button type="button" class="btn-close" onclick="closeAuditModal()" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                    <div style="margin-bottom: 1rem;">
+                        <label for="auditGeneralNotes" style="font-weight:600; display:block; margin-bottom:0.5rem;">General Notes (for the student/session)</label>
+                        <textarea id="auditGeneralNotes" class="form-control" placeholder="Add general notes about this student's devices or session (visible to all users)" rows="3" style="width:100%;"></textarea>
+                    </div>
                     <div id="auditDevicesContainer" style="min-height: 300px;">
                         <div style="text-align: center; padding: 2rem;">
                             <div class="spinner-border text-primary" style="width: 2rem; height: 2rem; margin: 1rem auto;"></div>
@@ -1208,6 +1212,19 @@ function openAuditModal(studentId, studentName) {
     bsModal.show();
     
     // Then load devices asynchronously
+    // Pre-populate general notes from the table row (if any)
+    try {
+        const row = document.querySelector(`[data-student-id="${studentId}"]`);
+        const latest = row ? row.getAttribute('data-latest-note') || '' : '';
+        // We will set the textarea once the modal is in the DOM
+        setTimeout(() => {
+            const el = document.getElementById('auditGeneralNotes');
+            if (el && latest) el.value = latest;
+        }, 50);
+    } catch (e) {
+        console.warn('Could not prepopulate notes:', e);
+    }
+
     loadStudentDevicesForAudit(studentId);
 }
 
@@ -1485,12 +1502,15 @@ async function saveAllDeviceAudits() {
             // All devices saved successfully - now mark the student as completed
             console.log(`[saveAllDeviceAudits] All ${saved} devices saved. Marking student as completed...`);
             try {
+                const generalNotesEl = document.getElementById('auditGeneralNotes');
+                const generalNotesValue = generalNotesEl ? generalNotesEl.value : '';
                 const completionResponse = await fetch(`/devices/audit/api/student/${sessionId}/${currentAuditStudent.id}/complete/`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': getCookie('csrftoken')
-                    }
+                    },
+                    body: JSON.stringify({ general_notes: generalNotesValue })
                 });
                 
                 if (completionResponse.ok) {
